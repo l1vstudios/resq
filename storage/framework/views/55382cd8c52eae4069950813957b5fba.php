@@ -3,55 +3,62 @@
     <div data-simplebar class="h-100">
         <div id="sidebar-menu">
             <ul class="metismenu list-unstyled" id="side-menu">
-                <li class="menu-title">RESQ</li>
+                <li class="menu-title">Project Configuration</li>
 
                 <li class="<?php echo e(request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : ''); ?>">
                     <a href="<?php echo e(route('dashboard')); ?>" class="waves-effect <?php echo e(request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'active' : ''); ?>">
                         <i class="bx bx-home-circle"></i>
-                        <span>Project Configuration</span>
+                        <span>Dashboard</span>
                     </a>
                 </li>
 
-                <li class="menu-title">Project Setup</li>
-
-                <li class="<?php echo e(request()->routeIs('projects.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('projects.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('projects.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-briefcase-alt-2"></i>
-                        <span>Projects</span>
+                <li class="mm-active">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
+                        <i class="bx bx-cog"></i>
+                        <span>Configuration</span>
                     </a>
+                    <ul class="sub-menu mm-show" aria-expanded="true">
+                        <li class="<?php echo e(request()->routeIs('projects.*') ? 'mm-active' : ''); ?>">
+                            <a href="<?php echo e(route('projects.index')); ?>" class="<?php echo e(request()->routeIs('projects.*') ? 'active' : ''); ?>">
+                                Project Setup
+                            </a>
+                        </li>
+
+                    </ul>
                 </li>
 
-                <li class="<?php echo e(request()->routeIs('clusters.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('clusters.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('clusters.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-map-alt"></i>
-                        <span>Clusters</span>
+                <li class="mm-active">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
+                        <i class="bx bx-list-check"></i>
+                        <span>Registered</span>
                     </a>
-                </li>
-
-                <li class="menu-title">Stations</li>
-
-                <li class="<?php echo e(request()->routeIs('monitoring-stations.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('monitoring-stations.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('monitoring-stations.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-map-pin"></i>
-                        <span>Monitoring Stations</span>
-                    </a>
-                </li>
-
-                <li class="<?php echo e(request()->routeIs('warning-stations.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('warning-stations.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('warning-stations.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-bell"></i>
-                        <span>Warning Stations</span>
-                    </a>
-                </li>
-
-                <li class="<?php echo e(request()->routeIs('sensors.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('sensors.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('sensors.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-slider-alt"></i>
-                        <span>Sensor</span>
-                    </a>
+                    <ul class="sub-menu mm-show" aria-expanded="true">
+                        <li>
+                            <a href="<?php echo e(route('clusters.index')); ?>" class="<?php echo e(request()->routeIs('clusters.*') ? 'active' : ''); ?>">
+                                Geospatial Workspace
+                            </a>
+                        </li>
+                        <li>
+                            <a href="<?php echo e(route('monitoring-stations.index')); ?>" class="<?php echo e(request()->routeIs('monitoring-stations.*') ? 'active' : ''); ?>">
+                                Monitoring Station
+                            </a>
+                        </li>
+                        <li>
+                            <a href="<?php echo e(route('warning-stations.index')); ?>" class="<?php echo e(request()->routeIs('warning-stations.*') ? 'active' : ''); ?>">
+                                Warning Station
+                            </a>
+                        </li>
+                    </ul>
                 </li>
 
                 <li class="menu-title">Device Setup</li>
+
+                <li class="<?php echo e(request()->routeIs('mst-prefixes.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('mst-prefixes.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('mst-prefixes.*') ? 'active' : ''); ?>">
+                        <i class="bx bx-purchase-tag-alt"></i>
+                        <span>Prefix Sensors</span>
+                    </a>
+                </li>
 
                 <li class="<?php echo e(request()->routeIs('data-loggers.*') ? 'mm-active' : ''); ?>">
                     <a href="<?php echo e(route('data-loggers.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('data-loggers.*') ? 'active' : ''); ?>">
@@ -83,28 +90,13 @@
                     </a>
                 </li>
 
-                <li class="<?php echo e(request()->routeIs('warning-stations.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('warning-stations.index')); ?>#command-test" class="waves-effect">
+                <li class="<?php echo e(request()->routeIs('command-test.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('command-test.index')); ?>#command-test" class="waves-effect <?php echo e(request()->routeIs('command-test.*') ? 'active' : ''); ?>">
                         <i class="bx bx-send"></i>
                         <span>Command Test</span>
                     </a>
                 </li>
 
-                <li class="menu-title">Administration</li>
-
-                <li class="<?php echo e(request()->routeIs('admins.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('admins.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('admins.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-user-plus"></i>
-                        <span>Admins</span>
-                    </a>
-                </li>
-
-                <li class="<?php echo e(request()->routeIs('customers.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('customers.list')); ?>" class="waves-effect <?php echo e(request()->routeIs('customers.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-group"></i>
-                        <span>Customers</span>
-                    </a>
-                </li>
             </ul>
         </div>
     </div>

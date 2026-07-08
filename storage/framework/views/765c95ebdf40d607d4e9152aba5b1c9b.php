@@ -134,7 +134,7 @@
                     </div>
                     <div>
                         <p class="text-muted mb-1">Proyek</p>
-                        <h5 class="mb-0">Daftar Proyek</h5>
+                        <h5 class="mb-0"><?php echo e($dashboardTotals['projects'] ?? 0); ?></h5>
                     </div>
                 </div>
             </div>
@@ -150,8 +150,8 @@
                         </span>
                     </div>
                     <div>
-                        <p class="text-muted mb-1">Klaster</p>
-                        <h5 class="mb-0">Basis Data Klaster</h5>
+                        <p class="text-muted mb-1">Geospatial Workspace</p>
+                        <h5 class="mb-0"><?php echo e($dashboardTotals['workspaces'] ?? 0); ?></h5>
                     </div>
                 </div>
             </div>
@@ -167,8 +167,8 @@
                         </span>
                     </div>
                     <div>
-                        <p class="text-muted mb-1">Stasiun</p>
-                        <h5 class="mb-0">Pemantauan & Peringatan</h5>
+                        <p class="text-muted mb-1">Monitoring Station</p>
+                        <h5 class="mb-0"><?php echo e($dashboardTotals['monitoring_stations'] ?? 0); ?></h5>
                     </div>
                 </div>
             </div>
@@ -184,8 +184,8 @@
                         </span>
                     </div>
                     <div>
-                        <p class="text-muted mb-1">Telemetri</p>
-                        <h5 class="mb-0">Data Sensor</h5>
+                        <p class="text-muted mb-1">Sensor</p>
+                        <h5 class="mb-0"><?php echo e($dashboardTotals['sensors'] ?? 0); ?></h5>
                     </div>
                 </div>
             </div>
@@ -209,36 +209,23 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>DKI Jakarta</td>
-                                <td>1</td>
-                                <td>3</td>
-                                <td><span class="badge bg-success">Normal</span></td>
-                            </tr>
-                            <tr>
-                                <td>Jawa Barat</td>
-                                <td>2</td>
-                                <td>5</td>
-                                <td><span class="badge bg-warning">Waspada</span></td>
-                            </tr>
-                            <tr>
-                                <td>Jawa Tengah</td>
-                                <td>1</td>
-                                <td>2</td>
-                                <td><span class="badge bg-success">Normal</span></td>
-                            </tr>
-                            <tr>
-                                <td>Sumatera Barat</td>
-                                <td>1</td>
-                                <td>3</td>
-                                <td><span class="badge bg-danger">Bahaya</span></td>
-                            </tr>
-                            <tr>
-                                <td>Sulawesi Selatan</td>
-                                <td>1</td>
-                                <td>2</td>
-                                <td><span class="badge bg-info">Pengujian</span></td>
-                            </tr>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = ($coverageRows ?? collect()); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <tr>
+                                    <td><?php echo e($row['province']); ?></td>
+                                    <td><?php echo e($row['workspaces']); ?></td>
+                                    <td><?php echo e($row['sensors']); ?></td>
+                                    <td>
+                                        <span class="badge <?php echo e(in_array($row['status'], ['Danger', 'Bahaya', 'Awas']) ? 'bg-danger' : ($row['status'] === 'Waspada' ? 'bg-warning' : 'bg-success')); ?>">
+                                            <?php echo e($row['status']); ?>
+
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Belum ada cakupan provinsi.</td>
+                                </tr>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -254,25 +241,25 @@
                     <div class="col-xl-3 col-sm-6">
                         <div class="d-flex justify-content-between border-bottom pb-2 mb-3 mb-xl-0">
                             <span class="text-muted">Total Provinsi</span>
-                            <strong>5</strong>
+                            <strong><?php echo e($dashboardTotals['provinces'] ?? 0); ?></strong>
                         </div>
                     </div>
                     <div class="col-xl-3 col-sm-6">
                         <div class="d-flex justify-content-between border-bottom pb-2 mb-3 mb-xl-0">
-                            <span class="text-muted">Klaster Aktif</span>
-                            <strong>6</strong>
+                            <span class="text-muted">Workspace Aktif</span>
+                            <strong><?php echo e($dashboardTotals['workspaces'] ?? 0); ?></strong>
                         </div>
                     </div>
                     <div class="col-xl-3 col-sm-6">
                         <div class="d-flex justify-content-between border-bottom pb-2 mb-3 mb-sm-0">
                             <span class="text-muted">Titik Sensor</span>
-                            <strong>15</strong>
+                            <strong><?php echo e($dashboardTotals['sensors'] ?? 0); ?></strong>
                         </div>
                     </div>
                     <div class="col-xl-3 col-sm-6">
                         <div class="d-flex justify-content-between border-bottom pb-2">
                             <span class="text-muted">Stasiun Peringatan</span>
-                            <strong>5</strong>
+                            <strong><?php echo e($dashboardTotals['warning_stations'] ?? 0); ?></strong>
                         </div>
                     </div>
                 </div>
@@ -355,160 +342,9 @@
             return;
         }
 
-        var clusters = [
-            {
-                name: 'Klaster Banjir Jakarta Utara',
-                province: 'DKI Jakarta',
-                city: 'Jakarta Utara',
-                hazard: 'Banjir',
-                status: 'Normal',
-                sensors: 3,
-                warnings: 1,
-                lat: -6.1214,
-                lng: 106.7741
-            },
-            {
-                name: 'Klaster Cekungan Bandung',
-                province: 'Jawa Barat',
-                city: 'Bandung',
-                hazard: 'Banjir',
-                status: 'Waspada',
-                sensors: 3,
-                warnings: 1,
-                lat: -6.9175,
-                lng: 107.6191
-            },
-            {
-                name: 'Klaster Longsor Bogor',
-                province: 'Jawa Barat',
-                city: 'Bogor',
-                hazard: 'Longsor',
-                status: 'Normal',
-                sensors: 2,
-                warnings: 1,
-                lat: -6.5971,
-                lng: 106.8060
-            },
-            {
-                name: 'Klaster Banjir Pesisir Semarang',
-                province: 'Jawa Tengah',
-                city: 'Semarang',
-                hazard: 'Banjir',
-                status: 'Normal',
-                sensors: 2,
-                warnings: 1,
-                lat: -6.9667,
-                lng: 110.4167
-            },
-            {
-                name: 'Klaster Tsunami Padang',
-                province: 'Sumatera Barat',
-                city: 'Padang',
-                hazard: 'Tsunami',
-                status: 'Bahaya',
-                sensors: 3,
-                warnings: 1,
-                lat: -0.9471,
-                lng: 100.4172
-            },
-            {
-                name: 'Klaster Gempa Bumi Makassar',
-                province: 'Sulawesi Selatan',
-                city: 'Makassar',
-                hazard: 'Gempa Bumi',
-                status: 'Pengujian',
-                sensors: 2,
-                warnings: 1,
-                lat: -5.1477,
-                lng: 119.4327
-            }
-        ];
-
-        var sensorPoints = [
-            { name: 'TMA-JKT-01', type: 'Sensor Tinggi Muka Air', station: 'Stasiun 1', province: 'DKI Jakarta', lat: -6.1290, lng: 106.8100, status: 'Normal' },
-            { name: 'CH-JKT-02', type: 'Sensor Curah Hujan', station: 'Stasiun 1', province: 'DKI Jakarta', lat: -6.1680, lng: 106.8300, status: 'Normal' },
-            { name: 'BMS-JKT-03', type: 'Baterai / BMS', station: 'Stasiun 1', province: 'DKI Jakarta', lat: -6.1050, lng: 106.7600, status: 'Normal' },
-            { name: 'TMA-BDG-01', type: 'Sensor Tinggi Muka Air', station: 'Stasiun 1', province: 'Jawa Barat', lat: -6.9000, lng: 107.6100, status: 'Waspada' },
-            { name: 'CH-BDG-02', type: 'Sensor Curah Hujan', station: 'Stasiun 2', province: 'Jawa Barat', lat: -6.9400, lng: 107.6600, status: 'Normal' },
-            { name: 'TMA-BGR-01', type: 'Sensor Tinggi Muka Air', station: 'Stasiun 3', province: 'Jawa Barat', lat: -6.6100, lng: 106.7900, status: 'Normal' },
-            { name: 'GT-BGR-02', type: 'Sensor Gerakan Tanah', station: 'Stasiun 3', province: 'Jawa Barat', lat: -6.5550, lng: 106.8500, status: 'Waspada' },
-            { name: 'TMA-SMG-01', type: 'Sensor Tinggi Muka Air', station: 'Stasiun 1', province: 'Jawa Tengah', lat: -6.9580, lng: 110.4300, status: 'Normal' },
-            { name: 'CH-SMG-02', type: 'Sensor Curah Hujan', station: 'Stasiun 1', province: 'Jawa Tengah', lat: -6.9900, lng: 110.3800, status: 'Normal' },
-            { name: 'PS-PDG-01', type: 'Sensor Pasang Surut Tsunami', station: 'Stasiun 1', province: 'Sumatera Barat', lat: -0.9200, lng: 100.3600, status: 'Bahaya' },
-            { name: 'GB-PDG-02', type: 'Sensor Getaran Gempa Bumi', station: 'Stasiun 2', province: 'Sumatera Barat', lat: -0.9800, lng: 100.4200, status: 'Bahaya' },
-            { name: 'BMS-PDG-03', type: 'Baterai / BMS', station: 'Stasiun 2', province: 'Sumatera Barat', lat: -0.9400, lng: 100.4700, status: 'Normal' },
-            { name: 'GB-MKS-01', type: 'Sensor Getaran Gempa Bumi', station: 'Stasiun 1', province: 'Sulawesi Selatan', lat: -5.1300, lng: 119.4200, status: 'Pengujian' },
-            { name: 'CH-MKS-02', type: 'Sensor Curah Hujan', station: 'Stasiun 1', province: 'Sulawesi Selatan', lat: -5.1750, lng: 119.4600, status: 'Pengujian' }
-        ];
-
-        var warningStations = [
-            { name: 'Stasiun Peringatan Jakarta Utara', province: 'DKI Jakarta', lat: -6.1150, lng: 106.7900, status: 'Siap' },
-            { name: 'Stasiun Peringatan Bandung', province: 'Jawa Barat', lat: -6.9300, lng: 107.6000, status: 'Siap' },
-            { name: 'Stasiun Peringatan Bogor', province: 'Jawa Barat', lat: -6.5900, lng: 106.8350, status: 'Siap' },
-            { name: 'Stasiun Peringatan Semarang', province: 'Jawa Tengah', lat: -6.9700, lng: 110.4500, status: 'Siap' },
-            { name: 'Stasiun Peringatan Padang', province: 'Sumatera Barat', lat: -0.9550, lng: 100.3500, status: 'Siaga' },
-            { name: 'Stasiun Peringatan Makassar', province: 'Sulawesi Selatan', lat: -5.1550, lng: 119.4100, status: 'Pengujian' }
-        ];
-
-        <?php
-            $clusterCoordinates = [
-                'CLS-TSU-PDG' => [-0.9471, 100.4172],
-                'CLS-FLD-JKT' => [-6.1214, 106.7741],
-            ];
-
-            $clustersData = collect(config('resq_dummy.clusters'))->map(function ($cluster) use ($clusterCoordinates) {
-                return [
-                    'name' => $cluster['name'],
-                    'province' => $cluster['province'],
-                    'city' => $cluster['city'],
-                    'hazard' => $cluster['hazard'],
-                    'status' => $cluster['status'],
-                    'sensors' => collect(config('resq_dummy.sensors'))->where('cluster_id', $cluster['id'])->count(),
-                    'warnings' => 1,
-                    'lat' => $clusterCoordinates[$cluster['id']][0],
-                    'lng' => $clusterCoordinates[$cluster['id']][1],
-                ];
-            })->values();
-
-            $sensorCoordinates = [
-                'PS-PDG-01' => [-0.9200, 100.3600],
-                'GB-PDG-02' => [-0.9800, 100.4200],
-                'TMA-JKT-01' => [-6.1290, 106.8100],
-            ];
-
-            $sensorPointsData = collect(config('resq_dummy.sensors'))->map(function ($sensor) use ($sensorCoordinates) {
-                return [
-                    'name' => $sensor['id'],
-                    'type' => $sensor['type'],
-                    'station' => $sensor['monitoring_station_id'],
-                    'province' => collect(config('resq_dummy.clusters'))->firstWhere('id', $sensor['cluster_id'])['province'],
-                    'lat' => $sensorCoordinates[$sensor['id']][0],
-                    'lng' => $sensorCoordinates[$sensor['id']][1],
-                    'status' => $sensor['status'],
-                ];
-            })->values();
-
-            $warningCoordinates = [
-                'WS-PDG-001' => [-0.9550, 100.3500],
-                'WS-JKT-001' => [-6.1150, 106.7900],
-            ];
-
-            $warningStationsData = collect(config('resq_dummy.warning_stations'))->map(function ($station) use ($warningCoordinates) {
-                return [
-                    'name' => $station['id'] . ' - ' . $station['name'],
-                    'province' => collect(config('resq_dummy.clusters'))->firstWhere('id', $station['cluster_id'])['province'],
-                    'lat' => $warningCoordinates[$station['id']][0],
-                    'lng' => $warningCoordinates[$station['id']][1],
-                    'status' => $station['status'],
-                ];
-            })->values();
-        ?>
-
-        clusters = <?php echo json_encode($clustersData, 15, 512) ?>;
-
-        sensorPoints = <?php echo json_encode($sensorPointsData, 15, 512) ?>;
-
-        warningStations = <?php echo json_encode($warningStationsData, 15, 512) ?>;
+        var clusters = <?php echo json_encode($mapClusters ?? [], 15, 512) ?>;
+        var sensorPoints = <?php echo json_encode($mapSensors ?? [], 15, 512) ?>;
+        var warningStations = <?php echo json_encode($mapWarningStations ?? [], 15, 512) ?>;
 
         var statusColors = {
             Normal: '#34c38f',

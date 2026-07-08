@@ -4,142 +4,40 @@
 
 @section('content')
 @component('components.breadcrumb')
-@slot('li_1') Stations @endslot
+@slot('li_1') Registered @endslot
 @slot('title') Monitoring Stations @endslot
 @endcomponent
 
 @php
-    $clusters = collect(config('resq_dummy.clusters'))->keyBy('id');
-    $monitoringStations = config('resq_dummy.monitoring_stations');
-    $sensors = collect(config('resq_dummy.sensors'))->groupBy('monitoring_station_id');
-    $dangerStation = collect($monitoringStations)->firstWhere('status', 'Danger');
+    $monitoringStations = collect($monitoringStations ?? config('resq_dummy.monitoring_stations'));
+    $sensorsByStation = collect($sensors ?? config('resq_dummy.sensors'))->groupBy('monitoring_station_id');
+    $totalStations = $monitoringStations->count();
+    $onlineStations = $monitoringStations->where('connectivity_status', 'Online')->count();
+    $activeLoggers = $monitoringStations->where('logger_status', 'Active')->count();
 @endphp
 
 <div class="row">
-    <div class="col-xl-5 mb-4">
-        <div class="card h-100 mb-0">
-            <div class="card-body">
-                <h4 class="card-title mb-4">Monitoring Station Identity</h4>
-                <form>
-                    <div class="mb-3">
-                        <label class="form-label">Cluster</label>
-                        <select class="form-select">
-                            @foreach ($clusters as $cluster)
-                                <option>{{ $cluster['id'] }} - {{ $cluster['name'] }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Warning Station ID</label>
-                            <input type="text" class="form-control" value="{{ $dangerStation['id'] }}" disabled>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Station Name</label>
-                            <input type="text" class="form-control" value="{{ $dangerStation['name'] }}">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Coordinate</label>
-                        <input type="text" class="form-control" value="{{ $dangerStation['coordinate'] }}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Role</label>
-                        <select class="form-select">
-                            <option>Monitoring</option>
-                            <option>Dissemination / Warning</option>
-                        </select>
-                    </div>
-                    <button type="button" class="btn btn-primary">
-                        <i class="bx bx-save me-1"></i> Save Station
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-7 mb-4">
-        <div class="card h-100 mb-0">
-            <div class="card-body">
-                <h4 class="card-title mb-4">Linked Device Configuration</h4>
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <div class="border rounded p-3 h-100 d-flex flex-column justify-content-between">
-                            <div>
-                                <p class="text-muted mb-1">Data Logger</p>
-                                <h6 class="mb-3">{{ $dangerStation['logger_id'] }}</h6>
-                            </div>
-                            <a href="{{ route('data-loggers.index') }}" class="btn btn-light btn-sm w-100 text-start">
-                                <i class="bx bx-data me-1"></i> Open Data Loggers
-                            </a>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="border rounded p-3 h-100 d-flex flex-column justify-content-between">
-                            <div>
-                                <p class="text-muted mb-1">Connectivity</p>
-                                <h6 class="mb-3">{{ $dangerStation['connectivity_status'] }}</h6>
-                            </div>
-                            <a href="{{ route('connectivity.index') }}" class="btn btn-light btn-sm w-100 text-start">
-                                <i class="bx bx-wifi me-1"></i> Open Connectivity
-                            </a>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="border rounded p-3 h-100 d-flex flex-column justify-content-between">
-                            <div>
-                                <p class="text-muted mb-1">Credential / Auth</p>
-                                <h6 class="mb-3">Linked to {{ $dangerStation['logger_id'] }}</h6>
-                            </div>
-                            <a href="{{ route('credentials.index') }}" class="btn btn-light btn-sm w-100 text-start">
-                                <i class="bx bx-key me-1"></i> Open Credentials
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-12">
+    <div class="col-md-4">
         <div class="card">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h4 class="card-title mb-0">Sensor Assignment</h4>
-                    <a href="{{ route('sensors.index') }}" class="btn btn-light btn-sm">
-                        <i class="bx bx-slider-alt me-1"></i> Sensor Validation
-                    </a>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-nowrap align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Sensor ID & Type</th>
-                                <th>Slave ID (Station ID)</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse (($sensors[$dangerStation['id']] ?? []) as $sensor)
-                                <tr>
-                                    <td><strong>{{ $sensor['id'] }}</strong> - {{ $sensor['type'] }}</td>
-                                    <td>{{ $sensor['monitoring_station_id'] }}</td>
-                                    <td>
-                                        <span class="badge {{ $sensor['status'] === 'Danger' ? 'bg-danger' : 'bg-success' }}">
-                                            {{ $sensor['status'] }}
-                                        </span>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="3" class="text-center text-muted">No sensors assigned to this station.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
+                <p class="text-muted mb-1">Total Monitoring Station</p>
+                <h4 class="mb-0">{{ $totalStations }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <p class="text-muted mb-1">Logger Active</p>
+                <h4 class="mb-0">{{ $activeLoggers }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <p class="text-muted mb-1">Connectivity Online</p>
+                <h4 class="mb-0">{{ $onlineStations }}</h4>
             </div>
         </div>
     </div>
@@ -149,32 +47,46 @@
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <h4 class="card-title mb-4">Monitoring Station List</h4>
+                <h4 class="card-title mb-4">Monitoring Station Registry</h4>
                 <div class="table-responsive">
                     <table class="table table-nowrap align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Station ID</th>
-                                <th>Cluster</th>
-                                <th>Logger</th>
-                                <th>Warning ID</th>
+                                <th>Workspace</th>
+                                <th>Station Name</th>
+                                <th>Coordinate</th>
+                                <th>Data Logger</th>
+                                <th>Logger Status</th>
+                                <th>Connectivity</th>
+                                <th>Warning Station</th>
+                                <th>Sensors</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($monitoringStations as $station)
+                            @forelse ($monitoringStations as $station)
                                 <tr>
-                                    <td>{{ $station['id'] }}</td>
-                                    <td>{{ $station['cluster_id'] }}</td>
-                                    <td>{{ $station['logger_id'] }}</td>
-                                    <td>{{ $station['warning_station_id'] }}</td>
+                                    <td>{{ $station['id'] ?? '-' }}</td>
+                                    <td>{{ $station['cluster_id'] ?? '-' }}</td>
+                                    <td>{{ $station['name'] ?? '-' }}</td>
+                                    <td>{{ $station['coordinate'] ?? '-' }}</td>
+                                    <td>{{ $station['logger_id'] ?? '-' }}</td>
+                                    <td><span class="badge bg-light text-dark">{{ $station['logger_status'] ?? '-' }}</span></td>
+                                    <td><span class="badge {{ ($station['connectivity_status'] ?? '') === 'Online' ? 'bg-success' : 'bg-secondary' }}">{{ $station['connectivity_status'] ?? '-' }}</span></td>
+                                    <td>{{ $station['warning_station_id'] ?? '-' }}</td>
+                                    <td>{{ ($sensorsByStation[$station['id'] ?? ''] ?? collect())->count() }}</td>
                                     <td>
-                                        <span class="badge {{ $station['status'] === 'Danger' ? 'bg-danger' : 'bg-success' }}">
-                                            {{ $station['status'] }}
+                                        <span class="badge {{ in_array($station['status'] ?? '', ['Danger', 'Bahaya', 'Awas']) ? 'bg-danger' : (($station['status'] ?? '') === 'Waspada' ? 'bg-warning' : 'bg-success') }}">
+                                            {{ $station['status'] ?? '-' }}
                                         </span>
                                     </td>
                                 </tr>
-                            @endforeach
+                            @empty
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted">Belum ada monitoring station.</td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>

@@ -4,10 +4,12 @@
             <div class="navbar-brand-box">
                 <a href="<?php echo e(route('dashboard')); ?>" class="logo logo-dark">
                     <span class="logo-sm">
-                        <img src="<?php echo e(URL::asset('build/images/logos33.png')); ?>" alt="RESQ" height="100">
+                        <!-- Menambahkan margin-top sedikit pada logo kecil -->
+                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ" height="100" style="margin-top: 10px;">
                     </span>
                     <span class="logo-lg">
-                        <img src="<?php echo e(URL::asset('build/images/logos33.png')); ?>" alt="RESQ" height="65">
+                        <!-- Mengganti class mt-4 dengan inline style margin-top agar lebih presisi -->
+                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ" height="180" style="margin-top: 30px;">
                     </span>
                 </a>
             </div>
@@ -44,63 +46,55 @@
             </div>
 
             <div class="dropdown d-inline-block">
+                <?php ($alertNotifications = collect($alertNotifications ?? [])); ?>
                 <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-bell bx-tada"></i>
-                    <span class="badge bg-danger rounded-pill">2</span>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($alertNotifications->isNotEmpty()): ?>
+                        <span class="badge bg-danger rounded-pill"><?php echo e($alertNotifications->count()); ?></span>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </button>
                 <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
                     aria-labelledby="page-header-notifications-dropdown">
                     <div class="p-3 border-bottom">
                         <div class="row align-items-center">
                             <div class="col">
-                                <h6 class="m-0">Danger Sensors</h6>
+                                <h6 class="m-0">Awas Sensors</h6>
                             </div>
                             <div class="col-auto">
-                                <span class="badge bg-danger-subtle text-danger">Critical only</span>
+                                <span class="badge bg-danger-subtle text-danger">Realtime DB</span>
                             </div>
                         </div>
                     </div>
 
                     <div data-simplebar style="max-height: 260px;">
-                        <a href="<?php echo e(route('dashboard')); ?>" class="text-reset notification-item">
-                            <div class="d-flex">
-                                <div class="avatar-xs me-3">
-                                    <span class="avatar-title bg-danger rounded-circle font-size-16">
-                                        <i class="bx bx-error-circle"></i>
-                                    </span>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="mt-0 mb-1">PS-PDG-01 - Tsunami Tide Sensor</h6>
-                                    <div class="font-size-12 text-muted">
-                                        <p class="mb-1">Padang, Sumatera Barat. Status: Danger.</p>
-                                        <p class="mb-0"><i class="mdi mdi-clock-outline"></i> 2 minutes ago</p>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $alertNotifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $alert): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                            <a href="<?php echo e(route('telemetry.index')); ?>" class="text-reset notification-item">
+                                <div class="d-flex">
+                                    <div class="avatar-xs me-3">
+                                        <span class="avatar-title bg-danger rounded-circle font-size-16">
+                                            <i class="bx bx-error-circle"></i>
+                                        </span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mt-0 mb-1"><?php echo e($alert['sensor_id']); ?> - <?php echo e($alert['parameter'] ?? $alert['type']); ?></h6>
+                                        <div class="font-size-12 text-muted">
+                                            <p class="mb-1"><?php echo e($alert['city'] ?? '-'); ?>, <?php echo e($alert['province'] ?? '-'); ?>. Level: <?php echo e($alert['alert_level']); ?>. Value: <?php echo e($alert['value'] ?? '-'); ?></p>
+                                            <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <?php echo e($alert['last_seen']); ?></p>
+                                        </div>
                                     </div>
                                 </div>
+                            </a>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            <div class="p-3 text-center text-muted">
+                                Tidak ada sensor level Awas.
                             </div>
-                        </a>
-
-                        <a href="<?php echo e(route('dashboard')); ?>" class="text-reset notification-item">
-                            <div class="d-flex">
-                                <div class="avatar-xs me-3">
-                                    <span class="avatar-title bg-danger rounded-circle font-size-16">
-                                        <i class="bx bx-error"></i>
-                                    </span>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="mt-0 mb-1">GB-PDG-02 - Earthquake Vibration Sensor</h6>
-                                    <div class="font-size-12 text-muted">
-                                        <p class="mb-1">Padang, Sumatera Barat. Status: Danger.</p>
-                                        <p class="mb-0"><i class="mdi mdi-clock-outline"></i> 4 minutes ago</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
                     <div class="p-2 border-top d-grid">
-                        <a class="btn btn-sm btn-link font-size-14 text-center text-danger" href="<?php echo e(route('dashboard')); ?>">
-                            <i class="mdi mdi-map-marker-alert-outline me-1"></i> Open danger sensor map
+                        <a class="btn btn-sm btn-link font-size-14 text-center text-danger" href="<?php echo e(route('telemetry.index')); ?>">
+                            <i class="mdi mdi-map-marker-alert-outline me-1"></i> Open telemetry
                         </a>
                     </div>
                 </div>

@@ -9,9 +9,11 @@
 @endcomponent
 
 @php
-    $monitoringStations = config('resq_dummy.monitoring_stations');
-    $sensors = config('resq_dummy.sensors');
-    $dangerSensor = collect($sensors)->firstWhere('status', 'Danger');
+    $monitoringStations = collect($monitoringStations ?? config('resq_dummy.monitoring_stations'));
+    $sensors = collect($sensors ?? config('resq_dummy.sensors'));
+    $dangerSensor = $sensors->firstWhere('status', 'Danger') ?? $sensors->first() ?? [
+        'type' => '-',
+    ];
 @endphp
 
 <div class="row">

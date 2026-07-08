@@ -5,19 +5,19 @@
             <div class="navbar-brand-box">
                 <a href="index" class="logo logo-dark">
                     <span class="logo-sm">
-                        <img src="{{ URL::asset ('build/images/logos33.png') }}" alt="RESQ" height="100">
+                        <img src="{{ URL::asset ('build/images/logos44.png') }}" alt="RESQ" height="100">
                     </span>
                     <span class="logo-lg">
-                        <img src="{{ URL::asset ('build/images/logos33.png') }}" alt="RESQ" height="100">
+                        <img src="{{ URL::asset ('build/images/logos44.png') }}" alt="RESQ" height="100">
                     </span>
                 </a>
 
                 <a href="index" class="logo logo-light">
                     <span class="logo-sm">
-                        <img src="{{ URL::asset ('build/images/logos33.png') }}" alt="RESQ" height="40">
+                        <img src="{{ URL::asset ('build/images/logos44.png') }}" alt="RESQ" height="40">
                     </span>
                     <span class="logo-lg">
-                        <img src="{{ URL::asset ('build/images/logos33.png') }}" alt="RESQ" height="48">
+                        <img src="{{ URL::asset ('build/images/logos44.png') }}" alt="RESQ" height="48">
                     </span>
                 </a>
             </div>

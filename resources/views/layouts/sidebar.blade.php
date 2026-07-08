@@ -3,55 +3,62 @@
     <div data-simplebar class="h-100">
         <div id="sidebar-menu">
             <ul class="metismenu list-unstyled" id="side-menu">
-                <li class="menu-title">RESQ</li>
+                <li class="menu-title">Project Configuration</li>
 
                 <li class="{{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : '' }}">
                     <a href="{{ route('dashboard') }}" class="waves-effect {{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'active' : '' }}">
                         <i class="bx bx-home-circle"></i>
-                        <span>Project Configuration</span>
+                        <span>Dashboard</span>
                     </a>
                 </li>
 
-                <li class="menu-title">Project Setup</li>
-
-                <li class="{{ request()->routeIs('projects.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('projects.index') }}" class="waves-effect {{ request()->routeIs('projects.*') ? 'active' : '' }}">
-                        <i class="bx bx-briefcase-alt-2"></i>
-                        <span>Projects</span>
+                <li class="mm-active">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
+                        <i class="bx bx-cog"></i>
+                        <span>Configuration</span>
                     </a>
+                    <ul class="sub-menu mm-show" aria-expanded="true">
+                        <li class="{{ request()->routeIs('projects.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('projects.index') }}" class="{{ request()->routeIs('projects.*') ? 'active' : '' }}">
+                                Project Setup
+                            </a>
+                        </li>
+
+                    </ul>
                 </li>
 
-                <li class="{{ request()->routeIs('clusters.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('clusters.index') }}" class="waves-effect {{ request()->routeIs('clusters.*') ? 'active' : '' }}">
-                        <i class="bx bx-map-alt"></i>
-                        <span>Clusters</span>
+                <li class="mm-active">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
+                        <i class="bx bx-list-check"></i>
+                        <span>Registered</span>
                     </a>
-                </li>
-
-                <li class="menu-title">Stations</li>
-
-                <li class="{{ request()->routeIs('monitoring-stations.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('monitoring-stations.index') }}" class="waves-effect {{ request()->routeIs('monitoring-stations.*') ? 'active' : '' }}">
-                        <i class="bx bx-map-pin"></i>
-                        <span>Monitoring Stations</span>
-                    </a>
-                </li>
-
-                <li class="{{ request()->routeIs('warning-stations.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('warning-stations.index') }}" class="waves-effect {{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
-                        <i class="bx bx-bell"></i>
-                        <span>Warning Stations</span>
-                    </a>
-                </li>
-
-                <li class="{{ request()->routeIs('sensors.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('sensors.index') }}" class="waves-effect {{ request()->routeIs('sensors.*') ? 'active' : '' }}">
-                        <i class="bx bx-slider-alt"></i>
-                        <span>Sensor</span>
-                    </a>
+                    <ul class="sub-menu mm-show" aria-expanded="true">
+                        <li>
+                            <a href="{{ route('clusters.index') }}" class="{{ request()->routeIs('clusters.*') ? 'active' : '' }}">
+                                Geospatial Workspace
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('monitoring-stations.index') }}" class="{{ request()->routeIs('monitoring-stations.*') ? 'active' : '' }}">
+                                Monitoring Station
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
+                                Warning Station
+                            </a>
+                        </li>
+                    </ul>
                 </li>
 
                 <li class="menu-title">Device Setup</li>
+
+                <li class="{{ request()->routeIs('mst-prefixes.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('mst-prefixes.index') }}" class="waves-effect {{ request()->routeIs('mst-prefixes.*') ? 'active' : '' }}">
+                        <i class="bx bx-purchase-tag-alt"></i>
+                        <span>Prefix Sensors</span>
+                    </a>
+                </li>
 
                 <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('data-loggers.index') }}" class="waves-effect {{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
@@ -83,28 +90,13 @@
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('warning-stations.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('warning-stations.index') }}#command-test" class="waves-effect">
+                <li class="{{ request()->routeIs('command-test.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('command-test.index') }}#command-test" class="waves-effect {{ request()->routeIs('command-test.*') ? 'active' : '' }}">
                         <i class="bx bx-send"></i>
                         <span>Command Test</span>
                     </a>
                 </li>
 
-                <li class="menu-title">Administration</li>
-
-                <li class="{{ request()->routeIs('admins.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('admins.index') }}" class="waves-effect {{ request()->routeIs('admins.*') ? 'active' : '' }}">
-                        <i class="bx bx-user-plus"></i>
-                        <span>Admins</span>
-                    </a>
-                </li>
-
-                <li class="{{ request()->routeIs('customers.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('customers.list') }}" class="waves-effect {{ request()->routeIs('customers.*') ? 'active' : '' }}">
-                        <i class="bx bx-group"></i>
-                        <span>Customers</span>
-                    </a>
-                </li>
             </ul>
         </div>
     </div>
