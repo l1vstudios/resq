@@ -8,6 +8,7 @@ use App\Models\DeviceCredential;
 use App\Models\MstPrefix;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -89,6 +90,7 @@ class DeviceSetupController extends Controller
     public function storeTelemetry(Request $request): RedirectResponse
     {
         $data = $request->validate([
+            'telemetry_id' => ['nullable', 'exists:telemetry_readings,id'],
             'sensor_id' => ['required', 'exists:sensors,id'],
             'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
             'value' => ['nullable', 'string', 'max:255'],
@@ -96,8 +98,10 @@ class DeviceSetupController extends Controller
             'status' => ['required', Rule::in(['Normal', 'Waspada', 'Siaga', 'Awas', 'Danger'])],
             'received_at' => ['nullable', 'date'],
         ]);
+        $telemetryId = $data['telemetry_id'] ?? null;
+        unset($data['telemetry_id']);
 
-        $reading = TelemetryReading::create($data);
+        $reading = $this->upsertTelemetryReading($data, $telemetryId ? (int) $telemetryId : null);
 
         Sensor::whereKey($data['sensor_id'])->update([
             'value' => $data['value'],
@@ -107,6 +111,109 @@ class DeviceSetupController extends Controller
         ]);
 
         return back()->with('message', 'Telemetry reading berhasil disimpan.');
+    }
+
+    public function updateRealtimeSensorStatus(Request $request): JsonResponse
+    {
+        $callbackToken = env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN');
+
+        if ($callbackToken && ! hash_equals($callbackToken, (string) $request->bearerToken())) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid callback token.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'sensor_id' => ['nullable', 'required_without:sensor_code', 'exists:sensors,id'],
+            'sensor_code' => ['nullable', 'required_without:sensor_id', 'string', 'exists:sensors,sensor_code'],
+            'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
+            'value' => ['nullable', 'string', 'max:255'],
+            'threshold_exceeded' => ['nullable', 'boolean'],
+        ]);
+
+        $sensor = ! empty($data['sensor_id'])
+            ? Sensor::findOrFail($data['sensor_id'])
+            : Sensor::where('sensor_code', $data['sensor_code'])->firstOrFail();
+        $thresholdExceeded = array_key_exists('threshold_exceeded', $data)
+            ? (bool) $data['threshold_exceeded']
+            : $this->thresholdExceeded($data['value'] ?? null, $sensor->threshold ?? $sensor->rule);
+        $level = $thresholdExceeded ? 'Awas' : 'Normal';
+
+        $sensor->update([
+            'value' => $data['value'],
+            'alert_level' => $level,
+            'status' => $level,
+            'last_seen_at' => now(),
+        ]);
+
+        $this->upsertTelemetryReading([
+            'sensor_id' => $sensor->id,
+            'data_logger_id' => $data['data_logger_id'] ?? null,
+            'value' => $data['value'],
+            'alert_level' => $level,
+            'status' => $level,
+            'received_at' => now(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'sensor' => [
+                'id' => $sensor->id,
+                'sensor_code' => $sensor->sensor_code,
+                'value' => $sensor->value,
+                'alert_level' => $sensor->alert_level,
+                'status' => $sensor->status,
+                'last_seen_at' => optional($sensor->last_seen_at)->toISOString(),
+            ],
+        ]);
+    }
+
+    private function thresholdExceeded(?string $value, ?string $threshold): bool
+    {
+        $numericValue = $this->numericFromText($value);
+        $numericThreshold = $this->numericFromText($threshold);
+
+        return $numericValue !== null
+            && $numericThreshold !== null
+            && $numericValue > $numericThreshold;
+    }
+
+    private function upsertTelemetryReading(array $data, ?int $telemetryId = null): TelemetryReading
+    {
+        $reading = $telemetryId
+            ? TelemetryReading::findOrFail($telemetryId)
+            : TelemetryReading::where('sensor_id', $data['sensor_id'])
+                ->latest('received_at')
+                ->latest()
+                ->first();
+
+        if ($reading) {
+            $reading->update($data);
+        } else {
+            $reading = TelemetryReading::create($data);
+        }
+
+        TelemetryReading::where('sensor_id', $data['sensor_id'])
+            ->whereKeyNot($reading->id)
+            ->delete();
+
+        return $reading;
+    }
+
+    private function numericFromText(?string $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        preg_match('/-?\d+(\.\d+)?/', str_replace(',', '.', $value), $matches);
+
+        return isset($matches[0]) ? (float) $matches[0] : null;
     }
 
     public function destroy(string $type, int $id): RedirectResponse

@@ -10,6 +10,8 @@
     ],
     "scripts": {
         "dev": "vite",
+        "modbus:server": "node modbus-server/server.js",
+        "mqtt:gateway": "MQTT_AUTOSTART=true node modbus-server/server.js",
         "build": "vite build",
         "build-rtl": "rtlcss public/build/css/app.min.css & rtlcss public/build/css/bootstrap.min.css"
     },
@@ -27,6 +29,11 @@
     },
     "dependencies": {
         "bootstrap": "5.3.5",
+        "cors": "^2.8.6",
+        "dotenv": "^17.4.2",
+        "express": "^5.2.1",
+        "modbus-serial": "^8.0.25",
+        "mqtt": "^5.15.2",
         "vite-plugin-static-copy": "^0.13.1"
     }
 }

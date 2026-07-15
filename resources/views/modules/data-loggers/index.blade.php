@@ -18,7 +18,7 @@
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4">Data Logger Setup</h4>
-                <form method="POST" action="{{ route('data-loggers.store') }}">
+                <form method="POST" action="{{ route('data-loggers.store') }}" id="data-logger-form">
                     @csrf
                     <div class="mb-3">
                         <label class="form-label">Monitoring Station</label>
@@ -102,11 +102,25 @@
                                     <td><span class="badge {{ ($logger['logger_status'] ?? '') === 'Active' ? 'bg-success' : 'bg-secondary' }}">{{ $logger['logger_status'] ?? '-' }}</span></td>
                                     <td class="text-end">
                                         @isset($logger['db_id'])
-                                            <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'data-logger', 'id' => $logger['db_id']]) }}">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button class="btn btn-outline-danger btn-sm">Delete</button>
-                                            </form>
+                                            <div class="d-inline-flex gap-1">
+                                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                                    data-edit-form="#data-logger-form"
+                                                    data-edit-fields="{{ base64_encode(json_encode([
+                                                        'monitoring_station_id' => $logger['monitoring_station_db_id'] ?? '',
+                                                        'logger_code' => $logger['id'] ?? '',
+                                                        'serial_number' => $logger['serial_number'] ?? '',
+                                                        'logger_model' => $logger['logger_model'] ?? '',
+                                                        'vendor' => $logger['vendor'] ?? '',
+                                                        'firmware_version' => $logger['firmware_version'] ?? '',
+                                                        'device_label' => $logger['device_label'] ?? '',
+                                                        'logger_status' => $logger['logger_status'] ?? 'Active',
+                                                    ])) }}">Edit</button>
+                                                <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'data-logger', 'id' => $logger['db_id']]) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="btn btn-outline-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
                                         @endisset
                                     </td>
                                 </tr>

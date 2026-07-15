@@ -1,4 +1,42 @@
 <!-- ========== Left Sidebar Start ========== -->
+<style>
+    .vertical-collpsed .main-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .vertical-collpsed .vertical-menu {
+        z-index: 1100 !important;
+    }
+
+    .vertical-collpsed .vertical-menu #sidebar-menu,
+    .vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover {
+        position: relative;
+        z-index: 1101 !important;
+    }
+
+    .vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > a {
+        background-color: #f5f5f5;
+        color: #556ee6;
+        position: relative;
+        width: 260px !important;
+        z-index: 1102 !important;
+    }
+
+    .vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > a span {
+        display: inline !important;
+    }
+
+    .vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul {
+        display: block !important;
+        z-index: 1102 !important;
+    }
+
+    .vertical-collpsed .vertical-menu #sidebar-menu > ul > li > a {
+        overflow: visible;
+    }
+</style>
+
 <div class="vertical-menu">
     <div data-simplebar class="h-100">
         <div id="sidebar-menu">
@@ -57,6 +95,13 @@
                     <a href="{{ route('mst-prefixes.index') }}" class="waves-effect {{ request()->routeIs('mst-prefixes.*') ? 'active' : '' }}">
                         <i class="bx bx-purchase-tag-alt"></i>
                         <span>Prefix Sensors</span>
+                    </a>
+                </li>
+
+                <li class="{{ request()->routeIs('modbus-configuration.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('modbus-configuration.index') }}" class="waves-effect {{ request()->routeIs('modbus-configuration.*') ? 'active' : '' }}">
+                        <i class="bx bx-cog"></i>
+                        <span>Modbus Configuration</span>
                     </a>
                 </li>
 

@@ -1,20 +1,124 @@
+<style>
+    #vertical-menu-btn.sidebar-toggle-btn {
+        align-items: center;
+        display: inline-flex !important;
+        justify-content: center;
+        min-width: 48px;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    .topbar-logo-toggle {
+        align-items: center;
+        display: flex;
+        gap: 0;
+        min-width: 0;
+    }
+
+    .topbar-logo-toggle .navbar-brand-box {
+        align-items: center;
+        display: flex;
+        height: 70px;
+        justify-content: center;
+        margin-left: 0;
+        overflow: visible;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        width: 260px;
+    }
+
+    .topbar-logo-toggle .logo {
+        align-items: center;
+        line-height: 1;
+    }
+
+    .topbar-logo-toggle .logo-lg img {
+        height: 180px;
+        margin-top: 10px !important;
+        max-width: 300px;
+        object-fit: contain;
+        width: auto;
+    }
+
+    .topbar-logo-mobile {
+        align-items: center;
+        display: inline-flex;
+        height: 42px;
+        justify-content: center;
+        width: 42px;
+    }
+
+    .topbar-logo-mobile img {
+        max-height: 42px;
+        max-width: 42px;
+        object-fit: contain;
+        width: auto;
+    }
+
+    #vertical-menu-btn.sidebar-toggle-btn i {
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .topbar-logo-toggle #vertical-menu-btn.sidebar-toggle-btn {
+        margin-left: 0;
+    }
+
+    .vertical-collpsed .topbar-logo-toggle .navbar-brand-box {
+        justify-content: center;
+        margin-left: 0;
+        width: 70px !important;
+    }
+
+    .vertical-collpsed .topbar-logo-mobile {
+        margin: 0 auto;
+    }
+
+    .vertical-collpsed .navbar-brand-box .logo-sm > img,
+    .navbar-brand-box .logo-sm > img {
+        max-height: 24px;
+        width: auto;
+    }
+
+    .vertical-collpsed .vertical-menu #sidebar-menu > ul > li > a > span,
+    .vertical-collpsed .vertical-menu #sidebar-menu .menu-title {
+        display: none !important;
+    }
+
+    @media (min-width: 992px) {
+        #vertical-menu-btn.sidebar-toggle-btn {
+            display: inline-flex !important;
+        }
+    }
+</style>
+
 <header id="page-topbar">
     <div class="navbar-header">
-        <div class="d-flex">
+        <div class="topbar-logo-toggle">
             <div class="navbar-brand-box">
                 <a href="<?php echo e(route('dashboard')); ?>" class="logo logo-dark">
                     <span class="logo-sm">
-                        <!-- Menambahkan margin-top sedikit pada logo kecil -->
-                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ" height="100" style="margin-top: 10px;">
+                        <span class="topbar-logo-mobile">
+                            <img src="<?php echo e(URL::asset('build/images/logomobile.png')); ?>" alt="RESQ">
+                        </span>
                     </span>
                     <span class="logo-lg">
-                        <!-- Mengganti class mt-4 dengan inline style margin-top agar lebih presisi -->
-                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ" height="180" style="margin-top: 30px;">
+                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ">
+                    </span>
+                </a>
+                <a href="<?php echo e(route('dashboard')); ?>" class="logo logo-light">
+                    <span class="logo-sm">
+                        <span class="topbar-logo-mobile">
+                            <img src="<?php echo e(URL::asset('build/images/logomobile.png')); ?>" alt="RESQ">
+                        </span>
+                    </span>
+                    <span class="logo-lg">
+                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ">
                     </span>
                 </a>
             </div>
 
-            <button type="button" class="btn btn-sm px-3 font-size-16 header-item waves-effect" id="vertical-menu-btn">
+            <button type="button" class="btn btn-sm px-3 font-size-16 header-item waves-effect sidebar-toggle-btn" id="vertical-menu-btn" aria-label="Toggle sidebar">
                 <i class="fa fa-fw fa-bars"></i>
             </button>
 

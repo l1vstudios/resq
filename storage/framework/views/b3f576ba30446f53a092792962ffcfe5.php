@@ -34,7 +34,7 @@
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4">Prefix Sensors Setup</h4>
-                <form method="POST" action="<?php echo e(route('mst-prefixes.store')); ?>">
+                <form method="POST" action="<?php echo e(route('mst-prefixes.store')); ?>" id="mst-prefix-form">
                     <?php echo csrf_field(); ?>
                     <div class="mb-3">
                         <label class="form-label">Prefix</label>
@@ -56,7 +56,7 @@
                             <option>Maintenance</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary">Save / Update Prefix</button>
+                    <button type="submit" class="btn btn-success">Save / Update Prefix</button>
                 </form>
             </div>
         </div>
@@ -93,11 +93,21 @@
                                     </td>
                                     <td class="text-end">
                                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(isset($prefix['db_id'])): ?>
-                                            <form method="POST" action="<?php echo e(route('device-setup.destroy', ['type' => 'mst-prefix', 'id' => $prefix['db_id']])); ?>">
-                                                <?php echo csrf_field(); ?>
-                                                <?php echo method_field('DELETE'); ?>
-                                                <button class="btn btn-outline-danger btn-sm">Delete</button>
-                                            </form>
+                                            <div class="d-inline-flex gap-1">
+                                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                                    data-edit-form="#mst-prefix-form"
+                                                    data-edit-fields="<?php echo e(base64_encode(json_encode([
+                                                        'prefix_code' => $prefix['id'] ?? '',
+                                                        'name' => $prefix['name'] ?? '',
+                                                        'description' => $prefix['description'] ?? '',
+                                                        'status' => $prefix['status'] ?? 'Active',
+                                                    ]))); ?>">Edit</button>
+                                                <form method="POST" action="<?php echo e(route('device-setup.destroy', ['type' => 'mst-prefix', 'id' => $prefix['db_id']])); ?>">
+                                                    <?php echo csrf_field(); ?>
+                                                    <?php echo method_field('DELETE'); ?>
+                                                    <button class="btn btn-outline-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
                                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                     </td>
                                 </tr>

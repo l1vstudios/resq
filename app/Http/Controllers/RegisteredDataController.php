@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Models\WarningStation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
@@ -42,6 +43,11 @@ class RegisteredDataController extends Controller
         return view('modules.mst-prefixes.index', $this->data());
     }
 
+    public function modbusConfiguration(): View
+    {
+        return view('modules.modbus-configuration.index', $this->data());
+    }
+
     public function dataLoggers(): View
     {
         return view('modules.data-loggers.index', $this->data());
@@ -60,6 +66,16 @@ class RegisteredDataController extends Controller
     public function telemetry(): View
     {
         return view('modules.telemetry.index', $this->data());
+    }
+
+    public function telemetryData(): JsonResponse
+    {
+        $data = $this->data();
+
+        return response()->json([
+            'sensors' => $data['sensors'],
+            'telemetryReadings' => $data['telemetryReadings'],
+        ]);
     }
 
     public function commandTest(): View
@@ -161,6 +177,9 @@ class RegisteredDataController extends Controller
             'mst_prefix' => $sensor->mstPrefix?->prefix_code,
             'slave_id' => $sensor->slave_id,
             'address' => $sensor->address,
+            'function_code' => $sensor->function_code ?? 'FC03',
+            'quantity' => $sensor->quantity ?? 1,
+            'poll_interval_ms' => $sensor->poll_interval_ms ?? 1000,
             'type' => $sensor->type,
             'parameter' => $sensor->parameter,
             'value' => $sensor->value,
@@ -169,6 +188,8 @@ class RegisteredDataController extends Controller
             'scale_factor' => $sensor->scale_factor,
             'offset' => $sensor->offset,
             'unit' => $sensor->unit,
+            'alert_level' => $sensor->alert_level,
+            'rule' => $sensor->rule,
             'status' => $sensor->status,
             'last_seen' => optional($sensor->last_seen_at)->diffForHumans(),
         ]);
@@ -324,13 +345,16 @@ class RegisteredDataController extends Controller
     {
         return collect($readings)->map(fn (TelemetryReading $reading) => [
             'db_id' => $reading->id,
+            'sensor_db_id' => $reading->sensor_id,
             'sensor_id' => $reading->sensor?->sensor_code,
             'monitoring_station_id' => $reading->sensor?->monitoringStation?->station_code,
+            'data_logger_db_id' => $reading->data_logger_id,
             'data_logger_id' => $reading->dataLogger?->logger_code,
             'value' => $reading->value,
             'alert_level' => $reading->alert_level,
             'status' => $reading->status,
             'received_at' => optional($reading->received_at ?? $reading->created_at)->diffForHumans(),
+            'received_at_input' => optional($reading->received_at)->format('Y-m-d\TH:i'),
         ]);
     }
 

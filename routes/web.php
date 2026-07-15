@@ -24,6 +24,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/map-data', [DashboardController::class, 'mapData'])->name('dashboard.map-data');
     Route::get('/project-configuration', [DashboardController::class, 'index'])->name('project-configuration');
     Route::get('/projects', [ProjectSetupController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectSetupController::class, 'storeProject'])->name('projects.store');
@@ -39,6 +40,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/sensors', [RegisteredDataController::class, 'sensors'])->name('sensors.index');
     Route::get('/mst-prefixes', [RegisteredDataController::class, 'mstPrefixes'])->name('mst-prefixes.index');
     Route::post('/mst-prefixes', [DeviceSetupController::class, 'storeMstPrefix'])->name('mst-prefixes.store');
+    Route::get('/modbus-configuration', [RegisteredDataController::class, 'modbusConfiguration'])->name('modbus-configuration.index');
+    Route::post('/modbus-configuration/realtime-sensor-status', [DeviceSetupController::class, 'updateRealtimeSensorStatus'])->name('modbus-configuration.realtime-sensor-status');
     Route::get('/data-loggers', [RegisteredDataController::class, 'dataLoggers'])->name('data-loggers.index');
     Route::post('/data-loggers', [DeviceSetupController::class, 'storeDataLogger'])->name('data-loggers.store');
     Route::get('/connectivity', [RegisteredDataController::class, 'connectivity'])->name('connectivity.index');
@@ -46,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');
     Route::post('/credentials', [DeviceSetupController::class, 'storeCredential'])->name('credentials.store');
     Route::get('/telemetry', [RegisteredDataController::class, 'telemetry'])->name('telemetry.index');
+    Route::get('/telemetry/live-data', [RegisteredDataController::class, 'telemetryData'])->name('telemetry.live-data');
     Route::post('/telemetry', [DeviceSetupController::class, 'storeTelemetry'])->name('telemetry.store');
     Route::get('/command-test', [RegisteredDataController::class, 'commandTest'])->name('command-test.index');
     Route::delete('/device-setup/{type}/{id}', [DeviceSetupController::class, 'destroy'])->name('device-setup.destroy');

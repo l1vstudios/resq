@@ -64,12 +64,69 @@
     }
 
     .sensor-pulse-marker.danger {
+        width: 24px;
+        height: 24px;
         animation: sensorDangerBlink .72s ease-in-out infinite alternate;
     }
 
     .sensor-pulse-marker.danger::after {
+        inset: -18px;
         animation-duration: .78s;
         border-width: 3px;
+    }
+
+    .danger-map-radius {
+        animation: mapDangerRadiusBlink 1s ease-in-out infinite alternate;
+    }
+
+    .danger-warning-icon {
+        align-items: center;
+        animation: warningIconBlink .64s ease-in-out infinite alternate;
+        background: #f46a6a;
+        border: 3px solid #ffffff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 12px rgba(244, 106, 106, .18), 0 0 30px rgba(244, 106, 106, .95);
+        color: #ffffff;
+        display: flex;
+        height: 36px;
+        justify-content: center;
+        position: relative;
+        width: 36px;
+    }
+
+    .danger-warning-icon::after {
+        animation: warningRingBlink 1s ease-out infinite;
+        border: 4px solid rgba(244, 106, 106, .75);
+        border-radius: 50%;
+        content: "";
+        inset: -22px;
+        position: absolute;
+    }
+
+    .danger-warning-icon i {
+        font-size: 22px;
+        line-height: 1;
+    }
+
+    .map-danger-popup .danger-popup-head {
+        align-items: center;
+        color: #f46a6a;
+        display: flex;
+        font-weight: 800;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .map-danger-popup .danger-popup-head i {
+        font-size: 22px;
+    }
+
+    .map-danger-reading {
+        background: rgba(244, 106, 106, .1);
+        border-left: 3px solid #f46a6a;
+        border-radius: 4px;
+        margin-top: 8px;
+        padding: 8px;
     }
 
     @keyframes sensorPulseRing {
@@ -91,6 +148,39 @@
         100% {
             transform: scale(1.18);
             box-shadow: 0 0 22px var(--sensor-color);
+        }
+    }
+
+    @keyframes mapDangerRadiusBlink {
+        0% {
+            opacity: .18;
+            stroke-opacity: .55;
+        }
+        100% {
+            opacity: .56;
+            stroke-opacity: 1;
+        }
+    }
+
+    @keyframes warningIconBlink {
+        0% {
+            transform: scale(.9);
+            filter: brightness(.9);
+        }
+        100% {
+            transform: scale(1.18);
+            filter: brightness(1.35);
+        }
+    }
+
+    @keyframes warningRingBlink {
+        0% {
+            opacity: .75;
+            transform: scale(.45);
+        }
+        100% {
+            opacity: 0;
+            transform: scale(2.2);
         }
     }
 </style>
@@ -346,6 +436,13 @@
         var clusters = @json($mapClusters ?? []);
         var sensorPoints = @json($mapSensors ?? []);
         var warningStations = @json($mapWarningStations ?? []);
+        var mapDataUrl = @json(route('dashboard.map-data'));
+        var sirenAudio = new Audio(@json(asset('sound/sirene.mp3')));
+        var sirenShouldPlay = false;
+        var sirenIsPlaying = false;
+
+        sirenAudio.loop = true;
+        sirenAudio.preload = 'auto';
 
         var statusColors = {
             Normal: '#34c38f',
@@ -354,8 +451,88 @@
             Waspada: '#f1b44c',
             Pengujian: '#50a5f1',
             Bahaya: '#f46a6a',
+            Awas: '#f46a6a',
             Siaga: '#f46a6a'
         };
+
+        function escapeHtml(value) {
+            return String(value ?? '-')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function isDanger(item) {
+            return Boolean(item && (
+                item.is_danger ||
+                item.status === 'Danger' ||
+                item.status === 'Bahaya' ||
+                item.status === 'Awas' ||
+                item.status === 'Siaga' ||
+                item.alert_level === 'Awas' ||
+                item.alert_level === 'Siaga'
+            ));
+        }
+
+        function hasDangerState(data) {
+            var clusters = data.clusters || [];
+            var sensorPoints = data.sensors || [];
+            var warningStations = data.warningStations || [];
+
+            return clusters.some(isDanger)
+                || sensorPoints.some(isDanger)
+                || warningStations.some(function (station) {
+                    return isDanger(station) || (station.danger_sensors || []).some(isDanger);
+                });
+        }
+
+        function syncSiren(shouldPlay) {
+            sirenShouldPlay = shouldPlay;
+
+            if (!shouldPlay) {
+                sirenAudio.pause();
+                sirenAudio.currentTime = 0;
+                sirenIsPlaying = false;
+                return;
+            }
+
+            if (sirenIsPlaying) {
+                return;
+            }
+
+            sirenAudio.play()
+                .then(function () {
+                    sirenIsPlaying = true;
+                })
+                .catch(function () {
+                    sirenIsPlaying = false;
+                });
+        }
+
+        document.addEventListener('click', function () {
+            if (sirenShouldPlay && !sirenIsPlaying) {
+                syncSiren(true);
+            }
+        });
+
+        function dangerPopup(title, bodyHtml) {
+            return '<div class="map-danger-popup">' +
+                '<div class="danger-popup-head"><i class="bx bxs-error"></i><span>BAHAYA</span></div>' +
+                '<strong>' + escapeHtml(title) + '</strong>' +
+                bodyHtml +
+            '</div>';
+        }
+
+        function sensorReadingHtml(sensor) {
+            return '<div class="map-danger-reading">' +
+                '<div><strong>Current Value :</strong> ' + escapeHtml(sensor.value || '-') + '</div>' +
+                '<div><strong>Threshold:</strong> ' + escapeHtml(sensor.threshold || '-') + '</div>' +
+                '<div><strong>Alert:</strong> ' + escapeHtml(sensor.alert_level || sensor.status || '-') + '</div>' +
+                '<div><strong>Update:</strong> ' + escapeHtml(sensor.last_seen || '-') + '</div>' +
+            '</div>';
+        }
 
         var map = L.map('sensor-cluster-map', {
             scrollWheelZoom: false
@@ -370,79 +547,148 @@
         var sensorLayer = L.layerGroup().addTo(map);
         var warningLayer = L.layerGroup().addTo(map);
 
-        clusters.forEach(function (cluster) {
-            var color = statusColors[cluster.status] || '#34c38f';
+        function renderMapData(data) {
+            var clusters = data.clusters || [];
+            var sensorPoints = data.sensors || [];
+            var warningStations = data.warningStations || [];
 
-            L.circle([cluster.lat, cluster.lng], {
-                radius: 22000,
-                color: color,
-                fillColor: color,
-                fillOpacity: 0.12,
-                weight: 2
-            }).addTo(clusterLayer);
+            syncSiren(hasDangerState(data));
+            clusterLayer.clearLayers();
+            sensorLayer.clearLayers();
+            warningLayer.clearLayers();
 
-            L.circleMarker([cluster.lat, cluster.lng], {
-                radius: 9,
-                color: '#ffffff',
-                fillColor: color,
-                fillOpacity: 1,
-                weight: 2
-            }).bindPopup(
-                '<strong>' + cluster.name + '</strong>' +
-                '<br>Provinsi: ' + cluster.province +
-                '<br>Kab/Kota: ' + cluster.city +
-                '<br>Ancaman: ' + cluster.hazard +
-                '<br>Sensor: ' + cluster.sensors +
-                '<br>Stasiun Peringatan: ' + cluster.warnings +
-                '<br>Status: ' + cluster.status
-            ).addTo(clusterLayer);
-        });
+            clusters.forEach(function (cluster) {
+                var color = isDanger(cluster) ? '#f46a6a' : (statusColors[cluster.status] || '#34c38f');
+                var clusterDanger = isDanger(cluster);
 
-        sensorPoints.forEach(function (sensor) {
-            var color = statusColors[sensor.status] || '#50a5f1';
-            var statusClass = sensor.status === 'Danger' || sensor.status === 'Bahaya' || sensor.status === 'Siaga'
-                ? 'danger'
-                : (sensor.status === 'Waspada' ? 'warning' : 'live');
-            var sensorIcon = L.divIcon({
-                className: 'sensor-live-icon',
-                html: '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-                popupAnchor: [0, -14]
+                L.circle([cluster.lat, cluster.lng], {
+                    radius: clusterDanger ? 90000 : 22000,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: clusterDanger ? 0.2 : 0.12,
+                    weight: clusterDanger ? 4 : 2,
+                    className: clusterDanger ? 'danger-map-radius' : ''
+                }).addTo(clusterLayer);
+
+                L.circleMarker([cluster.lat, cluster.lng], {
+                    radius: clusterDanger ? 12 : 9,
+                    color: '#ffffff',
+                    fillColor: color,
+                    fillOpacity: 1,
+                    weight: 2
+                }).bindPopup(
+                    '<strong>' + escapeHtml(cluster.name) + '</strong>' +
+                    '<br>Provinsi: ' + escapeHtml(cluster.province) +
+                    '<br>Kab/Kota: ' + escapeHtml(cluster.city) +
+                    '<br>Ancaman: ' + escapeHtml(cluster.hazard) +
+                    '<br>Sensor: ' + escapeHtml(cluster.sensors) +
+                    '<br>Stasiun Peringatan: ' + escapeHtml(cluster.warnings) +
+                    '<br>Status: ' + escapeHtml(cluster.status)
+                ).addTo(clusterLayer);
             });
 
-            L.marker([sensor.lat, sensor.lng], {
-                icon: sensorIcon,
-                title: sensor.name
-            }).bindPopup(
-                '<strong>' + sensor.name + '</strong>' +
-                '<br>Jenis: ' + sensor.type +
-                '<br>Stasiun: ' + sensor.station +
-                '<br>Provinsi: ' + sensor.province +
-                '<br>Status: ' + sensor.status +
-                '<br>Sinyal Aktif: Menyala'
-            ).addTo(sensorLayer);
-        });
+            sensorPoints.forEach(function (sensor) {
+                var sensorDanger = isDanger(sensor);
+                var color = sensorDanger ? '#f46a6a' : (statusColors[sensor.status] || '#50a5f1');
+                var statusClass = sensorDanger
+                    ? 'danger'
+                    : (sensor.status === 'Waspada' ? 'warning' : 'live');
+                var sensorIcon = L.divIcon({
+                    className: 'sensor-live-icon',
+                    html: '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>',
+                    iconSize: sensorDanger ? [52, 52] : [30, 30],
+                    iconAnchor: sensorDanger ? [26, 26] : [15, 15],
+                    popupAnchor: [0, -14]
+                });
+                var sensorPopupBody =
+                    '<br>Jenis: ' + escapeHtml(sensor.type) +
+                    '<br>Parameter: ' + escapeHtml(sensor.parameter) +
+                    '<br>Stasiun: ' + escapeHtml(sensor.station) +
+                    '<br>Warning Station: ' + escapeHtml(sensor.warning_station) +
+                    '<br>Provinsi: ' + escapeHtml(sensor.province) +
+                    '<br>Status: ' + escapeHtml(sensor.status) +
+                    sensorReadingHtml(sensor);
 
-        warningStations.forEach(function (station) {
-            var color = statusColors[station.status] || '#f1b44c';
+                if (sensorDanger) {
+                    L.circle([sensor.lat, sensor.lng], {
+                        radius: 120000,
+                        color: '#f46a6a',
+                        fillColor: '#f46a6a',
+                        fillOpacity: 0.22,
+                        weight: 4,
+                        className: 'danger-map-radius'
+                    }).addTo(sensorLayer);
+                }
 
-            L.marker([station.lat, station.lng], {
-                title: station.name
-            }).bindPopup(
-                '<strong>' + station.name + '</strong>' +
-                '<br>Provinsi: ' + station.province +
-                '<br>Status: ' + station.status
-            ).addTo(warningLayer);
+                L.marker([sensor.lat, sensor.lng], {
+                    icon: sensorIcon,
+                    title: sensor.name
+                }).bindPopup(sensorDanger
+                    ? dangerPopup(sensor.name, sensorPopupBody)
+                    : '<strong>' + escapeHtml(sensor.name) + '</strong>' + sensorPopupBody
+                ).addTo(sensorLayer);
+            });
 
-            L.circleMarker([station.lat, station.lng], {
-                radius: 11,
-                color: color,
-                fillColor: '#ffffff',
-                fillOpacity: 0.2,
-                weight: 3
-            }).addTo(warningLayer);
-        });
+            warningStations.forEach(function (station) {
+                var stationDanger = isDanger(station);
+                var color = stationDanger ? '#f46a6a' : (statusColors[station.status] || '#f1b44c');
+                var warningReadings = '';
+
+                (station.danger_sensors || []).forEach(function (sensor) {
+                    warningReadings += sensorReadingHtml(sensor)
+                        .replace('<div class="map-danger-reading">', '<div class="map-danger-reading"><strong>' + escapeHtml(sensor.name) + '</strong>');
+                });
+
+                var stationPopupBody =
+                    '<br>Provinsi: ' + escapeHtml(station.province) +
+                    '<br>Status: ' + escapeHtml(station.status) +
+                    '<br>Public Warning: ' + (station.public_warning_enabled ? 'Aktif' : 'Standby') +
+                    '<br>ACK: ' + escapeHtml(station.ack_response) +
+                    (warningReadings || '<div class="map-danger-reading">Belum ada bacaan sensor bahaya.</div>');
+
+                if (stationDanger) {
+                    L.circle([station.lat, station.lng], {
+                        radius: 150000,
+                        color: '#f46a6a',
+                        fillColor: '#f46a6a',
+                        fillOpacity: 0.24,
+                        weight: 5,
+                        className: 'danger-map-radius'
+                    }).addTo(warningLayer);
+                }
+
+                var warningIcon = stationDanger
+                    ? L.divIcon({
+                        className: 'sensor-live-icon',
+                        html: '<span class="danger-warning-icon"><i class="bx bxs-error"></i></span>',
+                        iconSize: [60, 60],
+                        iconAnchor: [30, 30],
+                        popupAnchor: [0, -26]
+                    })
+                    : undefined;
+                var warningMarkerOptions = {
+                    title: station.name
+                };
+
+                if (warningIcon) {
+                    warningMarkerOptions.icon = warningIcon;
+                }
+
+                L.marker([station.lat, station.lng], warningMarkerOptions).bindPopup(stationDanger
+                    ? dangerPopup(station.name, stationPopupBody)
+                    : '<strong>' + escapeHtml(station.name) + '</strong>' + stationPopupBody
+                ).addTo(warningLayer);
+
+                L.circleMarker([station.lat, station.lng], {
+                    radius: stationDanger ? 16 : 11,
+                    color: color,
+                    fillColor: stationDanger ? color : '#ffffff',
+                    fillOpacity: stationDanger ? 0.45 : 0.2,
+                    weight: stationDanger ? 4 : 3,
+                    className: stationDanger ? 'danger-map-radius' : ''
+                }).addTo(warningLayer);
+            });
+        }
 
         L.control.layers(null, {
             'Klaster': clusterLayer,
@@ -451,6 +697,42 @@
         }, {
             collapsed: false
         }).addTo(map);
+
+        renderMapData({
+            clusters: clusters,
+            sensors: sensorPoints,
+            warningStations: warningStations
+        });
+
+        var mapRefreshInFlight = false;
+
+        function refreshMapData() {
+            if (mapRefreshInFlight) {
+                return;
+            }
+
+            mapRefreshInFlight = true;
+            fetch(mapDataUrl, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+                .then(function (response) {
+                    return response.ok ? response.json() : null;
+                })
+                .then(function (data) {
+                    if (data) {
+                        renderMapData(data);
+                    }
+                })
+                .catch(function () {})
+                .finally(function () {
+                    mapRefreshInFlight = false;
+                });
+        }
+
+        refreshMapData();
+        setInterval(refreshMapData, 1000);
     });
 </script>
 @endsection

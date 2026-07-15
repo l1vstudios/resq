@@ -18,7 +18,7 @@
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4">Credential Setup</h4>
-                <form method="POST" action="{{ route('credentials.store') }}">
+                <form method="POST" action="{{ route('credentials.store') }}" id="credential-form">
                     @csrf
                     <div class="mb-3">
                         <label class="form-label">Data Logger</label>
@@ -95,11 +95,25 @@
                                     <td>{{ $credential['created_at'] ?? '-' }}</td>
                                     <td class="text-end">
                                         @isset($credential['db_id'])
-                                            <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'credential', 'id' => $credential['db_id']]) }}">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button class="btn btn-outline-danger btn-sm">Delete</button>
-                                            </form>
+                                            <div class="d-inline-flex gap-1">
+                                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                                    data-edit-form="#credential-form"
+                                                    data-edit-fields="{{ base64_encode(json_encode([
+                                                        'data_logger_id' => $credential['data_logger_db_id'] ?? '',
+                                                        'credential_code' => $credential['id'] ?? '',
+                                                        'device_token' => $credential['device_token'] ?? '',
+                                                        'mqtt_username' => $credential['mqtt_username'] ?? '',
+                                                        'mqtt_password_hash' => $credential['mqtt_password_hash'] ?? '',
+                                                        'certificate_ref' => $credential['certificate_ref'] ?? '',
+                                                        'credential_status' => $credential['credential_status'] ?? 'Active',
+                                                        'revoked_at' => ! empty($credential['revoked_at']) && $credential['revoked_at'] !== '-' ? \Carbon\Carbon::parse($credential['revoked_at'])->format('Y-m-d\TH:i') : '',
+                                                    ])) }}">Edit</button>
+                                                <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'credential', 'id' => $credential['db_id']]) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="btn btn-outline-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
                                         @endisset
                                     </td>
                                 </tr>

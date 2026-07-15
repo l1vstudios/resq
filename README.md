@@ -7,6 +7,38 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## RESQ MQTT Gateway
+
+Untuk koneksi online tanpa LAN/RJ45, jalankan gateway MQTT di server yang bisa akses internet:
+
+```bash
+npm run mqtt:gateway
+```
+
+Contoh `.env`:
+
+```dotenv
+APP_URL=https://resq.example.com
+MQTT_CALLBACK_TOKEN=isi-token-rahasia
+MQTT_AUTOSTART=true
+MQTT_BROKER_URL=mqtts://broker.example.com:8883
+MQTT_TOPIC=resq/telemetry/#
+MQTT_USERNAME=
+MQTT_PASSWORD=
+MQTT_CALLBACK_URL=
+```
+
+Payload yang dikirim device ke topic MQTT:
+
+```json
+{
+  "sensor_code": "SNS-PDG-001",
+  "value": 12.4
+}
+```
+
+Jika topic memakai pola `resq/telemetry/SNS-PDG-001`, `sensor_code` juga bisa diambil dari segmen terakhir topic. Laravel akan menyimpan telemetry dan menghitung status `Awas` saat nilai melewati threshold sensor.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

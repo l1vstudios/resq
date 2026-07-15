@@ -1,0 +1,10 @@
+Sensor: RIKA-510-01
+Gateway URL: http://127.0.0.1:3100
+Broker URL: mqtt://139.59.100.220:1883
+Topic: resq/telemetry/#
+Username: m100_logger
+Password: Alivanwm12
+Test Value: 12.4
+
+
+command : mosquitto_sub -h 127.0.0.1 -p 1883 -u m100_logger -P 'Alivanwm12' -t '#' -v

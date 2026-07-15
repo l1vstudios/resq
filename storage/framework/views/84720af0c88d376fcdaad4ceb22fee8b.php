@@ -43,10 +43,70 @@
         });
     });
 </script>
+<script>
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-edit-form]');
+        if (!button) {
+            return;
+        }
+
+        var form = document.querySelector(button.dataset.editForm);
+        if (!form) {
+            return;
+        }
+
+        event.preventDefault();
+
+        var cssEscape = window.CSS && CSS.escape
+            ? CSS.escape
+            : function (value) {
+                return String(value).replace(/["\\]/g, '\\$&');
+            };
+        var fields = {};
+        try {
+            fields = JSON.parse(atob(button.dataset.editFields || 'e30='));
+        } catch (error) {
+            fields = {};
+        }
+
+        Object.keys(fields).forEach(function (name) {
+            var value = fields[name];
+            var escapedName = cssEscape(name);
+            var inputs = form.querySelectorAll('[name="' + escapedName + '"], [name="' + escapedName + '[]"]');
+
+            inputs.forEach(function (input) {
+                if (input.type === 'checkbox') {
+                    if (input.name.endsWith('[]')) {
+                        input.checked = Array.isArray(value) && value.map(String).includes(input.value);
+                    } else {
+                        input.checked = value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+                    }
+                    return;
+                }
+
+                if (input.type === 'radio') {
+                    input.checked = String(input.value) === String(value ?? '');
+                    return;
+                }
+
+                input.value = value ?? '';
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        form.classList.add('border', 'border-primary', 'rounded', 'p-2');
+
+        setTimeout(function () {
+            form.classList.remove('border', 'border-primary', 'rounded', 'p-2');
+        }, 1800);
+    });
+</script>
 
 <?php echo $__env->yieldContent('script'); ?>
 
 <!-- App js -->
 <script src="<?php echo e(URL::asset('build/js/app.js')); ?>"></script>
 
-<?php echo $__env->yieldContent('script-bottom'); ?><?php /**PATH /Users/brainsoft/kerjaan/resq/resources/views/layouts/vendor-scripts.blade.php ENDPATH**/ ?>
+<?php echo $__env->yieldContent('script-bottom'); ?>
+<?php /**PATH /Users/brainsoft/kerjaan/resq/resources/views/layouts/vendor-scripts.blade.php ENDPATH**/ ?>

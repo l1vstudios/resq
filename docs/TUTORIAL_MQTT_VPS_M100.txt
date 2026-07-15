@@ -1,0 +1,647 @@
+TUTORIAL SETTING MQTT DI VPS DAN LOGGER M100 UNTUK RESQ
+========================================================
+
+Tujuan:
+- Logger M100 kirim data lewat internet ke MQTT broker di VPS.
+- Aplikasi RESQ consume data MQTT tanpa kabel LAN/RJ45 lokal.
+- Gateway Node di server subscribe topic MQTT lalu push telemetry ke Laravel.
+
+Catatan perangkat:
+- Panduan ini diasumsikan untuk USR-M100/PUSR M100 atau logger M100 sejenis yang punya fitur MQTT.
+- Nama menu tiap firmware bisa beda. Jika menu tidak sama, cari field yang setara:
+  Server Address, Port, Client ID, Username, Password, Publish Topic, Subscribe Topic,
+  KeepAlive, QoS, SSL/TLS, Modbus/Edge Computing/Data Point.
+
+
+1. ARSITEKTUR YANG DIPAKAI
+--------------------------
+
+M100 Logger
+  -> publish MQTT ke VPS broker
+  -> topic: resq/telemetry/SENSOR_CODE
+  -> payload JSON: {"sensor_code":"SNS-PDG-001","value":12.4}
+
+VPS
+  -> Mosquitto MQTT Broker menerima data dari M100
+  -> Node MQTT Gateway subscribe topic resq/telemetry/#
+  -> Gateway POST ke Laravel: /api/realtime-sensor-status
+
+Laravel RESQ
+  -> update tabel sensors
+  -> insert tabel telemetry_readings
+  -> dashboard baca data terbaru
+
+
+2. SYARAT AWAL
+--------------
+
+Di VPS:
+- Ubuntu 22.04/24.04 disarankan.
+- Domain/subdomain sudah mengarah ke IP VPS.
+  Contoh:
+    mqtt.domain-kamu.com -> IP VPS
+    app.domain-kamu.com  -> IP VPS
+- Port yang dibuka:
+    22   SSH
+    80   HTTP, untuk certbot
+    443  HTTPS app Laravel
+    8883 MQTT TLS, untuk M100
+
+Di RESQ:
+- Project sudah punya sensor di database.
+- Pastikan sensor_code di database sama dengan topic/payload M100.
+  Contoh sensor_code:
+    SNS-PDG-001
+
+
+3. INSTALL MQTT BROKER DI VPS
+-----------------------------
+
+Login ke VPS:
+
+  ssh root@IP_VPS
+
+Update server:
+
+  apt update && apt upgrade -y
+
+Install Mosquitto dan client test:
+
+  apt install -y mosquitto mosquitto-clients
+  systemctl enable mosquitto
+  systemctl start mosquitto
+
+Buat user MQTT untuk M100:
+
+  mosquitto_passwd -c /etc/mosquitto/passwd m100_logger
+
+Masukkan password yang kuat.
+Contoh, jangan pakai ini di production:
+
+  Password: GantiPasswordKuat123
+
+Buat config listener MQTT non-TLS untuk test internal dulu:
+
+  nano /etc/mosquitto/conf.d/resq.conf
+
+Isi:
+
+  listener 1883 0.0.0.0
+  allow_anonymous false
+  password_file /etc/mosquitto/passwd
+
+Restart Mosquitto:
+
+  systemctl restart mosquitto
+  systemctl status mosquitto
+
+Test subscribe di terminal VPS:
+
+  mosquitto_sub -h 127.0.0.1 -p 1883 -u m100_logger -P 'PASSWORD_MQTT' -t 'resq/telemetry/#' -v
+
+Buka terminal VPS kedua, publish test:
+
+  mosquitto_pub -h 127.0.0.1 -p 1883 -u m100_logger -P 'PASSWORD_MQTT' \
+    -t 'resq/telemetry/SNS-PDG-001' \
+    -m '{"sensor_code":"SNS-PDG-001","value":12.4}'
+
+Kalau terminal subscribe menerima pesan, broker sudah jalan.
+
+
+4. AKTIFKAN MQTT TLS PORT 8883
+------------------------------
+
+Untuk dipakai online dari M100, sebaiknya pakai TLS di port 8883.
+
+Install certbot:
+
+  apt install -y certbot
+
+Ambil SSL certificate untuk domain MQTT.
+Pastikan DNS mqtt.domain-kamu.com sudah mengarah ke IP VPS.
+
+  certbot certonly --standalone -d mqtt.domain-kamu.com
+
+Edit config Mosquitto:
+
+  nano /etc/mosquitto/conf.d/resq.conf
+
+Ganti/isi seperti ini:
+
+  listener 8883 0.0.0.0
+  allow_anonymous false
+  password_file /etc/mosquitto/passwd
+
+  cafile /etc/letsencrypt/live/mqtt.domain-kamu.com/chain.pem
+  certfile /etc/letsencrypt/live/mqtt.domain-kamu.com/fullchain.pem
+  keyfile /etc/letsencrypt/live/mqtt.domain-kamu.com/privkey.pem
+  tls_version tlsv1.2
+
+Jika Mosquitto tidak bisa membaca file SSL karena permission, tambahkan user mosquitto ke group ssl-cert:
+
+  usermod -aG ssl-cert mosquitto
+  chgrp -R ssl-cert /etc/letsencrypt/archive /etc/letsencrypt/live
+  chmod -R 750 /etc/letsencrypt/archive /etc/letsencrypt/live
+
+Restart:
+
+  systemctl restart mosquitto
+
+Buka firewall:
+
+  ufw allow OpenSSH
+  ufw allow 80/tcp
+  ufw allow 443/tcp
+  ufw allow 8883/tcp
+  ufw enable
+  ufw status
+
+Test dari VPS:
+
+  mosquitto_sub -h mqtt.domain-kamu.com -p 8883 --tls-version tlsv1.2 \
+    -u m100_logger -P 'PASSWORD_MQTT' \
+    -t 'resq/telemetry/#' -v
+
+Terminal kedua:
+
+  mosquitto_pub -h mqtt.domain-kamu.com -p 8883 --tls-version tlsv1.2 \
+    -u m100_logger -P 'PASSWORD_MQTT' \
+    -t 'resq/telemetry/SNS-PDG-001' \
+    -m '{"sensor_code":"SNS-PDG-001","value":12.4}'
+
+
+5. SETTING APLIKASI RESQ DI VPS
+-------------------------------
+
+Masuk ke folder project RESQ di VPS:
+
+  cd /var/www/resq
+
+Edit file .env Laravel:
+
+  nano .env
+
+Isi/ganti bagian penting:
+
+  APP_URL=https://app.domain-kamu.com
+
+  MQTT_CALLBACK_TOKEN=ISI_TOKEN_RAHASIA_YANG_PANJANG
+  MQTT_AUTOSTART=true
+  MQTT_BROKER_URL=mqtts://mqtt.domain-kamu.com:8883
+  MQTT_TOPIC=resq/telemetry/#
+  MQTT_USERNAME=m100_logger
+  MQTT_PASSWORD=PASSWORD_MQTT
+  MQTT_CONNECT_TIMEOUT_MS=10000
+  MQTT_CALLBACK_URL=
+
+  MODBUS_BACKEND_PORT=3100
+  MODBUS_BACKEND_URL=https://gateway.domain-kamu.com
+  MODBUS_CORS_ORIGIN=https://app.domain-kamu.com
+
+Catatan:
+- MQTT_CALLBACK_URL boleh kosong. Gateway akan pakai APP_URL + /api/realtime-sensor-status.
+- MQTT_CALLBACK_TOKEN harus sama dengan token yang dipakai gateway saat POST ke Laravel.
+- Kalau gateway dan Laravel satu server, tetap pakai APP_URL public HTTPS agar gampang debug.
+
+Install dependency Node jika belum:
+
+  npm install
+
+Test gateway manual:
+
+  MQTT_AUTOSTART=true node modbus-server/server.js
+
+Kalau sukses akan muncul:
+
+  Modbus/MQTT gateway listening on port 3100
+  MQTT autostart subscribed to resq/telemetry/#
+
+Stop dulu dengan CTRL+C.
+
+
+5A. JIKA WEB RESQ MASIH DI LOKAL, MQTT BROKER DI VPS
+----------------------------------------------------
+
+Pakai bagian ini kalau kondisi kamu seperti ini:
+
+- Web Laravel/RESQ masih jalan di laptop/PC lokal.
+- MQTT broker Mosquitto sudah jalan di VPS:
+    IP: 139.59.100.220
+    Port: 1883
+- M100 publish ke:
+    139.59.100.220:1883
+
+Arsitektur:
+
+  M100
+    -> MQTT broker VPS 139.59.100.220:1883
+    -> Node gateway jalan di laptop lokal subscribe broker VPS
+    -> Node gateway POST ke Laravel lokal
+
+Jadi yang lokal bukan MQTT broker, tapi aplikasi RESQ dan Node gateway.
+
+Isi .env di project RESQ lokal:
+
+  APP_URL=http://127.0.0.1:8000
+
+  MQTT_AUTOSTART=true
+  MQTT_BROKER_URL=mqtt://139.59.100.220:1883
+  MQTT_TOPIC=resq/telemetry/#
+  MQTT_USERNAME=m100_logger
+  MQTT_PASSWORD=PASSWORD_MQTT
+  MQTT_CALLBACK_TOKEN=
+  MQTT_CALLBACK_URL=
+
+  MODBUS_BACKEND_PORT=3100
+  MODBUS_BACKEND_URL=http://127.0.0.1:3100
+  MODBUS_CORS_ORIGIN=true
+
+Jalankan Laravel lokal:
+
+  php artisan serve --host=127.0.0.1 --port=8000
+
+Jalankan Node MQTT gateway lokal di terminal kedua:
+
+  npm run mqtt:gateway
+
+Atau:
+
+  MQTT_AUTOSTART=true node modbus-server/server.js
+
+Di halaman Modbus Configuration tab MQTT, isi:
+
+  Gateway URL:
+    http://127.0.0.1:3100
+
+  Broker URL:
+    mqtt://139.59.100.220:1883
+
+  Topic:
+    resq/telemetry/#
+
+  Username:
+    m100_logger
+
+  Password:
+    PASSWORD_MQTT
+
+Setelah itu klik Subscribe / Connect MQTT.
+
+Setting M100 tetap mengarah ke VPS:
+
+  Server Address:
+    139.59.100.220
+
+  Remote Port:
+    1883
+
+  Username:
+    m100_logger
+
+  Password:
+    PASSWORD_MQTT
+
+  Publish Topic:
+    resq/telemetry/RIKA-510-01
+
+Payload test yang bisa masuk dashboard:
+
+  {"value":12.4}
+
+Atau:
+
+  {"sensor_code":"RIKA-510-01","value":12.4}
+
+Catatan penting:
+- Pastikan sensor_code RIKA-510-01 sudah ada di database RESQ lokal.
+- Payload "TEST MQTT" membuktikan MQTT connect, tapi tidak ideal untuk telemetry karena bukan angka.
+- Kalau Laravel lokal memakai URL/port lain, sesuaikan APP_URL.
+- Kalau gateway berjalan di VPS tapi web masih lokal, VPS tidak bisa POST ke Laravel lokal kecuali web lokal diexpose dengan tunnel/domain publik. Cara paling mudah: jalankan gateway di lokal.
+
+
+6. JALANKAN MQTT GATEWAY SEBAGAI SERVICE
+----------------------------------------
+
+Buat systemd service:
+
+  nano /etc/systemd/system/resq-mqtt-gateway.service
+
+Isi:
+
+  [Unit]
+  Description=RESQ MQTT Gateway
+  After=network-online.target
+  Wants=network-online.target
+
+  [Service]
+  Type=simple
+  WorkingDirectory=/var/www/resq
+  Environment=NODE_ENV=production
+  ExecStart=/usr/bin/npm run mqtt:gateway
+  Restart=always
+  RestartSec=5
+  User=www-data
+  Group=www-data
+
+  [Install]
+  WantedBy=multi-user.target
+
+Aktifkan:
+
+  systemctl daemon-reload
+  systemctl enable resq-mqtt-gateway
+  systemctl start resq-mqtt-gateway
+  systemctl status resq-mqtt-gateway
+
+Lihat log:
+
+  journalctl -u resq-mqtt-gateway -f
+
+
+7. OPSIONAL: EXPOSE GATEWAY URL VIA NGINX
+-----------------------------------------
+
+Ini hanya perlu kalau kamu ingin halaman Modbus Configuration di browser bisa tombol Connect/Subscribe
+ke gateway. Kalau gateway sudah autostart dari systemd, dashboard Laravel tetap bisa menerima data
+tanpa user membuka halaman itu.
+
+Contoh Nginx:
+
+  server {
+      listen 443 ssl;
+      server_name gateway.domain-kamu.com;
+
+      ssl_certificate /etc/letsencrypt/live/gateway.domain-kamu.com/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/gateway.domain-kamu.com/privkey.pem;
+
+      location / {
+          proxy_pass http://127.0.0.1:3100;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+
+Set di .env:
+
+  MODBUS_BACKEND_URL=https://gateway.domain-kamu.com
+  MODBUS_CORS_ORIGIN=https://app.domain-kamu.com
+
+
+8. SETTING LOGGER M100
+----------------------
+
+Langkah umum:
+
+1. Hubungkan M100 ke internet.
+   Pilihan:
+   - Ethernet WAN ke router internet.
+   - Cellular/4G dengan SIM card dan APN operator.
+
+2. Login ke web console M100.
+   - Hubungkan laptop ke M100 sesuai manual perangkat.
+   - Buka IP web console M100.
+   - Login admin.
+
+3. Setting waktu.
+   Cari menu System / Time / NTP:
+   - Enable NTP
+   - NTP server: pool.ntp.org
+   - Timezone: Asia/Jakarta
+
+4. Setting jaringan.
+   Jika pakai Ethernet:
+   - Mode: DHCP, atau Static IP sesuai jaringan.
+   - DNS: 8.8.8.8 atau 1.1.1.1
+
+   Jika pakai SIM/4G:
+   - Enable Cellular
+   - APN: isi sesuai operator
+   - Username/Password APN: kosong jika operator tidak butuh
+   - Pastikan status NET/Cellular connected.
+
+5. Setting MQTT.
+   Cari menu seperti:
+   - Cloud Service > MQTT
+   - Cloud Service > Generic MQTT
+   - MQTT Client
+   - Data Service > MQTT
+
+   Isi parameter:
+
+   Protocol:
+     MQTT over TLS / MQTTS
+
+   Server Address / Broker Host:
+     mqtt.domain-kamu.com
+
+   Server Port:
+     8883
+
+   Client ID:
+     M100-PDG-001
+
+   Username:
+     m100_logger
+
+   Password:
+     PASSWORD_MQTT
+
+   KeepAlive:
+     60
+
+   Clean Session:
+     true / enable
+
+   QoS:
+     0 atau 1
+     Gunakan QoS 1 jika koneksi 4G kurang stabil.
+
+   Retain:
+     false / disable
+
+   TLS/SSL:
+     enable
+
+   CA certificate:
+     Jika firmware meminta CA, upload CA dari Let's Encrypt.
+     Biasanya bisa memakai ISRG Root X1.
+     Jika firmware punya opsi "verify server certificate", enable jika CA sudah benar.
+
+6. Setting publish topic.
+   Gunakan salah satu pola:
+
+   Opsi A, sensor_code di topic:
+     resq/telemetry/SNS-PDG-001
+
+   Payload:
+     {"value":12.4}
+
+   Opsi B, sensor_code di payload:
+     resq/telemetry
+
+   Payload:
+     {"sensor_code":"SNS-PDG-001","value":12.4}
+
+   Rekomendasi:
+     Pakai Opsi A karena gateway bisa ambil sensor_code dari segmen terakhir topic.
+
+7. Setting data source / edge computing / Modbus polling.
+   Jika sensor masuk lewat RS485 Modbus RTU:
+   - Enable Edge Computing atau Modbus Master.
+   - Serial port:
+       Baud rate: sesuai sensor, contoh 9600
+       Data bits: 8
+       Parity: None/Even sesuai sensor
+       Stop bits: 1
+   - Add data point:
+       Slave ID: sesuai sensor
+       Function Code: 03 atau 04
+       Register Address: sesuai sensor
+       Data Type: uint16/int16/float32 sesuai sensor
+       Scale/Offset: sesuai kalibrasi
+       Poll interval: contoh 1000 ms atau 5000 ms
+
+8. Mapping data point ke MQTT payload.
+   Target payload akhir sebaiknya JSON sederhana:
+
+     {"sensor_code":"SNS-PDG-001","value":12.4}
+
+   Jika M100 mendukung custom JSON, set format seperti:
+
+     {
+       "sensor_code": "SNS-PDG-001",
+       "value": ${VALUE}
+     }
+
+   Jika M100 mengirim format JSON bawaan yang berbeda, cek log gateway:
+
+     journalctl -u resq-mqtt-gateway -f
+
+   Lalu sesuaikan format M100 atau mapping di gateway.
+
+9. Save dan reboot M100.
+   Setelah save, restart/reboot perangkat agar koneksi MQTT benar-benar baru.
+
+
+9. TEST END-TO-END
+------------------
+
+Di VPS, lihat pesan dari M100:
+
+  mosquitto_sub -h mqtt.domain-kamu.com -p 8883 --tls-version tlsv1.2 \
+    -u m100_logger -P 'PASSWORD_MQTT' \
+    -t 'resq/telemetry/#' -v
+
+Jika data masuk, lanjut cek gateway:
+
+  journalctl -u resq-mqtt-gateway -f
+
+Cek Laravel:
+- Buka dashboard RESQ.
+- Buka menu Telemetry.
+- Pastikan sensor value berubah.
+- Jika value melewati threshold sensor, status akan menjadi Awas.
+
+Test tanpa M100:
+
+  mosquitto_pub -h mqtt.domain-kamu.com -p 8883 --tls-version tlsv1.2 \
+    -u m100_logger -P 'PASSWORD_MQTT' \
+    -t 'resq/telemetry/SNS-PDG-001' \
+    -m '{"value":12.4}'
+
+
+10. TROUBLESHOOTING
+-------------------
+
+Masalah: M100 tidak connect ke broker.
+Cek:
+- Port 8883 terbuka: ufw status
+- DNS mqtt.domain-kamu.com sudah benar
+- Username/password MQTT benar
+- TLS/SSL enable
+- Jam M100 benar. TLS sering gagal kalau waktu perangkat salah.
+- APN/SIM punya internet.
+
+Masalah: Mosquitto menolak koneksi.
+Cek log:
+
+  journalctl -u mosquitto -f
+
+Masalah: Data masuk ke broker tapi tidak masuk dashboard.
+Cek:
+
+  journalctl -u resq-mqtt-gateway -f
+
+Pastikan:
+- MQTT_TOPIC di .env mencakup topic M100.
+- sensor_code di topic/payload sama dengan sensor_code di database.
+- APP_URL benar dan bisa diakses dari VPS.
+- MQTT_CALLBACK_TOKEN di .env Laravel sama dengan token yang dikirim gateway.
+
+Masalah: Laravel return 403 Invalid callback token.
+Solusi:
+- Samakan MQTT_CALLBACK_TOKEN.
+- Jalankan:
+    php artisan config:clear
+    systemctl restart resq-mqtt-gateway
+
+Masalah: Laravel return 422 sensor_code tidak ditemukan.
+Solusi:
+- Buat sensor di aplikasi RESQ dengan sensor_code yang sama.
+- Contoh topic:
+    resq/telemetry/SNS-PDG-001
+  Maka sensor_code harus:
+    SNS-PDG-001
+
+Masalah: Certificate TLS gagal di M100.
+Solusi:
+- Upload CA certificate yang benar ke M100 jika firmware meminta.
+- Coba sementara port 1883 non-TLS untuk memastikan username/password dan topic benar.
+- Setelah sukses, balik lagi ke 8883 TLS.
+
+
+11. CHECKLIST CEPAT
+-------------------
+
+VPS:
+[ ] Mosquitto aktif
+[ ] Port 8883 terbuka
+[ ] User MQTT dibuat
+[ ] TLS certificate valid
+[ ] mosquitto_sub bisa menerima test publish
+
+RESQ:
+[ ] .env MQTT_BROKER_URL benar
+[ ] .env MQTT_TOPIC benar
+[ ] .env MQTT_CALLBACK_TOKEN ada
+[ ] resq-mqtt-gateway service aktif
+[ ] sensor_code ada di database
+
+M100:
+[ ] Internet connected
+[ ] Time/NTP benar
+[ ] MQTT broker host benar
+[ ] Port 8883
+[ ] Username/password benar
+[ ] Publish topic benar
+[ ] Payload JSON berisi value atau sensor_code + value
+
+
+12. REFERENSI
+-------------
+
+- PUSR USR-M100 product page menyebut M100 mendukung MQTT, MQTT publish/subscribe,
+  Modbus gateway, custom JSON, RS485, Ethernet, cellular, dan web console.
+  https://www.pusr.com/products/remote-io-edge-gateway.html
+
+- PUSR USR-M100 Azure quick start menjelaskan field MQTT penting seperti
+  Client ID, Server Address, Port, KeepAlive, publish topic, subscribe topic,
+  dan edge computing yang dapat mengirim data Modbus RTU sebagai JSON ke broker.
+  https://www.pusr.com/uploads/20240418/54323c58578f0ba494ce367b7a4caa9d.pdf
+
+- Mosquitto configuration manual menjelaskan listener, password_file,
+  certfile, keyfile, dan opsi TLS.
+  https://mosquitto.org/man/mosquitto-conf-5.html

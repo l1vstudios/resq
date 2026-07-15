@@ -18,7 +18,7 @@
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4">Connectivity Setup</h4>
-                <form method="POST" action="{{ route('connectivity.store') }}">
+                <form method="POST" action="{{ route('connectivity.store') }}" id="connectivity-form">
                     @csrf
                     <div class="mb-3">
                         <label class="form-label">Data Logger</label>
@@ -56,7 +56,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Host / Endpoint</label>
-                        <input name="host_or_endpoint" class="form-control" placeholder="mqtt.resq.local">
+                        <input name="host_or_endpoint" class="form-control" placeholder="mqtts://broker.example.com">
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-3">
@@ -65,7 +65,7 @@
                         </div>
                         <div class="col-md-8 mb-3">
                             <label class="form-label">Topic / API Path</label>
-                            <input name="topic_or_api_path" class="form-control">
+                            <input name="topic_or_api_path" class="form-control" placeholder="resq/telemetry/#">
                         </div>
                     </div>
                     <div class="row">
@@ -121,11 +121,29 @@
                                     <td><span class="badge {{ ($item['connectivity_status'] ?? '') === 'Online' ? 'bg-success' : 'bg-secondary' }}">{{ $item['connectivity_status'] ?? '-' }}</span></td>
                                     <td class="text-end">
                                         @isset($item['db_id'])
-                                            <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'connectivity', 'id' => $item['db_id']]) }}">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button class="btn btn-outline-danger btn-sm">Delete</button>
-                                            </form>
+                                            <div class="d-inline-flex gap-1">
+                                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                                    data-edit-form="#connectivity-form"
+                                                    data-edit-fields="{{ base64_encode(json_encode([
+                                                        'data_logger_id' => $item['data_logger_db_id'] ?? '',
+                                                        'connectivity_code' => $item['id'] ?? '',
+                                                        'communication_type' => $item['communication_type'] ?? 'Cellular',
+                                                        'protocol' => $item['protocol'] ?? 'MQTT',
+                                                        'host_or_endpoint' => $item['host_or_endpoint'] ?? '',
+                                                        'port' => $item['port'] ?? '',
+                                                        'topic_or_api_path' => $item['topic_or_api_path'] ?? '',
+                                                        'gateway_id' => $item['gateway_id'] ?? '',
+                                                        'sim_number' => $item['sim_number'] ?? '',
+                                                        'imei' => $item['imei'] ?? '',
+                                                        'apn' => $item['apn'] ?? '',
+                                                        'connectivity_status' => $item['connectivity_status'] ?? 'Online',
+                                                    ])) }}">Edit</button>
+                                                <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'connectivity', 'id' => $item['db_id']]) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="btn btn-outline-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
                                         @endisset
                                     </td>
                                 </tr>
