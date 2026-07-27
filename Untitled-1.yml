@@ -1,0 +1,8 @@
+cd /root/rednode-gateway
+npm install
+export REDNODE_CONFIG_URL=http://192.168.3.10:8000/api/rednode/config
+export REDNODE_CALLBACK_URL=http://192.168.3.10:8000/api/realtime-sensor-status
+export REDNODE_HEARTBEAT_URL=http://192.168.3.10:8000/api/rednode/heartbeat
+npm run gateway
+node gateway.js
+php artisan serve --host=0.0.0.0 --port=8000

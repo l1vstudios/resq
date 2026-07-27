@@ -22,6 +22,7 @@ class Sensor extends Model
         'sensor_code',
         'type',
         'parameter',
+        'weather_parameters',
         'value',
         'threshold',
         'data_type',
@@ -36,6 +37,7 @@ class Sensor extends Model
     ];
 
     protected $casts = [
+        'weather_parameters' => 'array',
         'last_seen_at' => 'datetime',
     ];
 

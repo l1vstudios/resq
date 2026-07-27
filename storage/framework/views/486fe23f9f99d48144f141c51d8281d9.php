@@ -128,6 +128,22 @@
         white-space: normal;
         word-break: break-word;
     }
+
+    .rednode-sensor-grid {
+        border: 1px solid #eff2f7;
+        border-radius: .25rem;
+        max-height: 220px;
+        overflow: auto;
+    }
+
+    .rednode-sensor-option {
+        border-bottom: 1px solid #eff2f7;
+        padding: 10px 12px;
+    }
+
+    .rednode-sensor-option:last-child {
+        border-bottom: 0;
+    }
 </style>
 <?php $__env->stopSection(); ?>
 
@@ -139,10 +155,46 @@
 
 <?php
     $sensors = collect($sensors ?? []);
+    $sensorTypeLabels = [
+        'water_level' => 'Sensor Tinggi Air',
+        'rain_gauge' => 'Sensor Curah Hujan',
+        'tide_level' => 'Sensor Pasang Surut',
+        'seismic_vibration' => 'Sensor Getaran',
+        'ground_movement' => 'Sensor Pergeseran Tanah',
+        'soil_moisture' => 'Sensor Kelembapan Tanah',
+        'river_flow' => 'Sensor Debit Air',
+        'weather_station' => 'Sensor Cuaca',
+        'temperature' => 'Sensor Suhu',
+        'humidity' => 'Sensor Kelembapan',
+        'pressure' => 'Sensor Tekanan Udara',
+        'wind_speed' => 'Sensor Kecepatan Angin',
+        'wind_direction' => 'Sensor Arah Angin',
+        'battery_bms' => 'Sensor Baterai',
+        'solar_charger' => 'Sensor Solar Charger',
+        'device_health' => 'Sensor Kondisi Perangkat',
+    ];
+    $weatherParameterLabels = [
+        'temperature' => 'Suhu',
+        'humidity' => 'Kelembapan',
+        'pressure' => 'Tekanan Udara',
+        'wind_speed' => 'Kecepatan Angin',
+        'wind_direction' => 'Arah Angin',
+        'rainfall' => 'Curah Hujan',
+        'solar_radiation' => 'Radiasi Matahari',
+        'battery_voltage' => 'Tegangan Baterai',
+    ];
     $sensorConfigs = $sensors->map(fn ($sensor) => [
         'db_id' => $sensor['db_id'] ?? $sensor['id'] ?? null,
         'code' => $sensor['id'] ?? '-',
         'label' => trim(($sensor['id'] ?? '-') . ' - ' . ($sensor['parameter'] ?? $sensor['type'] ?? 'Sensor')),
+        'type' => $sensor['type'] ?? null,
+        'parameter' => $sensor['parameter'] ?? null,
+        'sensor_type_label' => $sensorTypeLabels[$sensor['type'] ?? ''] ?? (! empty($sensor['type']) ? 'Sensor ' . ucwords(str_replace('_', ' ', (string) $sensor['type'])) : 'Sensor'),
+        'sensor_detail_label' => collect($sensor['weather_parameters'] ?? [])
+            ->map(fn ($parameter) => $weatherParameterLabels[$parameter] ?? ucwords(str_replace('_', ' ', (string) $parameter)))
+            ->filter()
+            ->implode(', ') ?: ($sensor['parameter'] ?? ''),
+        'monitoring_station_db_id' => $sensor['monitoring_station_db_id'] ?? null,
         'slave_id' => $sensor['slave_id'] ?? 1,
         'function_code' => $sensor['function_code'] ?? 'FC03',
         'address' => $sensor['address'] ?? 0,
@@ -163,6 +215,36 @@
     $mqttTopic = env('MQTT_TOPIC', 'resq/telemetry/#');
     $mqttUsername = env('MQTT_USERNAME', '');
     $mqttPassword = env('MQTT_PASSWORD', '');
+    $dataLoggers = collect($dataLoggers ?? []);
+    $connectivity = collect($connectivity ?? []);
+    $rednodeLoggerCode = env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01');
+    $rednodeSerialConfig = $connectivity
+        ->first(fn ($item) => ($item['logger_id'] ?? null) === $rednodeLoggerCode && (($item['protocol'] ?? null) === 'Modbus RTU' || ! empty($item['serial_port'])))
+        ?? $connectivity->first(fn ($item) => ($item['protocol'] ?? null) === 'Modbus RTU' || ! empty($item['serial_port']))
+        ?? [];
+    $rednodeLoggerCode = $rednodeSerialConfig['logger_id'] ?? $rednodeLoggerCode;
+    $rednodeLogger = $dataLoggers->firstWhere('id', $rednodeLoggerCode) ?? [];
+    $rednodePublicBaseUrl = rtrim(env('REDNODE_PUBLIC_APP_URL') ?: config('app.url') ?: url('/'), '/');
+    $rednodeConfigUrl = $rednodePublicBaseUrl . '/api/rednode/config?logger_code=' . urlencode($rednodeLoggerCode);
+    $ttyOptions = [
+        ['pins' => 'PIN 1-2', 'mapping' => 'Pin 1 = B, Pin 2 = A', 'port' => '/dev/ttyAS4'],
+        ['pins' => 'PIN 3-4', 'mapping' => 'Pin 3 = B, Pin 4 = A', 'port' => '/dev/ttyAS5'],
+        ['pins' => 'PIN 5-6', 'mapping' => 'Pin 5 = B, Pin 6 = A', 'port' => '/dev/ttyAS2'],
+        ['pins' => 'PIN 7-8', 'mapping' => 'Pin 7 = B, Pin 8 = A', 'port' => '/dev/ttyAS3'],
+    ];
+    $selectedSerialPort = $rednodeSerialConfig['serial_port'] ?? $rednodeSerialConfig['host_or_endpoint'] ?? env('REDNODE_SERIAL_PORT', '/dev/ttyAS2');
+    $selectedPinMapping = $rednodeSerialConfig['pin_mapping'] ?? $rednodeSerialConfig['topic_or_api_path'] ?? collect($ttyOptions)->firstWhere('port', $selectedSerialPort)['mapping'] ?? '';
+    $rednodePollIntervalSeconds = (($rednodeSerialConfig['rednode_poll_interval_ms'] ?? env('REDNODE_POLL_INTERVAL_MS', 1000)) / 1000);
+    $selectedRednodeSensorIds = collect($rednodeSerialConfig['monitored_sensor_ids'] ?? [])
+        ->map(fn ($id) => (int) $id)
+        ->filter()
+        ->values();
+    if ($selectedRednodeSensorIds->isEmpty()) {
+        $selectedRednodeSensorIds = $sensorConfigs->pluck('db_id')->filter()->map(fn ($id) => (int) $id)->values();
+    }
+    $rednodeStatusBaseUrl = url('/rednode-status');
+    $rednodeStatusUrl = $rednodeStatusBaseUrl . '?logger_code=' . urlencode($rednodeLoggerCode);
+    $rednodeControlUrl = route('rednode-control.store');
 ?>
 
 <div class="card modbus-shell mb-4" id="modbus-monitor" data-api-base="<?php echo e($gatewayBaseUrl); ?>">
@@ -181,8 +263,21 @@
         </div>
 
         <div class="row g-0">
-            <div class="col-xl-3 p-3 border-end">
-                <div class="modbus-panel p-3 mb-3">
+            <div class="col-12 p-3 border-bottom">
+                <div class="modbus-panel p-0 mb-3">
+                    <ul class="nav nav-tabs nav-justified px-2 pt-2" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#integration-mqtt" type="button" role="tab">MQTT</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#integration-sensor" type="button" role="tab">Sensor</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#integration-rednode" type="button" role="tab">RedNode</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content p-3">
+                        <div class="tab-pane fade show active" id="integration-mqtt" role="tabpanel">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div class="modbus-panel-title"><i class="bx bx-plug me-1"></i> Connection</div>
                         <span class="modbus-status offline" id="modbus-status">Offline</span>
@@ -244,9 +339,8 @@
                     </div>
                     <button type="button" class="btn btn-primary modbus-btn-run w-100" id="modbus-connect">Connect</button>
                     <button type="button" class="btn btn-danger modbus-btn-stop w-100 d-none" id="modbus-disconnect">Disconnect</button>
-                </div>
-
-                <div class="modbus-panel p-3 mb-3">
+                        </div>
+                        <div class="tab-pane fade" id="integration-sensor" role="tabpanel">
                     <div class="modbus-panel-title mb-3"><i class="bx bx-data me-1"></i> Sensor Configuration</div>
                     <div class="mb-3">
                         <label class="form-label modbus-label">Sensor</label>
@@ -293,6 +387,171 @@
                         <div><div class="text-muted fw-bold">RX</div><div class="text-success fs-5 fw-bold" id="modbus-rx">0</div></div>
                         <div><div class="text-muted fw-bold">ERR</div><div class="text-danger fs-5 fw-bold" id="modbus-err">0</div></div>
                     </div>
+                        </div>
+                        <div class="tab-pane fade" id="integration-rednode" role="tabpanel">
+                    <div class="modbus-panel-title mb-3"><i class="bx bx-chip me-1"></i> RedNode Bliiot</div>
+                    <form method="POST" action="<?php echo e(route('rednode-serial-config.store')); ?>" id="rednode-serial-form">
+                        <?php echo csrf_field(); ?>
+                        <div class="mb-3">
+                            <label class="form-label modbus-label">Data Logger</label>
+                            <select name="data_logger_id" class="form-select" id="rednode-data-logger">
+                                <option value="">Buat / pakai kode di bawah</option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $dataLoggers->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $logger): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <option
+                                        value="<?php echo e($logger['db_id']); ?>"
+                                        data-logger-code="<?php echo e($logger['id']); ?>"
+                                        data-monitoring-station-id="<?php echo e($logger['monitoring_station_db_id'] ?? ''); ?>"
+                                        <?php if(($logger['id'] ?? null) === $rednodeLoggerCode): echo 'selected'; endif; ?>
+                                    ><?php echo e($logger['id']); ?> - <?php echo e($logger['device_label'] ?? 'RedNode'); ?></option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label modbus-label">Logger Code</label>
+                            <input name="logger_code" type="text" class="form-control" id="rednode-logger-code" value="<?php echo e($rednodeLoggerCode); ?>" required readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label modbus-label">Port / Pin RS485</label>
+                            <select name="serial_port" class="form-select" id="rednode-serial-port" required>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $ttyOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <option value="<?php echo e($option['port']); ?>" data-pin-mapping="<?php echo e($option['mapping']); ?>" <?php if($selectedSerialPort === $option['port']): echo 'selected'; endif; ?>>
+                                        <?php echo e($option['pins']); ?> - <?php echo e($option['port']); ?> (<?php echo e($option['mapping']); ?>)
+                                    </option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            </select>
+                        </div>
+                        <input type="hidden" name="pin_mapping" id="rednode-pin-mapping" value="<?php echo e($selectedPinMapping); ?>">
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label modbus-label">Baudrate</label>
+                                <input name="baud_rate" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600)); ?>" min="300" required>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label modbus-label">Timeout</label>
+                                <input name="timeout_ms" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500)); ?>" min="100" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-4 mb-3">
+                                <label class="form-label modbus-label">Data Bits</label>
+                                <input name="data_bits" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['data_bits'] ?? env('REDNODE_DATA_BITS', 8)); ?>" min="5" max="8" required>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label class="form-label modbus-label">Stop Bits</label>
+                                <input name="stop_bits" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['stop_bits'] ?? env('REDNODE_STOP_BITS', 1)); ?>" min="1" max="2" required>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label class="form-label modbus-label">Parity</label>
+                                <select name="parity" class="form-select" required>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = ['none', 'even', 'odd']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $parity): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <option value="<?php echo e($parity); ?>" <?php if(($rednodeSerialConfig['parity'] ?? env('REDNODE_PARITY', 'none')) === $parity): echo 'selected'; endif; ?>><?php echo e(ucfirst($parity)); ?></option>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label modbus-label">Polling Interval RedNode (detik)</label>
+                            <input name="rednode_poll_interval_seconds" type="number" class="form-control" value="<?php echo e($rednodePollIntervalSeconds); ?>" min="0.25" max="3600" step="0.25" required>
+                        </div>
+                        <input type="hidden" name="monitored_sensor_ids_present" value="1">
+                        <div class="mb-3">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                <label class="form-label modbus-label mb-0">Sensor Yang Dimonitor</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="text-muted fw-bold small" id="rednode-sensor-count">0 sensor</span>
+                                    <button type="button" class="btn btn-sm modbus-btn-outline" id="rednode-select-all">Select All</button>
+                                </div>
+                            </div>
+                            <div class="rednode-sensor-grid">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $sensorConfigs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $sensor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <?php
+                                        $sensorDbId = (int) ($sensor['db_id'] ?? 0);
+                                    ?>
+                                    <label
+                                        class="rednode-sensor-option d-flex align-items-start gap-2 mb-0"
+                                        for="rednode-sensor-<?php echo e($sensorDbId); ?>"
+                                        data-rednode-sensor-option
+                                        data-monitoring-station-id="<?php echo e($sensor['monitoring_station_db_id'] ?? ''); ?>"
+                                    >
+                                        <input
+                                            class="form-check-input mt-1"
+                                            type="checkbox"
+                                            id="rednode-sensor-<?php echo e($sensorDbId); ?>"
+                                            name="monitored_sensor_ids[]"
+                                            value="<?php echo e($sensorDbId); ?>"
+                                            data-rednode-sensor-check
+                                            <?php if($selectedRednodeSensorIds->contains($sensorDbId)): echo 'checked'; endif; ?>
+                                            <?php if(! $sensorDbId): echo 'disabled'; endif; ?>
+                                        >
+                                        <span>
+                                            <span class="fw-bold d-block"><?php echo e($sensor['code']); ?></span>
+                                            <span class="badge bg-info-subtle text-info border border-info-subtle mb-1">
+                                                <?php echo e($sensor['sensor_type_label']); ?>
+
+                                            </span>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! empty($sensor['sensor_detail_label'])): ?>
+                                                <span class="text-muted small ms-1"><?php echo e($sensor['sensor_detail_label']); ?></span>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <span class="text-muted small d-block">
+                                                Slave <?php echo e($sensor['slave_id']); ?> |
+                                                <?php echo e($sensor['function_code']); ?> |
+                                                Addr <?php echo e($sensor['address']); ?> |
+                                                Qty <?php echo e($sensor['quantity']); ?>
+
+                                            </span>
+                                        </span>
+                                    </label>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    <div class="text-muted fw-bold p-3">Belum ada sensor yang punya konfigurasi slave/address.</div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                            <div class="form-text">Sensor yang dicentang akan dikirim ke RedNode saat gateway reload config.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label modbus-label">Config URL</label>
+                            <input type="text" class="form-control" id="rednode-config-url" value="<?php echo e($rednodeConfigUrl); ?>" readonly>
+                        </div>
+                        <button type="submit" class="btn btn-primary modbus-btn-run w-100">Simpan Perubahan RedNode</button>
+                    </form>
+                    <div class="border-top mt-3 pt-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="modbus-panel-title">Live Status</div>
+                            <span class="modbus-status offline" id="rednode-live-status">Offline</span>
+                        </div>
+                        <div class="small text-muted fw-bold mb-1">Port: <span id="rednode-live-port"><?php echo e($selectedSerialPort); ?></span></div>
+                        <div class="small text-muted fw-bold mb-2">Last seen: <span id="rednode-live-seen">-</span></div>
+                        <div class="alert alert-warning py-2 px-3 mb-2 d-none" id="rednode-live-error"></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <tbody id="rednode-live-readings">
+                                    <tr><td class="text-muted">Belum ada nilai sensor.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                        </div>
+                    </div>
+                    <div class="border-top px-3 py-2">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="modbus-panel-title"><i class="bx bx-list-ul me-1"></i> Integration Log</div>
+                            <span class="text-muted fw-bold small" id="integration-log-count">0 event</span>
+                        </div>
+                        <div class="table-responsive mqtt-log-wrap">
+                            <table class="table table-sm modbus-table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width:84px;">Time</th>
+                                        <th style="width:86px;">Source</th>
+                                        <th>Message</th>
+                                        <th style="width:82px;">Result</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="integration-log-rows">
+                                    <tr><td colspan="4" class="text-center text-muted py-3">Belum ada log integrasi.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="modbus-panel p-3">
@@ -319,7 +578,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-9 p-3">
+            <div class="col-12 p-3">
                 <div class="modbus-table-wrap d-flex flex-column">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-2 border-bottom">
                         <div class="fw-bold text-muted">
@@ -404,11 +663,15 @@
         const el = (id) => document.getElementById(id);
         const rowsEl = el('modbus-rows');
         const mqttLogRowsEl = el('mqtt-log-rows');
+        const integrationLogRowsEl = el('integration-log-rows');
         const messageEl = el('modbus-message');
         const apiBaseInput = el('modbus-api-base');
         const csrfToken = <?php echo json_encode(csrf_token(), 15, 512) ?>;
         const gatewayStatusUrl = window.location.origin + '/api/realtime-sensor-status';
         const realtimeStatusUrl = gatewayStatusUrl;
+        const rednodeStatusBaseUrl = <?php echo json_encode($rednodeStatusBaseUrl, 15, 512) ?>;
+        const rednodeControlUrl = <?php echo json_encode($rednodeControlUrl, 15, 512) ?>;
+        const rednodeConfigBaseUrl = <?php echo json_encode($rednodePublicBaseUrl . '/api/rednode/config', 15, 512) ?>;
         const gatewayCallbackToken = <?php echo json_encode(env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN', ''), 512) ?>;
         const state = {
             connected: false,
@@ -423,6 +686,14 @@
         const storedApiBase = localStorage.getItem('modbusApiBase') || '';
         const hasLocalApiBase = /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:|\/|$)/i.test(storedApiBase);
         apiBaseInput.value = hasLocalApiBase ? (root.dataset.apiBase || '') : (storedApiBase || root.dataset.apiBase || '');
+        const rednodeSerialPort = el('rednode-serial-port');
+        const rednodePinMapping = el('rednode-pin-mapping');
+        const rednodeSerialForm = el('rednode-serial-form');
+        const rednodeDataLogger = el('rednode-data-logger');
+        const rednodeSensorChecks = Array.from(document.querySelectorAll('[data-rednode-sensor-check]'));
+        const rednodeSensorOptions = Array.from(document.querySelectorAll('[data-rednode-sensor-option]'));
+        const integrationLogs = [];
+        let lastRednodeOnline = null;
         const mqttConfigKeys = {
             broker: 'resqMqttBrokerUrl',
             topic: 'resqMqttTopic',
@@ -650,6 +921,180 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function appendIntegrationLog(source, message, result) {
+            integrationLogs.unshift({
+                source: source,
+                message: message,
+                result: result || 'Info',
+                time: new Date(),
+            });
+
+            if (integrationLogs.length > 50) {
+                integrationLogs.pop();
+            }
+
+            el('integration-log-count').textContent = integrationLogs.length + (integrationLogs.length === 1 ? ' event' : ' events');
+            integrationLogRowsEl.innerHTML = integrationLogs.map((item) => {
+                const normalized = String(item.result || '').toLowerCase();
+                const badge = normalized.includes('gagal') || normalized.includes('error') || normalized.includes('offline')
+                    ? 'bg-danger'
+                    : (normalized.includes('sukses') || normalized.includes('online') ? 'bg-success' : 'bg-secondary');
+
+                return '<tr>' +
+                    '<td>' + escapeHtml(item.time.toLocaleTimeString()) + '</td>' +
+                    '<td class="fw-bold">' + escapeHtml(item.source) + '</td>' +
+                    '<td>' + escapeHtml(item.message) + '</td>' +
+                    '<td><span class="badge ' + badge + '">' + escapeHtml(item.result) + '</span></td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function selectedRednodeSensorIds() {
+            return rednodeSensorChecks
+                .filter((input) => input.checked && !input.disabled)
+                .map((input) => Number(input.value))
+                .filter((value) => Number.isFinite(value) && value > 0);
+        }
+
+        function selectedRednodeSensorCodes() {
+            const selectedIds = new Set(selectedRednodeSensorIds().map((id) => String(id)));
+            return new Set(sensorConfigs
+                .filter((sensor) => selectedIds.has(String(sensor.db_id || '')))
+                .map((sensor) => String(sensor.code || sensor.sensor_code || ''))
+                .filter(Boolean));
+        }
+
+        function selectedRednodeSensorNames() {
+            const selectedIds = new Set(selectedRednodeSensorIds().map((id) => String(id)));
+            return sensorConfigs
+                .filter((sensor) => selectedIds.has(String(sensor.db_id || '')))
+                .map((sensor) => sensor.code || sensor.sensor_code || sensor.label || 'Sensor')
+                .filter(Boolean);
+        }
+
+        function decodeRegisterPairs(registers) {
+            const values = Array.isArray(registers) ? registers : [];
+            const decoded = [];
+
+            for (let index = 0; index + 1 < values.length; index += 2) {
+                const high = Number(values[index]) & 0xffff;
+                const low = Number(values[index + 1]) & 0xffff;
+                const buffer = new ArrayBuffer(4);
+                const view = new DataView(buffer);
+
+                view.setUint16(0, high, false);
+                view.setUint16(2, low, false);
+
+                const float32 = view.getFloat32(0, false);
+                if (!Number.isFinite(float32)) {
+                    continue;
+                }
+
+                decoded.push({
+                    label: 'Reg ' + index + '-' + (index + 1),
+                    value: float32,
+                    registers: [high, low],
+                });
+            }
+
+            return decoded;
+        }
+
+        function renderDecodedValues(registers) {
+            const decoded = decodeRegisterPairs(registers)
+                .filter((item) => Math.abs(item.value) >= 0.000001 || item.registers.some((value) => value !== 0));
+
+            if (!decoded.length) {
+                return '';
+            }
+
+            return '<div class="small text-muted mt-1">' + decoded.slice(0, 6).map((item) => (
+                '<span class="me-2">' + escapeHtml(item.label) + ': <strong>' + escapeHtml(item.value.toFixed(2)) + '</strong></span>'
+            )).join('') + '</div>';
+        }
+
+        function renderLiveParameterValues(values) {
+            if (!Array.isArray(values) || !values.length) {
+                return '';
+            }
+
+            return '<div class="small text-muted mt-1">' + values.slice(0, 8).map((item) => (
+                '<span class="me-2">' + escapeHtml(item.label || item.parameter || '-') + ': <strong>' + escapeHtml(item.value_text || item.value || '-') + '</strong></span>'
+            )).join('') + '</div>';
+        }
+
+        function updateRednodeSensorCount() {
+            const countEl = el('rednode-sensor-count');
+            if (!countEl) {
+                return;
+            }
+
+            const count = selectedRednodeSensorIds().length;
+            countEl.textContent = count + ' sensor';
+
+            const selectAllButton = el('rednode-select-all');
+            if (selectAllButton) {
+                const allChecked = rednodeSensorChecks.length > 0
+                    && rednodeSensorChecks.every((input) => input.checked || input.disabled);
+                selectAllButton.textContent = allChecked ? 'Clear' : 'Select All';
+            }
+        }
+
+        function currentRednodeLoggerCode() {
+            const formData = new FormData(rednodeSerialForm);
+            return String(formData.get('logger_code') || '').trim();
+        }
+
+        function currentRednodeStatusUrl() {
+            const url = new URL(rednodeStatusBaseUrl, window.location.origin);
+            url.searchParams.set('logger_code', currentRednodeLoggerCode());
+            return url.toString();
+        }
+
+        function updateRednodeConfigUrl() {
+            const configInput = el('rednode-config-url');
+
+            if (!configInput) {
+                return;
+            }
+
+            const url = new URL(rednodeConfigBaseUrl);
+            url.searchParams.set('logger_code', currentRednodeLoggerCode());
+            configInput.value = url.toString();
+        }
+
+        function filterRednodeSensorsForLogger() {
+            if (!rednodeDataLogger) {
+                return;
+            }
+
+            const selectedOption = rednodeDataLogger.options[rednodeDataLogger.selectedIndex];
+            const monitoringStationId = selectedOption?.dataset.monitoringStationId || '';
+            const loggerCode = selectedOption?.dataset.loggerCode || '';
+            const loggerInput = rednodeSerialForm.querySelector('[name="logger_code"]');
+
+            if (loggerInput && loggerCode) {
+                loggerInput.value = loggerCode;
+            }
+
+            updateRednodeConfigUrl();
+
+            rednodeSensorOptions.forEach((option) => {
+                const sameStation = !monitoringStationId || option.dataset.monitoringStationId === monitoringStationId;
+                option.classList.toggle('d-none', !sameStation);
+
+                const input = option.querySelector('[data-rednode-sensor-check]');
+                if (input) {
+                    input.disabled = !sameStation;
+                    if (!sameStation) {
+                        input.checked = false;
+                    }
+                }
+            });
+
+            updateRednodeSensorCount();
+        }
+
         function renderMqttLog(log) {
             const rows = Array.isArray(log) ? log : [];
             el('mqtt-log-count').textContent = rows.length + (rows.length === 1 ? ' message' : ' messages');
@@ -673,6 +1118,241 @@
                     '<td><span class="badge ' + badge + '">' + escapeHtml(status) + '</span></td>' +
                 '</tr>';
             }).join('');
+        }
+
+        function renderRednodeRegisters(payload) {
+            const activeCodes = selectedRednodeSensorCodes();
+            const sensors = (Array.isArray(payload?.sensors) ? payload.sensors : [])
+                .filter((sensor) => !activeCodes.size || activeCodes.has(String(sensor.sensor_code || '')));
+            if (!sensors.length) {
+                if (activeCodes.size) {
+                    state.rows = [];
+                    renderRows();
+                }
+                return;
+            }
+
+            const selectedCode = state.sensor?.code || state.sensor?.sensor_code || null;
+            const reading = sensors.find((item) => item.sensor_code === selectedCode)
+                || sensors.find((item) => Array.isArray(item.rows) && item.rows.length)
+                || sensors[0];
+            const rows = Array.isArray(reading?.rows) ? reading.rows : [];
+
+            if (!reading || !rows.length) {
+                state.rows = [];
+                if (reading?.sensor_code) {
+                    el('modbus-sensor-label').textContent = [reading.sensor_code, reading.sensor_label || reading.parameter || reading.sensor_type].filter(Boolean).join(' - ');
+                    el('modbus-last-update').textContent = reading.received_at ? new Date(reading.received_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+                }
+                renderRows();
+                return;
+            }
+
+            const functionCode = reading.function_code || 'FC03';
+            const address = Number(reading.address || rows[0]?.address || 0);
+            const quantity = Number(reading.quantity || rows.length || 1);
+
+            state.rows = rows.map((row) => ({
+                address: Number(row.address || 0),
+                raw: row.raw,
+                uint16: row.uint16 ?? row.raw,
+                int16: row.int16 ?? row.raw,
+                hex: row.hex || '0x0000',
+                binary: row.binary || '00000000 00000000',
+                float32: row.float32 ?? null,
+            }));
+
+            el('modbus-function').value = functionCode;
+            el('modbus-address').value = address;
+            el('modbus-quantity').value = quantity;
+            el('modbus-fc-label').textContent = functionCode;
+            el('modbus-address-label').textContent = address + ' - ' + (address + quantity - 1);
+            el('modbus-sensor-label').textContent = [reading.sensor_code || '-', reading.sensor_label || reading.parameter || reading.sensor_type].filter(Boolean).join(' - ');
+            el('modbus-last-update').textContent = reading.received_at ? new Date(reading.received_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+            renderRows();
+        }
+
+        async function refreshRednodeStatus() {
+            const response = await fetch(currentRednodeStatusUrl(), { headers: { Accept: 'application/json' } });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.ok === false) {
+                throw new Error(data.message || 'RedNode status gagal dibaca.');
+            }
+
+            const statusEl = el('rednode-live-status');
+            const online = Boolean(data.online);
+            if (lastRednodeOnline !== online) {
+                appendIntegrationLog('RedNode', online ? 'Kabar koneksi diterima dari RedNode.' : 'Kabar koneksi RedNode belum diterima atau sudah terlalu lama.', online ? 'Online' : 'Offline');
+                lastRednodeOnline = online;
+            }
+            statusEl.textContent = online ? 'Online' : 'Offline';
+            statusEl.classList.toggle('offline', !online);
+            el('rednode-live-port').textContent = [data.serial_port || '-', data.pin_mapping || ''].filter(Boolean).join(' | ');
+            el('rednode-live-seen').textContent = data.last_seen_at ? new Date(data.last_seen_at).toLocaleString() : '-';
+
+            const errorBox = el('rednode-live-error');
+            errorBox.textContent = data.last_error || '';
+            errorBox.classList.toggle('d-none', !data.last_error);
+
+            const activeCodes = selectedRednodeSensorCodes();
+            const payloadSensors = (Array.isArray(data.last_payload?.sensors) ? data.last_payload.sensors : [])
+                .filter((sensor) => !activeCodes.size || activeCodes.has(String(sensor.sensor_code || '')));
+            const readings = Array.isArray(data.latest_readings) ? data.latest_readings : [];
+            const liveRows = payloadSensors.map((sensor) => ({
+                sensor_code: sensor.sensor_code,
+                sensor_label: sensor.sensor_label,
+                sensor_type: sensor.sensor_type,
+                parameter: sensor.parameter,
+                value: sensor.error ? sensor.error : (sensor.value ?? '-'),
+                status: sensor.error ? 'Timeout' : (sensor.threshold_exceeded ? 'Awas' : 'Normal'),
+                error: sensor.error || null,
+                registers: sensor.registers || [],
+                parameter_values: sensor.parameter_values || [],
+                fresh: true,
+                received_at: sensor.received_at || data.last_payload?.reported_at || data.last_seen_at,
+            }));
+            const liveCodes = new Set(liveRows.map((row) => row.sensor_code));
+            readings.forEach((reading) => {
+                const code = String(reading.sensor_code || '');
+                if ((!activeCodes.size || activeCodes.has(code)) && !liveCodes.has(reading.sensor_code)) {
+                    liveRows.push(reading);
+                }
+            });
+
+            el('rednode-live-readings').innerHTML = liveRows.length
+                ? liveRows.slice(0, 8).map((reading) => {
+                    const statusText = reading.status || '-';
+                    const statusLower = String(statusText).toLowerCase();
+                    const stale = reading.fresh === false || statusLower.includes('data lama');
+                    const danger = Boolean(reading.error) || statusLower.includes('timeout') || statusLower.includes('gagal') || statusLower.includes('awas');
+                    const badge = stale ? 'bg-secondary' : (danger ? 'bg-danger' : 'bg-success');
+                    const valueClass = stale ? 'text-muted fw-bold' : (danger ? 'text-danger fw-bold' : 'modbus-value');
+                    const receivedAt = reading.received_at ? new Date(reading.received_at).toLocaleTimeString() : '-';
+                    const label = reading.sensor_label || reading.parameter || reading.sensor_type || receivedAt;
+
+                    return '<tr>' +
+                        '<td><div class="fw-bold">' + escapeHtml(reading.sensor_code || '-') + '</div><small class="text-muted">' + escapeHtml(label) + '</small><br><small class="text-muted">' + escapeHtml(receivedAt) + '</small></td>' +
+                        '<td class="text-end"><span class="' + valueClass + '">' + escapeHtml(reading.value ?? '-') + '</span><br><span class="badge ' + badge + '">' + escapeHtml(statusText) + '</span>' + renderLiveParameterValues(reading.parameter_values) + renderDecodedValues(reading.registers) + '</td>' +
+                    '</tr>';
+                }).join('')
+                : '<tr><td class="text-muted">Belum ada nilai sensor.</td></tr>';
+
+            renderRednodeRegisters(data.last_payload);
+        }
+
+        async function submitRednodeConfig(showSuccess = true) {
+            const submitButton = rednodeSerialForm.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            submitButton.disabled = true;
+            submitButton.textContent = 'Saving...';
+
+            try {
+                const response = await fetch(rednodeSerialForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: new FormData(rednodeSerialForm),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok || data.ok === false) {
+                    const errors = data.errors ? Object.values(data.errors).flat().join(' ') : '';
+                    throw new Error(errors || data.message || 'Konfigurasi RedNode gagal disimpan.');
+                }
+
+                const rednode = data.rednode || {};
+                const portLabel = [rednode.serial_port || rednodeSerialPort.value, rednode.pin_mapping || rednodePinMapping.value].filter(Boolean).join(' | ');
+                const selectedCount = Array.isArray(rednode.monitored_sensor_ids)
+                    ? rednode.monitored_sensor_ids.length
+                    : selectedRednodeSensorIds().length;
+                const names = selectedRednodeSensorNames();
+                const target = names.length ? names.join(', ') : selectedCount + ' sensor';
+                const message = 'Berhasil mengganti sensor RedNode ke ' + target + '. RedNode akan mengambil config terbaru otomatis.';
+                el('rednode-live-port').textContent = portLabel || '-';
+                if (showSuccess) {
+                    appendIntegrationLog('RedNode', message, 'Sukses');
+                    showMessage(message, 'success');
+                }
+                refreshRednodeStatus().catch(() => {});
+                return data;
+            } catch (error) {
+                appendIntegrationLog('RedNode', error.message, 'Gagal');
+                showMessage(error.message, 'warning');
+                throw error;
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = originalText;
+            }
+        }
+
+        async function saveRednodeSerial(event) {
+            event.preventDefault();
+            const submitButton = rednodeSerialForm.querySelector('button[type="submit"]');
+
+            await submitRednodeConfig(true);
+            showMessage('Config tersimpan. Menjalankan gateway RedNode di logger...', 'info');
+            await controlRednode('start', { apply: false, button: submitButton });
+        }
+
+        async function controlRednode(action, options = {}) {
+            const button = options.button || el(action === 'start' ? 'rednode-start' : 'rednode-stop');
+            const originalText = button?.textContent || '';
+
+            if (button) {
+                button.disabled = true;
+                button.textContent = action === 'start' ? 'Starting...' : 'Stopping...';
+            }
+
+            try {
+                if (options.apply !== false) {
+                    await submitRednodeConfig(false);
+                }
+                const formData = new FormData(rednodeSerialForm);
+                const response = await fetch(rednodeControlUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        action: action,
+                        logger_code: formData.get('logger_code'),
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok || data.ok === false) {
+                    const errors = data.errors ? Object.values(data.errors).flat().join(' ') : '';
+                    throw new Error(errors || data.message || 'Perintah RedNode gagal.');
+                }
+
+                const remoteLog = Array.isArray(data.terminal_log) && data.terminal_log.length
+                    ? data.terminal_log.join(' | ')
+                    : (data.output || '');
+                const output = remoteLog ? ' Remote: ' + remoteLog : '';
+                const statusEl = el('rednode-live-status');
+                const online = action === 'start';
+                statusEl.textContent = online ? 'Online' : 'Offline';
+                statusEl.classList.toggle('offline', !online);
+                lastRednodeOnline = online;
+                if (data.last_seen_at) {
+                    el('rednode-live-seen').textContent = new Date(data.last_seen_at).toLocaleString();
+                }
+                appendIntegrationLog('RedNode', data.message + output, 'Sukses');
+                showMessage(data.message + output, 'success');
+                setTimeout(() => refreshRednodeStatus().catch(() => {}), 1500);
+            } catch (error) {
+                appendIntegrationLog('RedNode', error.message, 'Gagal');
+                showMessage(error.message, 'warning');
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            }
         }
 
         function displayValue(row) {
@@ -889,6 +1569,7 @@
             setStats(data.stats);
             renderRows();
             syncRealtimeSensorStatus(evaluateThreshold());
+            appendIntegrationLog('Sensor', 'Read once berhasil untuk ' + (state.sensor ? state.sensor.code : 'sensor aktif') + '.', 'Sukses');
         }
 
         function setPolling(active) {
@@ -986,6 +1667,7 @@
             const data = await request('/api/mqtt/test-publish', mqttTestPayload());
             setStats(data.stats);
             showMessage('Test MQTT terkirim ke ' + data.topic + ' dengan payload ' + data.payload + '.', 'success');
+            appendIntegrationLog('MQTT', 'Test publish terkirim ke ' + data.topic + '.', 'Sukses');
 
             setTimeout(() => {
                 refreshBackendStatus().catch(() => {});
@@ -995,6 +1677,7 @@
         function handleError(error) {
             setConnected(false);
             showMessage(error.message, 'warning');
+            appendIntegrationLog(state.protocol === 'mqtt' ? 'MQTT' : 'Sensor', error.message, 'Gagal');
             if (state.polling) {
                 stopPolling().catch(() => {});
             }
@@ -1013,6 +1696,36 @@
         el('modbus-poll').addEventListener('click', () => startPolling().catch(handleError));
         el('modbus-write').addEventListener('click', () => writeValue().catch(handleError));
         el('mqtt-test').addEventListener('click', () => testMqttBroker().catch(handleError));
+        if (rednodeSerialForm) {
+            rednodeSerialForm.addEventListener('submit', saveRednodeSerial);
+        }
+        if (rednodeDataLogger) {
+            rednodeDataLogger.addEventListener('change', () => {
+                filterRednodeSensorsForLogger();
+                refreshRednodeStatus().catch(() => {});
+            });
+            filterRednodeSensorsForLogger();
+        }
+        if (el('rednode-start')) {
+            el('rednode-start').addEventListener('click', () => controlRednode('start'));
+        }
+        if (el('rednode-stop')) {
+            el('rednode-stop').addEventListener('click', () => controlRednode('stop'));
+        }
+        rednodeSensorChecks.forEach((input) => {
+            input.addEventListener('change', updateRednodeSensorCount);
+        });
+        if (el('rednode-select-all')) {
+            el('rednode-select-all').addEventListener('click', () => {
+                const allChecked = rednodeSensorChecks.every((input) => input.checked || input.disabled);
+                rednodeSensorChecks.forEach((input) => {
+                    if (!input.disabled) {
+                        input.checked = !allChecked;
+                    }
+                });
+                updateRednodeSensorCount();
+            });
+        }
         el('modbus-clear').addEventListener('click', () => {
             state.rows = [];
             renderRows();
@@ -1023,6 +1736,13 @@
             el(id).addEventListener('blur', saveMqttConfig);
         });
         el('mqtt-save-config').addEventListener('change', saveMqttConfig);
+        if (rednodeSerialPort && rednodePinMapping) {
+            const syncRednodePinMapping = () => {
+                rednodePinMapping.value = rednodeSerialPort.options[rednodeSerialPort.selectedIndex]?.dataset.pinMapping || '';
+            };
+            rednodeSerialPort.addEventListener('change', syncRednodePinMapping);
+            syncRednodePinMapping();
+        }
 
         document.querySelectorAll('[data-modbus-mode]').forEach((button) => {
             button.addEventListener('click', () => {
@@ -1034,6 +1754,7 @@
         });
 
         loadStoredMqttConfig();
+        updateRednodeSensorCount();
 
         if (sensorConfigs.length) {
             const storedSensorIndex = localStorage.getItem(mqttConfigKeys.sensorIndex);
@@ -1067,6 +1788,11 @@
         } else {
             setConnected(false);
         }
+
+        refreshRednodeStatus().catch(() => {});
+        setInterval(() => {
+            refreshRednodeStatus().catch(() => {});
+        }, 1000);
     })();
 </script>
 <?php $__env->stopSection(); ?>

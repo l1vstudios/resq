@@ -39,6 +39,70 @@ Payload yang dikirim device ke topic MQTT:
 
 Jika topic memakai pola `resq/telemetry/SNS-PDG-001`, `sensor_code` juga bisa diambil dari segmen terakhir topic. Laravel akan menyimpan telemetry dan menghitung status `Awas` saat nilai melewati threshold sensor.
 
+## RESQ RedNode / Bliiot Gateway
+
+Untuk RedNode Bliiot yang membaca sensor RS485 Modbus RTU langsung dari serial, web RESQ sekarang menyediakan konfigurasi di:
+
+```text
+GET /api/rednode/config?logger_code=REDNODE-BLIIOT-01
+```
+
+Runner RedNode akan mengambil `slave_id`, `address`, `function_code`, `quantity`, `poll_interval_ms`, `threshold`, `scale_factor`, `offset`, dan `unit` dari sensor yang dipilih di tab RedNode. Hasil polling dikirim balik ke Laravel lewat `/api/realtime-sensor-status`, jadi telemetry langsung masuk database.
+
+Port serial RedNode juga disimpan dari web di halaman Modbus Configuration. Mapping bawaan BL118:
+
+```text
+PIN 1-2 = /dev/ttyAS4
+PIN 3-4 = /dev/ttyAS5
+PIN 5-6 = /dev/ttyAS2
+PIN 7-8 = /dev/ttyAS3
+```
+
+Gunakan script test pin di RedNode untuk memastikan kabel sensor sedang masuk ke pasangan pin yang benar, lalu pilih port tersebut di web.
+
+```bash
+npm run rednode:test-pins
+```
+
+Untuk test semua port dari web, pastikan file `test-ports.js` juga ada di folder gateway RedNode. Tombol **Test All Ports** akan menghentikan gateway sementara, mencoba semua port BL118, lalu menampilkan TX/RX per sensor di tabel web.
+
+```bash
+npm run rednode:test-ports
+```
+
+Contoh env untuk dijalankan di RedNode:
+
+```dotenv
+APP_URL=http://IP-LAPTOP-ATAU-SERVER:8000
+REDNODE_CONFIG_URL=http://IP-LAPTOP-ATAU-SERVER:8000/api/rednode/config
+REDNODE_CALLBACK_URL=http://IP-LAPTOP-ATAU-SERVER:8000/api/realtime-sensor-status
+REDNODE_HEARTBEAT_URL=http://IP-LAPTOP-ATAU-SERVER:8000/api/rednode/heartbeat
+REDNODE_HEARTBEAT_MS=1000
+REDNODE_CONFIG_REFRESH_MS=5000
+REDNODE_POLL_INTERVAL_MS=1000
+REDNODE_LOGGER_CODE=REDNODE-BLIIOT-01
+REDNODE_SSH_HOST=192.168.3.1
+REDNODE_SSH_PORT=22
+REDNODE_SSH_USER=root
+REDNODE_SSH_PASSWORD=PASSWORD_SSH_RED_NODE
+REDNODE_GATEWAY_PATH=/root/rednode-gateway
+
+# Opsional kalau data juga mau dipublish ke broker MQTT
+REDNODE_MQTT_ENABLED=true
+REDNODE_MQTT_BROKER_URL=mqtt://139.59.100.220:1883
+REDNODE_MQTT_TOPIC_PREFIX=resq/telemetry
+REDNODE_MQTT_USERNAME=m100_logger
+REDNODE_MQTT_PASSWORD=PASSWORD_MQTT
+```
+
+Jalankan gateway:
+
+```bash
+npm run rednode:gateway
+```
+
+Jika `MQTT_CALLBACK_TOKEN`, `MODBUS_CALLBACK_TOKEN`, atau `REDNODE_CONFIG_TOKEN` diisi di Laravel, samakan token tersebut di env RedNode supaya device boleh mengambil konfigurasi dan mengirim telemetry.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

@@ -12,6 +12,9 @@
         "dev": "vite",
         "modbus:server": "node modbus-server/server.js",
         "mqtt:gateway": "MQTT_AUTOSTART=true node modbus-server/server.js",
+        "rednode:gateway": "node rednode-gateway/gateway.js",
+        "rednode:test-pins": "node rednode-gateway/test-pin-led.js",
+        "rednode:test-ports": "node rednode-gateway/test-ports.js --json",
         "build": "vite build",
         "build-rtl": "rtlcss public/build/css/app.min.css & rtlcss public/build/css/bootstrap.min.css"
     },
@@ -34,6 +37,7 @@
         "express": "^5.2.1",
         "modbus-serial": "^8.0.25",
         "mqtt": "^5.15.2",
+        "serialport": "^13.0.0",
         "vite-plugin-static-copy": "^0.13.1"
     }
 }

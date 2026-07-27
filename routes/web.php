@@ -33,6 +33,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/project-warning-stations', [ProjectSetupController::class, 'storeWarningStation'])->name('project-warning-stations.store');
     Route::post('/project-sensors', [ProjectSetupController::class, 'storeSensor'])->name('project-sensors.store');
     Route::post('/project-response-plans', [ProjectSetupController::class, 'storeResponsePlan'])->name('project-response-plans.store');
+    Route::post('/projects/start-monitoring', [DeviceSetupController::class, 'startProjectMonitoring'])->name('projects.start-monitoring');
+    Route::post('/projects/stop-monitoring', [DeviceSetupController::class, 'stopProjectMonitoring'])->name('projects.stop-monitoring');
+    Route::get('/projects/live-monitoring', [DeviceSetupController::class, 'projectMonitoringLiveData'])->name('projects.live-monitoring');
     Route::delete('/project-setup/{type}/{id}', [ProjectSetupController::class, 'destroy'])->name('project-setup.destroy');
     Route::get('/clusters', [RegisteredDataController::class, 'clusters'])->name('clusters.index');
     Route::get('/monitoring-stations', [RegisteredDataController::class, 'monitoringStations'])->name('monitoring-stations.index');
@@ -42,8 +45,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/mst-prefixes', [DeviceSetupController::class, 'storeMstPrefix'])->name('mst-prefixes.store');
     Route::get('/modbus-configuration', [RegisteredDataController::class, 'modbusConfiguration'])->name('modbus-configuration.index');
     Route::post('/modbus-configuration/realtime-sensor-status', [DeviceSetupController::class, 'updateRealtimeSensorStatus'])->name('modbus-configuration.realtime-sensor-status');
+    Route::post('/rednode-serial-config', [DeviceSetupController::class, 'storeRednodeSerialConfig'])->name('rednode-serial-config.store');
+    Route::post('/rednode-control', [DeviceSetupController::class, 'rednodeControl'])->name('rednode-control.store');
+    Route::post('/rednode-port-test', [DeviceSetupController::class, 'rednodePortTest'])->name('rednode-port-test.store');
+    Route::get('/rednode-pin-scan', [RegisteredDataController::class, 'rednodePinScan'])->name('rednode-pin-scan.index');
+    Route::post('/rednode-pin-scan', [DeviceSetupController::class, 'rednodePinScan'])->name('rednode-pin-scan.store');
+    Route::get('/rednode-status', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status.show');
     Route::get('/data-loggers', [RegisteredDataController::class, 'dataLoggers'])->name('data-loggers.index');
     Route::post('/data-loggers', [DeviceSetupController::class, 'storeDataLogger'])->name('data-loggers.store');
+    Route::post('/data-loggers/test-remote', [DeviceSetupController::class, 'testDataLoggerRemote'])->name('data-loggers.test-remote');
     Route::get('/connectivity', [RegisteredDataController::class, 'connectivity'])->name('connectivity.index');
     Route::post('/connectivity', [DeviceSetupController::class, 'storeConnectivity'])->name('connectivity.store');
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');

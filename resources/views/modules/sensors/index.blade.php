@@ -14,6 +14,16 @@
     $dangerSensor = $sensors->firstWhere('status', 'Danger') ?? $sensors->first() ?? [
         'type' => '-',
     ];
+    $weatherParameters = [
+        'temperature' => 'Suhu',
+        'humidity' => 'Kelembapan',
+        'pressure' => 'Tekanan Udara',
+        'wind_speed' => 'Kecepatan Angin',
+        'wind_direction' => 'Arah Angin',
+        'rainfall' => 'Curah Hujan',
+        'solar_radiation' => 'Radiasi Matahari',
+        'battery_voltage' => 'Tegangan Baterai',
+    ];
 @endphp
 
 <div class="row">
@@ -82,14 +92,25 @@
                         </thead>
                         <tbody>
                             @foreach ($sensors as $sensor)
+                                @php
+                                    $sensorWeatherParameters = collect($sensor['weather_parameters'] ?? [])
+                                        ->map(fn ($parameter) => $weatherParameters[$parameter] ?? Str::headline($parameter))
+                                        ->filter()
+                                        ->implode(', ');
+                                @endphp
                                 <tr>
                                     <td>
                                         <div>{{ $sensor['id'] }}</div>
-                                        <small class="text-muted">{{ $sensor['type'] }}</small>
+                                        <small class="text-muted">{{ Str::headline($sensor['type'] ?? '-') }}</small>
                                     </td>
                                     <td>{{ $sensor['monitoring_station_id'] }}</td>
                                     <td>{{ $sensor['warning_station_id'] }}</td>
-                                    <td>{{ $sensor['parameter'] }}</td>
+                                    <td>
+                                        <div>{{ $sensor['parameter'] ?: '-' }}</div>
+                                        @if ($sensorWeatherParameters)
+                                            <small class="text-muted">{{ $sensorWeatherParameters }}</small>
+                                        @endif
+                                    </td>
                                     <td>
                                         <span class="badge {{ $sensor['status'] === 'Danger' ? 'bg-danger' : 'bg-success' }}">
                                             {{ $sensor['status'] }}

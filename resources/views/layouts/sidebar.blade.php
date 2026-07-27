@@ -105,24 +105,17 @@
                     </a>
                 </li>
 
+                <li class="{{ request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('rednode-pin-scan.index') }}" class="waves-effect {{ request()->routeIs('rednode-pin-scan.*') ? 'active' : '' }}">
+                        <i class="bx bx-search-alt-2"></i>
+                        <span>RedNode Pin Scan</span>
+                    </a>
+                </li>
+
                 <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('data-loggers.index') }}" class="waves-effect {{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
                         <i class="bx bx-data"></i>
                         <span>Data Loggers</span>
-                    </a>
-                </li>
-
-                <li class="{{ request()->routeIs('connectivity.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('connectivity.index') }}" class="waves-effect {{ request()->routeIs('connectivity.*') ? 'active' : '' }}">
-                        <i class="bx bx-wifi"></i>
-                        <span>Connectivity</span>
-                    </a>
-                </li>
-
-                <li class="{{ request()->routeIs('credentials.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('credentials.index') }}" class="waves-effect {{ request()->routeIs('credentials.*') ? 'active' : '' }}">
-                        <i class="bx bx-key"></i>
-                        <span>Credentials</span>
                     </a>
                 </li>
 

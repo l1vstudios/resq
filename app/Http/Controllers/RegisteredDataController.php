@@ -48,6 +48,11 @@ class RegisteredDataController extends Controller
         return view('modules.modbus-configuration.index', $this->data());
     }
 
+    public function rednodePinScan(): View
+    {
+        return view('modules.rednode-pin-scan.index', $this->data());
+    }
+
     public function dataLoggers(): View
     {
         return view('modules.data-loggers.index', $this->data());
@@ -172,6 +177,7 @@ class RegisteredDataController extends Controller
             'db_id' => $sensor->id,
             'id' => $sensor->sensor_code,
             'cluster_id' => $sensor->workspace?->workspace_code,
+            'monitoring_station_db_id' => $sensor->monitoring_station_id,
             'monitoring_station_id' => $sensor->monitoringStation?->station_code,
             'warning_station_id' => $sensor->warningStation?->station_code,
             'mst_prefix' => $sensor->mstPrefix?->prefix_code,
@@ -182,6 +188,7 @@ class RegisteredDataController extends Controller
             'poll_interval_ms' => $sensor->poll_interval_ms ?? 1000,
             'type' => $sensor->type,
             'parameter' => $sensor->parameter,
+            'weather_parameters' => $sensor->weather_parameters ?? [],
             'value' => $sensor->value,
             'threshold' => $sensor->threshold,
             'data_type' => $sensor->data_type,
@@ -244,6 +251,13 @@ class RegisteredDataController extends Controller
             'vendor' => $logger->vendor,
             'firmware_version' => $logger->firmware_version,
             'device_label' => $logger->device_label,
+            'remote_host' => $logger->remote_host,
+            'remote_ssh_port' => $logger->remote_ssh_port,
+            'remote_ssh_user' => $logger->remote_ssh_user,
+            'remote_gateway_path' => $logger->remote_gateway_path,
+            'remote_last_tested_at' => optional($logger->remote_last_tested_at)->format('Y-m-d H:i:s'),
+            'remote_last_status' => $logger->remote_last_status,
+            'remote_last_message' => $logger->remote_last_message,
             'logger_status' => $logger->logger_status,
         ]);
     }
@@ -260,6 +274,13 @@ class RegisteredDataController extends Controller
                 'vendor' => '-',
                 'firmware_version' => '-',
                 'device_label' => $station['logger_id'],
+                'remote_host' => null,
+                'remote_ssh_port' => null,
+                'remote_ssh_user' => null,
+                'remote_gateway_path' => null,
+                'remote_last_tested_at' => null,
+                'remote_last_status' => null,
+                'remote_last_message' => null,
                 'logger_status' => $station['logger_status'],
             ])
             ->values();
@@ -299,6 +320,19 @@ class RegisteredDataController extends Controller
             'port' => $item->port,
             'topic_or_api_path' => $item->topic_or_api_path,
             'gateway_id' => $item->gateway_id,
+            'serial_port' => $item->serial_port,
+            'baud_rate' => $item->baud_rate,
+            'data_bits' => $item->data_bits,
+            'stop_bits' => $item->stop_bits,
+            'parity' => $item->parity,
+            'timeout_ms' => $item->timeout_ms,
+            'pin_mapping' => $item->pin_mapping,
+            'monitored_sensor_ids' => $item->monitored_sensor_ids ?? [],
+            'rednode_host' => $item->rednode_host,
+            'rednode_ssh_port' => $item->rednode_ssh_port,
+            'rednode_ssh_user' => $item->rednode_ssh_user,
+            'rednode_gateway_path' => $item->rednode_gateway_path,
+            'rednode_poll_interval_ms' => $item->rednode_poll_interval_ms,
             'sim_number' => $item->sim_number,
             'imei' => $item->imei,
             'apn' => $item->apn,
@@ -351,6 +385,7 @@ class RegisteredDataController extends Controller
             'data_logger_db_id' => $reading->data_logger_id,
             'data_logger_id' => $reading->dataLogger?->logger_code,
             'value' => $reading->value,
+            'parameter_values' => $reading->parameter_values ?? [],
             'alert_level' => $reading->alert_level,
             'status' => $reading->status,
             'received_at' => optional($reading->received_at ?? $reading->created_at)->diffForHumans(),

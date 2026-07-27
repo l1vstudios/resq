@@ -13,12 +13,14 @@ class TelemetryReading extends Model
         'sensor_id',
         'data_logger_id',
         'value',
+        'parameter_values',
         'alert_level',
         'status',
         'received_at',
     ];
 
     protected $casts = [
+        'parameter_values' => 'array',
         'received_at' => 'datetime',
     ];
 

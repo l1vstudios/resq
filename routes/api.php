@@ -21,3 +21,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/realtime-sensor-status', [DeviceSetupController::class, 'updateRealtimeSensorStatus'])
     ->name('api.realtime-sensor-status');
+
+Route::get('/rednode/config', [DeviceSetupController::class, 'rednodeConfig'])
+    ->name('api.rednode.config');
+
+Route::post('/rednode/heartbeat', [DeviceSetupController::class, 'rednodeHeartbeat'])
+    ->name('api.rednode.heartbeat');

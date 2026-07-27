@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "name": "resq-rednode-gateway",
+  "version": "1.0.0",
+  "scripts": {
+    "gateway": "node gateway.js",
+    "test-pins": "node test-pin-led.js",
+    "test-ports": "node test-ports.js --json"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "modbus-serial": "^8.0.25",
+    "mqtt": "^5.15.2",
+    "serialport": "^13.0.0"
+  }
+}

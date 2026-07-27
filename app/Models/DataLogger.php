@@ -17,7 +17,20 @@ class DataLogger extends Model
         'vendor',
         'firmware_version',
         'device_label',
+        'remote_host',
+        'remote_ssh_port',
+        'remote_ssh_user',
+        'remote_ssh_password',
+        'remote_gateway_path',
+        'remote_last_tested_at',
+        'remote_last_status',
+        'remote_last_message',
         'logger_status',
+    ];
+
+    protected $casts = [
+        'remote_ssh_password' => 'encrypted',
+        'remote_last_tested_at' => 'datetime',
     ];
 
     public function monitoringStation()

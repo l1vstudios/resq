@@ -58,6 +58,10 @@ class RouteServiceProvider extends ServiceProvider
     protected function configureRateLimiting()
     {
         RateLimiter::for('api', function (Request $request) {
+            if ($request->is('api/rednode/*') || $request->is('api/realtime-sensor-status')) {
+                return Limit::perMinute(1200)->by('rednode:' . $request->ip());
+            }
+
             return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
         });
     }

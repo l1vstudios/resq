@@ -105,24 +105,17 @@
                     </a>
                 </li>
 
+                <li class="<?php echo e(request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('rednode-pin-scan.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('rednode-pin-scan.*') ? 'active' : ''); ?>">
+                        <i class="bx bx-search-alt-2"></i>
+                        <span>RedNode Pin Scan</span>
+                    </a>
+                </li>
+
                 <li class="<?php echo e(request()->routeIs('data-loggers.*') ? 'mm-active' : ''); ?>">
                     <a href="<?php echo e(route('data-loggers.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('data-loggers.*') ? 'active' : ''); ?>">
                         <i class="bx bx-data"></i>
                         <span>Data Loggers</span>
-                    </a>
-                </li>
-
-                <li class="<?php echo e(request()->routeIs('connectivity.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('connectivity.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('connectivity.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-wifi"></i>
-                        <span>Connectivity</span>
-                    </a>
-                </li>
-
-                <li class="<?php echo e(request()->routeIs('credentials.*') ? 'mm-active' : ''); ?>">
-                    <a href="<?php echo e(route('credentials.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('credentials.*') ? 'active' : ''); ?>">
-                        <i class="bx bx-key"></i>
-                        <span>Credentials</span>
                     </a>
                 </li>
 

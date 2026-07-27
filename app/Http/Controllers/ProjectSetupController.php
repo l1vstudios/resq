@@ -140,6 +140,17 @@ class ProjectSetupController extends Controller
                 'device_health',
             ])],
             'parameter' => ['nullable', 'string', 'max:255'],
+            'weather_parameters' => ['nullable', 'array'],
+            'weather_parameters.*' => ['string', Rule::in([
+                'temperature',
+                'humidity',
+                'pressure',
+                'wind_speed',
+                'wind_direction',
+                'rainfall',
+                'solar_radiation',
+                'battery_voltage',
+            ])],
             'value' => ['nullable', 'string', 'max:255'],
             'threshold' => ['nullable', 'string', 'max:255'],
             'data_type' => ['required', Rule::in([
@@ -168,6 +179,9 @@ class ProjectSetupController extends Controller
             'rule' => ['nullable', 'string', 'max:255'],
             'status' => ['required', 'string', 'max:50'],
         ]);
+        $data['weather_parameters'] = $data['type'] === 'weather_station'
+            ? collect($data['weather_parameters'] ?? [])->unique()->values()->all()
+            : null;
 
         $addressAlreadyUsed = Sensor::query()
             ->where('mst_prefix_id', $data['mst_prefix_id'])
@@ -329,6 +343,7 @@ class ProjectSetupController extends Controller
             'poll_interval_ms' => $sensor->poll_interval_ms ?? 1000,
             'type' => $sensor->type,
             'parameter' => $sensor->parameter,
+            'weather_parameters' => $sensor->weather_parameters ?? [],
             'value' => $sensor->value,
             'threshold' => $sensor->threshold,
             'data_type' => $sensor->data_type,
