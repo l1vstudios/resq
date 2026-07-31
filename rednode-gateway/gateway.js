@@ -2,13 +2,14 @@ require('dotenv').config({ quiet: true });
 
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
 const mqtt = require('mqtt');
 const ModbusRTU = require('modbus-serial');
 
 const configUrl = process.env.REDNODE_CONFIG_URL
   || `${String(process.env.APP_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')}/api/rednode/config`;
-const configToken = process.env.REDNODE_CONFIG_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || '';
-const callbackToken = process.env.REDNODE_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || '';
+const configToken = process.env.REDNODE_CONFIG_TOKEN || '';
+const callbackToken = process.env.REDNODE_CALLBACK_TOKEN || '';
 const loggerCode = process.env.REDNODE_LOGGER_CODE || 'REDNODE-BLIIOT-01';
 const configRefreshMs = numberEnv('REDNODE_CONFIG_REFRESH_MS', 5000);
 const loopTickMs = numberEnv('REDNODE_LOOP_TICK_MS', 250);
@@ -23,6 +24,7 @@ let mqttBrokerUrl = null;
 let running = false;
 let sensorState = new Map();
 let lastHeartbeatAt = 0;
+let pendingHeartbeatReport = null;
 
 function numberEnv(name, fallback) {
   const value = Number(process.env[name]);
@@ -32,6 +34,11 @@ function numberEnv(name, fallback) {
 function normalizeFunctionCode(value, fallback = 'FC03') {
   const normalized = String(value || fallback).toUpperCase().replace(/[^0-9]/g, '');
   return `FC${normalized.padStart(2, '0')}`;
+}
+
+function stableId(prefix, facts) {
+  const digest = crypto.createHash('sha256').update(JSON.stringify(facts)).digest('hex');
+  return `${prefix}-${digest}`;
 }
 
 function numericFromText(value) {
@@ -337,26 +344,6 @@ function weatherValuesFromRegisters(registers, sensor) {
   });
 }
 
-function registerRowsForHeartbeat(sensor, registers) {
-  const functionCode = normalizeFunctionCode(sensor.function_code);
-  const startAddress = Number(sensor.address || 0);
-
-  return registers.map((value, index) => {
-    const uint16 = Number(value) & 0xffff;
-    const int16 = uint16 > 0x7fff ? uint16 - 0x10000 : uint16;
-
-    return {
-      address: startAddress + index,
-      raw: uint16,
-      uint16,
-      int16,
-      hex: `0x${uint16.toString(16).toUpperCase().padStart(4, '0')}`,
-      binary: uint16.toString(2).padStart(16, '0').replace(/(.{8})/g, '$1 ').trim(),
-      function_code: functionCode,
-    };
-  });
-}
-
 async function postTelemetry(sensor, result) {
   const callbackUrl = process.env.REDNODE_CALLBACK_URL || activeConfig?.callback?.url;
 
@@ -364,9 +351,30 @@ async function postTelemetry(sensor, result) {
     return;
   }
 
+  const observedAt = new Date().toISOString();
+  const registers = Array.isArray(result.registers)
+    ? result.registers.map((value) => Number(value) & 0xffff)
+    : [];
   const body = {
+    event_id: stableId('rednode', {
+      loggerCode,
+      sensor: sensor.sensor_id || sensor.sensor_code,
+      observedAt,
+      registers,
+      address: Number(sensor.address || 0),
+      functionCode: normalizeFunctionCode(sensor.function_code),
+    }),
+    envelope_version: '1',
+    transport: 'rednode',
+    payload_classification: Array.isArray(result.registers) && result.registers.length ? 'raw' : 'pre_normalized',
+    observed_at: observedAt,
     sensor_id: sensor.sensor_id,
     data_logger_id: activeConfig?.logger?.id || null,
+    logger_code: activeConfig?.logger?.logger_code || loggerCode,
+    raw: result.raw,
+    registers,
+    register_address: Number(sensor.address || 0),
+    function_code: normalizeFunctionCode(sensor.function_code),
     value: result.value_text,
     parameter_values: result.parameter_values || [],
     ...(result.threshold_exceeded !== null ? { threshold_exceeded: result.threshold_exceeded } : {}),
@@ -377,25 +385,32 @@ async function postTelemetry(sensor, result) {
   console.log(`[callback] ${sensor.sensor_code} terkirim ke ${callbackUrl}`);
 }
 
-async function postHeartbeat(connected, lastError, sensors = []) {
+async function postHeartbeat(connected, lastError) {
   const heartbeatUrl = process.env.REDNODE_HEARTBEAT_URL || activeConfig?.connection_report?.url || activeConfig?.heartbeat?.url;
 
-  if (!heartbeatUrl || Date.now() - lastHeartbeatAt < heartbeatMs) {
+  if (!heartbeatUrl || (!pendingHeartbeatReport && Date.now() - lastHeartbeatAt < heartbeatMs)) {
     return;
   }
 
   const serial = activeConfig?.serial || {};
   const headers = callbackToken ? { Authorization: `Bearer ${callbackToken}` } : {};
 
-  await httpJson('POST', heartbeatUrl, {
-    logger_code: loggerCode,
-    serial_port: serial.port,
-    pin_mapping: serial.pin_mapping || '',
-    connected,
-    last_error: lastError || null,
-    sensors,
-  }, headers);
+  if (!pendingHeartbeatReport) {
+    const reportId = crypto.randomUUID();
+    pendingHeartbeatReport = {
+      report_id: reportId,
+      logger_code: loggerCode,
+      serial_port: serial.port,
+      pin_mapping: serial.pin_mapping || '',
+      connected,
+      last_error: lastError || null,
+      sensors: [],
+    };
+  }
 
+  await httpJson('POST', heartbeatUrl, pendingHeartbeatReport, headers);
+
+  pendingHeartbeatReport = null;
   lastHeartbeatAt = Date.now();
 }
 
@@ -433,7 +448,6 @@ async function pollDueSensors() {
   }
 
   running = true;
-  const heartbeatSensors = [];
   let connected = false;
   let heartbeatError = null;
 
@@ -456,26 +470,6 @@ async function pollDueSensors() {
 
         state.lastValue = result.value_text;
         state.lastError = null;
-        heartbeatSensors.push({
-          sensor_code: sensor.sensor_code,
-          sensor_label: sensor.sensor_label,
-          sensor_type: sensor.sensor_type || sensor.type,
-          parameter: sensor.parameter,
-          weather_parameters: sensor.weather_parameters || [],
-          address: Number(sensor.address || 0),
-          quantity: registers.length,
-          function_code: normalizeFunctionCode(sensor.function_code),
-          registers,
-          rows: registerRowsForHeartbeat(sensor, registers),
-          raw: result.raw,
-          numeric_value: result.value,
-          parameter_values: result.parameter_values || [],
-          threshold: result.threshold,
-          threshold_exceeded: result.threshold_exceeded,
-          value: result.value_text,
-          error: null,
-          received_at: new Date().toISOString(),
-        });
         console.log(
           `[sensor] ${sensor.sensor_code} = ${result.value_text} ` +
           `| raw=${result.raw} | registers=[${registers.join(', ')}]`
@@ -483,22 +477,6 @@ async function pollDueSensors() {
       } catch (error) {
         state.lastError = error.message;
         heartbeatError = error.message;
-        heartbeatSensors.push({
-          sensor_code: sensor.sensor_code,
-          sensor_label: sensor.sensor_label,
-          sensor_type: sensor.sensor_type || sensor.type,
-          parameter: sensor.parameter,
-          weather_parameters: sensor.weather_parameters || [],
-          address: Number(sensor.address || 0),
-          quantity: Number(sensor.quantity || 1),
-          function_code: normalizeFunctionCode(sensor.function_code),
-          registers: [],
-          rows: [],
-          raw: null,
-          value: null,
-          error: error.message,
-          received_at: new Date().toISOString(),
-        });
         console.error(`[sensor] ${sensor.sensor_code}: ${error.message}`);
       } finally {
         state.nextAt = Date.now() + Math.max(Number(sensor.poll_interval_ms || 1000), 250);
@@ -510,7 +488,7 @@ async function pollDueSensors() {
     heartbeatError = error.message;
     console.error(`[serial] ${error.message}`);
   } finally {
-    postHeartbeat(connected, heartbeatError, heartbeatSensors).catch((error) => {
+    postHeartbeat(connected, heartbeatError).catch((error) => {
       console.error(`[laporan-koneksi] ${error.message}`);
     });
     running = false;

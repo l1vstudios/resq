@@ -121,6 +121,21 @@
 
                 <li class="menu-title">Telemetry</li>
 
+                <li class="{{ request()->routeIs('canonical-catalog.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('canonical-catalog.index') }}" class="waves-effect {{ request()->routeIs('canonical-catalog.*') ? 'active' : '' }}">
+                        <i class="bx bx-book-content"></i>
+                        <span>Canonical Catalog</span>
+                    </a>
+                </li>
+
+                <li class="{{ request()->routeIs('mapping-workbench.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('mapping-workbench.index') }}" class="waves-effect {{ request()->routeIs('mapping-workbench.*') ? 'active' : '' }}">
+                        <i class="bx bx-transfer-alt"></i>
+                        <span>Mapping Workbench</span>
+                    </a>
+                </li>
+                <li class="{{ request()->routeIs('canonical-trace.*') ? 'mm-active' : '' }}"><a href="{{ route('canonical-trace.index') }}" class="waves-effect {{ request()->routeIs('canonical-trace.*') ? 'active' : '' }}"><i class="bx bx-git-branch"></i><span>Canonical Trace & Replay</span></a></li>
+
                 <li class="{{ request()->routeIs('telemetry.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('telemetry.index') }}" class="waves-effect {{ request()->routeIs('telemetry.*') ? 'active' : '' }}">
                         <i class="bx bx-broadcast"></i>

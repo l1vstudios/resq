@@ -12,12 +12,17 @@ use App\Models\Project;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Models\WarningStation;
+use App\Services\Canonicalization\CanonicalCurrentQueryService;
+use App\Services\Canonicalization\CanonicalCurrentReading;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class RegisteredDataController extends Controller
 {
+    public function __construct(private readonly CanonicalCurrentQueryService $canonicalCurrent) {}
+
     public function clusters(): View
     {
         return view('modules.clusters.index', $this->data());
@@ -70,12 +75,12 @@ class RegisteredDataController extends Controller
 
     public function telemetry(): View
     {
-        return view('modules.telemetry.index', $this->data());
+        return view('modules.telemetry.index', $this->data(true));
     }
 
     public function telemetryData(): JsonResponse
     {
-        $data = $this->data();
+        $data = $this->data(true);
 
         return response()->json([
             'sensors' => $data['sensors'],
@@ -88,7 +93,7 @@ class RegisteredDataController extends Controller
         return view('modules.warning-stations.index', $this->data());
     }
 
-    private function data(): array
+    private function data(bool $includeTelemetry = false): array
     {
         if (! Schema::hasTable('resq_projects')) {
             return [
@@ -101,6 +106,7 @@ class RegisteredDataController extends Controller
                 'dataLoggers' => collect(config('resq_dummy.data_loggers')),
                 'connectivity' => collect(config('resq_dummy.connectivity')),
                 'credentials' => collect(config('resq_dummy.credentials')),
+                'telemetryReadings' => collect(),
                 'wsControllers' => collect(config('resq_dummy.ws_controllers'))->keyBy('warning_station_id'),
             ];
         }
@@ -125,7 +131,9 @@ class RegisteredDataController extends Controller
             ? DeviceCredential::with('dataLogger')->latest()->get()
             : collect();
         $telemetryModels = Schema::hasTable('telemetry_readings')
-            ? TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])->latest('received_at')->latest()->limit(100)->get()
+            ? ($includeTelemetry
+                ? $this->latestLegacyTelemetry($sensors->pluck('id')->all())
+                : TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])->latest('received_at')->latest()->limit(100)->get())
             : collect();
 
         $clusters = $workspaces->map(fn (GeospatialWorkspace $workspace) => [
@@ -222,7 +230,9 @@ class RegisteredDataController extends Controller
             'credentials' => $hasCredentials
                 ? $this->credentialsFromModels($credentialModels)
                 : $this->credentialsFromMonitoring($monitoring),
-            'telemetryReadings' => $this->telemetryFromModels($telemetryModels),
+            'telemetryReadings' => $includeTelemetry
+                ? $this->telemetryRows($sensors, $telemetryModels, $dataLoggerModels)
+                : $this->telemetryFromModels($telemetryModels),
             'wsControllers' => $this->controllersFromWarnings($warnings),
         ];
     }
@@ -291,13 +301,13 @@ class RegisteredDataController extends Controller
         return collect($monitoringStations)
             ->filter(fn ($station) => ! empty($station['logger_id']))
             ->map(fn ($station) => [
-                'id' => 'CONN-' . $station['id'],
+                'id' => 'CONN-'.$station['id'],
                 'logger_id' => $station['logger_id'],
                 'communication_type' => '-',
                 'protocol' => '-',
                 'host_or_endpoint' => '-',
                 'port' => '-',
-                'topic_or_api_path' => 'telemetry/' . $station['id'],
+                'topic_or_api_path' => 'telemetry/'.$station['id'],
                 'gateway_id' => '-',
                 'sim_number' => '-',
                 'imei' => '-',
@@ -345,9 +355,9 @@ class RegisteredDataController extends Controller
         return collect($monitoringStations)
             ->filter(fn ($station) => ! empty($station['logger_id']))
             ->map(fn ($station) => [
-                'id' => 'CRED-' . $station['id'],
+                'id' => 'CRED-'.$station['id'],
                 'logger_id' => $station['logger_id'],
-                'device_token' => 'linked-to-' . $station['logger_id'],
+                'device_token' => 'linked-to-'.$station['logger_id'],
                 'mqtt_username' => strtolower(str_replace('-', '_', $station['id'])),
                 'mqtt_password_hash' => '-',
                 'certificate_ref' => '-',
@@ -375,9 +385,10 @@ class RegisteredDataController extends Controller
         ]);
     }
 
-    private function telemetryFromModels($readings)
+    private function telemetryFromModels($readings): Collection
     {
         return collect($readings)->map(fn (TelemetryReading $reading) => [
+            'reading_source' => 'legacy',
             'db_id' => $reading->id,
             'sensor_db_id' => $reading->sensor_id,
             'sensor_id' => $reading->sensor?->sensor_code,
@@ -393,12 +404,85 @@ class RegisteredDataController extends Controller
         ]);
     }
 
+    private function latestLegacyTelemetry(array $sensorIds): Collection
+    {
+        if ($sensorIds === []) {
+            return collect();
+        }
+
+        return TelemetryReading::query()
+            ->with(['sensor.monitoringStation', 'dataLogger'])
+            ->whereIn('sensor_id', $sensorIds)
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('telemetry_readings as newer')
+                    ->whereColumn('newer.sensor_id', 'telemetry_readings.sensor_id')
+                    ->where(function ($newer) {
+                        $newer->whereRaw('COALESCE(newer.received_at, newer.created_at) > COALESCE(telemetry_readings.received_at, telemetry_readings.created_at)')
+                            ->orWhere(function ($sameTime) {
+                                $sameTime->whereRaw('COALESCE(newer.received_at, newer.created_at) = COALESCE(telemetry_readings.received_at, telemetry_readings.created_at)')
+                                    ->whereColumn('newer.id', '>', 'telemetry_readings.id');
+                            });
+                    });
+            })
+            ->orderBy('sensor_id')
+            ->get();
+    }
+
+    private function telemetryRows(Collection $sensors, Collection $legacyModels, Collection $dataLoggers): Collection
+    {
+        $canonical = $this->canonicalTablesAvailable()
+            ? $this->canonicalCurrent->forSensors($sensors->pluck('id')->all())->groupBy('sourceId')
+            : collect();
+        $legacyBySensor = $legacyModels->keyBy('sensor_id');
+        $dataLoggersById = $dataLoggers->keyBy('id');
+
+        return $sensors->flatMap(function (Sensor $sensor) use ($canonical, $legacyBySensor, $dataLoggersById): Collection {
+            $canonicalRows = collect($canonical->get($sensor->id, []));
+            if ($canonicalRows->isNotEmpty()) {
+                return $canonicalRows->map(fn (CanonicalCurrentReading $reading): array => $this->canonicalTelemetryRow(
+                    $reading,
+                    $sensor,
+                    $dataLoggersById->get($reading->dataLoggerId),
+                ));
+            }
+
+            $legacy = $legacyBySensor->get($sensor->id);
+
+            return $legacy ? $this->telemetryFromModels([$legacy]) : collect();
+        })->values();
+    }
+
+    private function canonicalTelemetryRow(CanonicalCurrentReading $reading, Sensor $sensor, ?DataLogger $dataLogger): array
+    {
+        return $reading->toArray() + [
+            'sensor_db_id' => $sensor->id,
+            'sensor_id' => $sensor->sensor_code,
+            'monitoring_station_id' => $sensor->monitoringStation?->station_code,
+            'data_logger_id' => $dataLogger?->logger_code,
+            'parameter_values' => [],
+            'alert_level' => 'Normal',
+            'received_at' => $reading->observedAt->diffForHumans(),
+            'received_at_input' => null,
+        ];
+    }
+
+    private function canonicalTablesAvailable(): bool
+    {
+        return collect([
+            'canonical_current_heads',
+            'canonical_values',
+            'raw_ingestion_events',
+            'ingress_rollout_states',
+        ])->every(fn (string $table): bool => Schema::hasTable($table));
+    }
+
     private function controllersFromWarnings($warningStations)
     {
         return collect($warningStations)
             ->mapWithKeys(fn ($station) => [
                 $station['id'] => [
-                    'id' => $station['controller_id'] ?: 'WSC-' . $station['id'],
+                    'id' => $station['controller_id'] ?: 'WSC-'.$station['id'],
                     'warning_station_id' => $station['id'],
                     'controller_model' => $station['controller_model'] ?: '-',
                     'vendor' => $station['controller_vendor'] ?: '-',

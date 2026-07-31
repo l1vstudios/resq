@@ -3,10 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Sensor;
-use Illuminate\Support\ServiceProvider;
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
-
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot()
     {
         Schema::defaultStringLength(191);
+
+        Gate::define('manage-canonical-mappings', fn (User $user) => $user->hasVerifiedEmail());
 
         View::composer('layouts.topbar', function ($view) {
             $alerts = collect();

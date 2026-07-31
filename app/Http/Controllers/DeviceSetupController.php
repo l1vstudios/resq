@@ -9,13 +9,26 @@ use App\Models\MstPrefix;
 use App\Models\Project;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
+use App\Services\Ingestion\AuthenticatedDeviceContext;
+use App\Services\Ingestion\AuthenticatedIngressRejectionRecorder;
+use App\Services\Ingestion\CanonicalIngressService;
+use App\Services\Ingestion\DeviceIngressAuthenticationException;
+use App\Services\Ingestion\DeviceIngressAuthenticator;
+use App\Services\Ingestion\IngressResult;
+use App\Services\Ingestion\IngressSubmission;
+use App\Services\Ingestion\RawEventConflictException;
+use App\Services\Ingestion\RawEventEnvelope;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use phpseclib3\Net\SSH2;
+use Throwable;
 
 class DeviceSetupController extends Controller
 {
@@ -78,11 +91,11 @@ class DeviceSetupController extends Controller
         }
 
         $timeoutArg = PHP_OS_FAMILY === 'Darwin' ? '2000' : '2';
-        $command = 'ping -c 1 -W ' . $timeoutArg . ' ' . escapeshellarg($host);
+        $command = 'ping -c 1 -W '.$timeoutArg.' '.escapeshellarg($host);
         $output = [];
         $exitCode = 1;
 
-        exec($command . ' 2>&1', $output, $exitCode);
+        exec($command.' 2>&1', $output, $exitCode);
 
         $ok = $exitCode === 0;
         $message = $ok
@@ -187,30 +200,30 @@ class DeviceSetupController extends Controller
             $logger->update(['logger_code' => $data['logger_code']]);
         }
 
-        $connectivityCode = 'SERIAL-' . $logger->logger_code;
+        $connectivityCode = 'SERIAL-'.$logger->logger_code;
         $existingConnectivity = ConnectivityConfig::where('connectivity_code', $connectivityCode)->first();
         $connectivityValues = [
-                'data_logger_id' => $logger->id,
-                'communication_type' => 'RS485',
-                'protocol' => 'Modbus RTU',
-                'host_or_endpoint' => $data['serial_port'],
-                'port' => null,
-                'topic_or_api_path' => $data['pin_mapping'],
-                'gateway_id' => $logger->logger_code,
-                'serial_port' => $data['serial_port'],
-                'baud_rate' => $data['baud_rate'],
-                'data_bits' => $data['data_bits'],
-                'stop_bits' => $data['stop_bits'],
-                'parity' => $data['parity'],
-                'timeout_ms' => $data['timeout_ms'],
-                'pin_mapping' => $data['pin_mapping'] ?? null,
-                'monitored_sensor_ids' => $request->has('monitored_sensor_ids_present') ? $monitoredSensorIds : null,
-                'rednode_host' => ($data['rednode_host'] ?? null) ?: $logger->remote_host ?: env('REDNODE_SSH_HOST'),
-                'rednode_ssh_port' => ($data['rednode_ssh_port'] ?? null) ?: $logger->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22),
-                'rednode_ssh_user' => ($data['rednode_ssh_user'] ?? null) ?: $logger->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root'),
-                'rednode_gateway_path' => ($data['rednode_gateway_path'] ?? null) ?: $logger->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway'),
-                'rednode_poll_interval_ms' => (int) round(((float) $data['rednode_poll_interval_seconds']) * 1000),
-                'connectivity_status' => $existingConnectivity?->connectivity_status ?? 'Offline',
+            'data_logger_id' => $logger->id,
+            'communication_type' => 'RS485',
+            'protocol' => 'Modbus RTU',
+            'host_or_endpoint' => $data['serial_port'],
+            'port' => null,
+            'topic_or_api_path' => $data['pin_mapping'],
+            'gateway_id' => $logger->logger_code,
+            'serial_port' => $data['serial_port'],
+            'baud_rate' => $data['baud_rate'],
+            'data_bits' => $data['data_bits'],
+            'stop_bits' => $data['stop_bits'],
+            'parity' => $data['parity'],
+            'timeout_ms' => $data['timeout_ms'],
+            'pin_mapping' => $data['pin_mapping'] ?? null,
+            'monitored_sensor_ids' => $request->has('monitored_sensor_ids_present') ? $monitoredSensorIds : null,
+            'rednode_host' => ($data['rednode_host'] ?? null) ?: $logger->remote_host ?: env('REDNODE_SSH_HOST'),
+            'rednode_ssh_port' => ($data['rednode_ssh_port'] ?? null) ?: $logger->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22),
+            'rednode_ssh_user' => ($data['rednode_ssh_user'] ?? null) ?: $logger->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root'),
+            'rednode_gateway_path' => ($data['rednode_gateway_path'] ?? null) ?: $logger->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway'),
+            'rednode_poll_interval_ms' => (int) round(((float) $data['rednode_poll_interval_seconds']) * 1000),
+            'connectivity_status' => $existingConnectivity?->connectivity_status ?? 'Offline',
         ];
 
         if (! empty($data['rednode_ssh_password'] ?? null) || $logger->remote_ssh_password) {
@@ -264,7 +277,7 @@ class DeviceSetupController extends Controller
         return back()->with('message', 'Credential berhasil disimpan.');
     }
 
-    public function storeTelemetry(Request $request): RedirectResponse
+    public function storeTelemetry(Request $request, CanonicalIngressService $ingress): RedirectResponse
     {
         $data = $request->validate([
             'telemetry_id' => ['nullable', 'exists:telemetry_readings,id'],
@@ -276,68 +289,444 @@ class DeviceSetupController extends Controller
             'status' => ['required', Rule::in(['Normal', 'Waspada', 'Siaga', 'Awas', 'Danger'])],
             'received_at' => ['nullable', 'date'],
         ]);
-        $telemetryId = $data['telemetry_id'] ?? null;
-        unset($data['telemetry_id']);
+        $sensor = Sensor::query()->with('monitoringStation.workspace')->findOrFail($data['sensor_id']);
+        $logger = ! empty($data['data_logger_id'])
+            ? DataLogger::query()->findOrFail($data['data_logger_id'])
+            : null;
 
-        $reading = $this->upsertTelemetryReading($data, $telemetryId ? (int) $telemetryId : null);
+        if ($logger && (int) $logger->monitoring_station_id !== (int) $sensor->monitoring_station_id) {
+            throw ValidationException::withMessages([
+                'data_logger_id' => 'Data logger harus berada pada monitoring station sensor yang sama.',
+            ]);
+        }
 
-        Sensor::whereKey($data['sensor_id'])->update([
-            'value' => $data['value'],
-            'alert_level' => $data['alert_level'],
-            'status' => $data['status'],
-            'last_seen_at' => $reading->received_at ?? now(),
-        ]);
+        $observedAt = ! empty($data['received_at'])
+            ? CarbonImmutable::parse((string) $data['received_at'])->utc()
+            : CarbonImmutable::now('UTC');
+        $eventKey = 'manual-'.Str::uuid();
+        $exactPayload = json_encode([
+            'event_id' => $eventKey,
+            'sensor_id' => $sensor->id,
+            'data_logger_id' => $logger?->id,
+            'value' => $data['value'] ?? null,
+            'parameter_values' => $data['parameter_values'] ?? null,
+            'observed_at' => $observedAt->toISOString(),
+        ], JSON_THROW_ON_ERROR);
+        $hasValue = array_key_exists('value', $data) && $data['value'] !== null;
+        $envelope = new RawEventEnvelope(
+            sourceType: 'sensor',
+            sourceId: $sensor->id,
+            logicalEventKey: $eventKey,
+            transport: 'manual',
+            payloadClassification: 'pre_normalized',
+            exactPayload: $exactPayload,
+            sourceSnapshot: [
+                'project_id' => $sensor->monitoringStation?->workspace?->project_id,
+                'monitoring_station_id' => $sensor->monitoring_station_id,
+                'data_logger_id' => $logger?->id,
+                'sensor_id' => $sensor->id,
+                'sensor_code' => $sensor->sensor_code,
+                'authentication_method' => 'web_session',
+                'actor_id' => $request->user()?->id,
+                'ingress_path' => 'manual',
+            ],
+            projectId: $sensor->monitoringStation?->workspace?->project_id,
+            monitoringStationId: $sensor->monitoring_station_id,
+            dataLoggerId: $logger?->id,
+            sensorId: $sensor->id,
+            contentType: 'application/json',
+            inspectionPayload: json_decode($exactPayload, true),
+            observedAt: $observedAt,
+            observedAtProvenance: ! empty($data['received_at']) ? 'operator' : 'server_received',
+            observedAtFallback: empty($data['received_at']),
+            items: [[
+                'item_key' => 'manual_value',
+                'source_parameter' => $sensor->parameter,
+                'raw_value' => $hasValue ? (string) $data['value'] : null,
+                'status' => $hasValue ? 'received' : 'missing',
+                'reason' => $hasValue ? null : 'No manual value supplied.',
+                'metadata' => ['payload_semantics' => 'pre_normalized'],
+            ]],
+        );
+
+        $ingress->ingest(new IngressSubmission(
+            'manual',
+            $envelope,
+            $sensor,
+            [
+                'value' => $hasValue ? (string) $data['value'] : null,
+                'parameter_values' => $data['parameter_values'] ?? null,
+            ],
+        ));
 
         return back()->with('message', 'Telemetry reading berhasil disimpan.');
     }
 
-    public function updateRealtimeSensorStatus(Request $request): JsonResponse
-    {
-        $callbackToken = env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN');
-
-        if ($callbackToken && ! hash_equals($callbackToken, (string) $request->bearerToken())) {
+    public function updateRealtimeSensorStatus(
+        Request $request,
+        DeviceIngressAuthenticator $authenticator,
+        CanonicalIngressService $ingress,
+        AuthenticatedIngressRejectionRecorder $rejections,
+    ): JsonResponse {
+        try {
+            $authenticated = $authenticator->authenticate($request);
+        } catch (DeviceIngressAuthenticationException $exception) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Invalid callback token.',
-            ], 403);
+                'message' => $exception->getMessage(),
+            ], $exception->status);
         }
 
-        $data = $request->validate([
-            'sensor_id' => ['nullable', 'required_without:sensor_code', 'exists:sensors,id'],
-            'sensor_code' => ['nullable', 'required_without:sensor_id', 'string', 'exists:sensors,sensor_code'],
-            'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
+        $trustedPath = $authenticated->defaultIngressPath();
+        $exactPayload = $request->getContent();
+        if (strlen($exactPayload) > (int) config('canonical.ingestion.max_payload_bytes', 1048576)) {
+            $rejections->record($trustedPath, $authenticated, $request, 'payload_too_large', 413);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Request body exceeds the configured size limit.',
+            ], 413);
+        }
+
+        $payload = json_decode($exactPayload, true);
+
+        if (! is_array($payload)) {
+            try {
+                $result = $ingress->ingest($this->realtimeIngressSubmission(
+                    $request,
+                    $authenticated,
+                    $trustedPath,
+                    [],
+                    $exactPayload,
+                    receiptStatus: 'rejected',
+                    failureReason: 'Request body is not a JSON object.',
+                ));
+            } catch (RawEventConflictException $exception) {
+                return $this->rawEventConflictResponse($exception);
+            }
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Request body must be a JSON object.',
+                'raw_event_id' => $result->capture->event->id,
+            ], 422);
+        }
+
+        try {
+            $trustedPath = $authenticator->resolveRealtimePath($authenticated, $payload['transport'] ?? null);
+        } catch (DeviceIngressAuthenticationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => $exception->getMessage(),
+            ], $exception->status);
+        }
+
+        $sensor = null;
+        try {
+            $sensor = $authenticator->resolveSensor(
+                $authenticated,
+                $payload['sensor_id'] ?? null,
+                $payload['sensor_code'] ?? null,
+                $payload['data_logger_id'] ?? null,
+            );
+        } catch (DeviceIngressAuthenticationException $exception) {
+            try {
+                $result = $ingress->ingest($this->realtimeIngressSubmission(
+                    $request,
+                    $authenticated,
+                    $trustedPath,
+                    $payload,
+                    $exactPayload,
+                    receiptStatus: 'rejected',
+                    failureReason: $exception->getMessage(),
+                ));
+            } catch (RawEventConflictException $conflict) {
+                return $this->rawEventConflictResponse($conflict);
+            }
+
+            return response()->json([
+                'ok' => false,
+                'message' => $exception->getMessage(),
+                'raw_event_id' => $result->capture->event->id,
+            ], $exception->status);
+        }
+
+        $validator = Validator::make($payload, [
+            'event_id' => ['required', 'string', 'max:191'],
+            'envelope_version' => ['nullable', 'string', 'max:20'],
+            'sensor_id' => ['nullable', 'required_without:sensor_code', 'integer'],
+            'sensor_code' => ['nullable', 'required_without:sensor_id', 'string', 'max:255'],
+            'data_logger_id' => ['nullable', 'integer'],
+            'transport' => ['required', Rule::in(config('canonical.ingestion.allowed_transports', []))],
+            'payload_classification' => ['nullable', 'string', 'max:32'],
+            'observed_at' => ['required', 'date'],
             'value' => ['nullable', 'string', 'max:255'],
             'parameter_values' => ['nullable', 'array'],
             'threshold_exceeded' => ['nullable', 'boolean'],
+            'raw' => ['nullable'],
+            'registers' => ['nullable', 'array', 'max:'.(int) config('canonical.ingestion.max_register_items', 125)],
+            'registers.*' => ['integer', 'min:0', 'max:65535'],
+            'register_address' => ['nullable', 'integer', 'min:0', 'max:65535'],
+            'function_code' => ['nullable', 'string', 'max:20'],
+            'raw_payload' => ['nullable', 'string'],
         ]);
 
-        $sensor = ! empty($data['sensor_id'])
-            ? Sensor::findOrFail($data['sensor_id'])
-            : Sensor::where('sensor_code', $data['sensor_code'])->firstOrFail();
-        $thresholdExceeded = array_key_exists('threshold_exceeded', $data)
-            ? (bool) $data['threshold_exceeded']
-            : $this->thresholdExceeded($data['value'] ?? null, $sensor->threshold ?? $sensor->rule);
-        $level = $thresholdExceeded ? 'Awas' : 'Normal';
+        if ($validator->fails()) {
+            try {
+                $result = $ingress->ingest($this->realtimeIngressSubmission(
+                    $request,
+                    $authenticated,
+                    $trustedPath,
+                    $payload,
+                    $exactPayload,
+                    $sensor,
+                    'rejected',
+                    substr($validator->errors()->toJson(), 0, 4000),
+                ));
+            } catch (RawEventConflictException $exception) {
+                return $this->rawEventConflictResponse($exception);
+            }
 
-        $sensor->update([
-            'value' => $data['value'],
-            'alert_level' => $level,
-            'status' => $level,
-            'last_seen_at' => now(),
-        ]);
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid device event envelope.',
+                'errors' => $validator->errors(),
+                'raw_event_id' => $result->capture->event->id,
+            ], 422);
+        }
 
-        $this->upsertTelemetryReading([
-            'sensor_id' => $sensor->id,
-            'data_logger_id' => $data['data_logger_id'] ?? null,
-            'value' => $data['value'],
-            'parameter_values' => $data['parameter_values'] ?? null,
-            'alert_level' => $level,
-            'status' => $level,
-            'received_at' => now(),
-        ]);
+        $data = $validator->validated();
+
+        try {
+            $result = $ingress->ingest($this->realtimeIngressSubmission(
+                $request,
+                $authenticated,
+                $trustedPath,
+                $data,
+                $exactPayload,
+                $sensor,
+            ));
+        } catch (RawEventConflictException $exception) {
+            return $this->rawEventConflictResponse($exception);
+        }
+
+        return $this->realtimeSensorResponse($sensor, $data, $result);
+    }
+
+    private function realtimeIngressSubmission(
+        Request $request,
+        AuthenticatedDeviceContext $authenticated,
+        string $path,
+        array $payload,
+        string $exactPayload,
+        ?Sensor $sensor = null,
+        string $receiptStatus = 'accepted',
+        ?string $failureReason = null,
+    ): IngressSubmission {
+        $eventKey = trim((string) ($payload['event_id'] ?? $request->header('X-Event-ID', '')));
+        if ($eventKey === '') {
+            $eventKey = 'rejected-'.hash('sha256', $exactPayload);
+        }
+        if (strlen($eventKey) > 191) {
+            $eventKey = 'invalid-key-'.hash('sha256', $eventKey);
+        }
+
+        $transport = match ($path) {
+            'modbus_tcp' => 'modbus_tcp',
+            'mqtt' => 'mqtt',
+            'rednode_callback' => 'rednode',
+            default => 'http',
+        };
+        $classification = $this->trustedPayloadClassification($payload, $transport);
+
+        $observedAt = null;
+        if (! empty($payload['observed_at'])) {
+            try {
+                $observedAt = CarbonImmutable::parse((string) $payload['observed_at'])->utc();
+            } catch (Throwable) {
+                $observedAt = null;
+            }
+        }
+
+        $envelope = new RawEventEnvelope(
+            sourceType: 'data_logger',
+            sourceId: $authenticated->dataLogger->id,
+            logicalEventKey: $eventKey,
+            transport: $transport,
+            payloadClassification: $classification,
+            exactPayload: $exactPayload,
+            sourceSnapshot: $authenticated->sourceSnapshot($sensor) + ['ingress_path' => $path],
+            projectId: $authenticated->projectId,
+            monitoringStationId: $authenticated->monitoringStationId,
+            dataLoggerId: $authenticated->dataLogger->id,
+            sensorId: $sensor?->id,
+            contentType: substr((string) $request->header('Content-Type'), 0, 127) ?: null,
+            contentEncoding: substr((string) $request->header('Content-Encoding'), 0, 32) ?: null,
+            inspectionPayload: $this->redactRawInspectionPayload($payload),
+            observedAt: $observedAt,
+            observedAtProvenance: $observedAt ? 'device' : 'missing',
+            envelopeVersion: substr((string) ($payload['envelope_version'] ?? '1'), 0, 20),
+            receiptStatus: $receiptStatus,
+            failureReason: $failureReason,
+            items: $this->rawItemsFromRealtimePayload($payload, $sensor, $classification),
+        );
+
+        $candidate = $sensor && $receiptStatus === 'accepted'
+            ? [
+                'value' => array_key_exists('value', $payload) ? $payload['value'] : null,
+                'parameter_values' => $payload['parameter_values'] ?? null,
+                ...array_key_exists('threshold_exceeded', $payload)
+                    ? ['threshold_exceeded' => (bool) $payload['threshold_exceeded']]
+                    : [],
+            ]
+            : null;
+
+        return new IngressSubmission($path, $envelope, $sensor, $candidate);
+    }
+
+    private function trustedPayloadClassification(array $payload, string $transport): string
+    {
+        if (! empty($payload['registers'])) {
+            return 'raw';
+        }
+
+        if ($transport !== 'mqtt' && array_key_exists('raw', $payload) && ! is_array($payload['raw'])) {
+            return 'raw';
+        }
+
+        return 'pre_normalized';
+    }
+
+    private function rawItemsFromRealtimePayload(array $payload, ?Sensor $sensor, string $classification): array
+    {
+        $items = [];
+        $baseAddress = (int) ($payload['register_address'] ?? $sensor?->address ?? 0);
+
+        foreach (($payload['registers'] ?? []) as $index => $register) {
+            $uint16 = ((int) $register) & 0xFFFF;
+            $items[] = [
+                'item_key' => 'register:'.$index,
+                'source_parameter' => $sensor?->parameter,
+                'raw_value' => (string) $uint16,
+                'raw_bytes' => pack('n', $uint16),
+                'register_address' => $baseAddress + $index,
+                'register_count' => 1,
+                'metadata' => [
+                    'function_code' => $payload['function_code'] ?? $sensor?->function_code,
+                    'sensor_code' => $sensor?->sensor_code,
+                ],
+            ];
+        }
+
+        if ($classification === 'pre_normalized'
+            && array_key_exists('raw_payload', $payload)
+            && array_key_exists('value', $payload)) {
+            $hasValue = $payload['value'] !== null;
+            $items[] = [
+                'item_key' => 'register:0',
+                'source_parameter' => $sensor?->parameter,
+                'raw_value' => $hasValue
+                    ? (is_bool($payload['value']) ? ($payload['value'] ? '1' : '0') : (string) $payload['value'])
+                    : null,
+                'status' => $hasValue ? 'received' : 'missing',
+                'reason' => $hasValue ? null : 'No extracted MQTT value supplied.',
+                'metadata' => [
+                    'payload_semantics' => 'pre_normalized',
+                    'adapter_value' => true,
+                ],
+            ];
+        }
+
+        if (array_key_exists('raw_payload', $payload)) {
+            $items[] = [
+                'item_key' => 'raw_payload',
+                'source_parameter' => $sensor?->parameter,
+                'raw_value' => (string) $payload['raw_payload'],
+                'raw_bytes' => (string) $payload['raw_payload'],
+                'metadata' => ['transport_payload' => true],
+            ];
+        } elseif (array_key_exists('raw', $payload) && ! is_array($payload['raw'])) {
+            $items[] = [
+                'item_key' => 'raw_value',
+                'source_parameter' => $sensor?->parameter,
+                'raw_value' => is_bool($payload['raw'])
+                    ? ($payload['raw'] ? '1' : '0')
+                    : (string) $payload['raw'],
+            ];
+        }
+
+        foreach (($payload['parameter_values'] ?? []) as $index => $parameterValue) {
+            if (! is_array($parameterValue)) {
+                continue;
+            }
+
+            $items[] = [
+                'item_key' => 'parameter:'.$index,
+                'source_parameter' => $parameterValue['parameter'] ?? $sensor?->parameter,
+                'raw_value' => isset($parameterValue['raw']) ? (string) $parameterValue['raw'] : null,
+                'metadata' => [
+                    'pre_normalized_value' => $parameterValue['value'] ?? null,
+                    'value_text' => $parameterValue['value_text'] ?? null,
+                ],
+            ];
+        }
+
+        if ($items === []) {
+            $items[] = [
+                'item_key' => 'legacy_value',
+                'source_parameter' => $sensor?->parameter,
+                'raw_value' => isset($payload['value']) ? (string) $payload['value'] : null,
+                'status' => isset($payload['value']) ? 'received' : 'missing',
+                'reason' => isset($payload['value']) ? null : 'No source value supplied.',
+                'metadata' => ['pre_normalized' => true],
+            ];
+        }
+
+        return $items;
+    }
+
+    private function redactRawInspectionPayload(array $payload): array
+    {
+        $sensitiveKeys = ['authorization', 'token', 'device_token', 'password', 'secret'];
+
+        $redact = function (mixed $value) use (&$redact, $sensitiveKeys): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+
+            $redacted = [];
+            foreach ($value as $key => $item) {
+                $redacted[$key] = in_array(strtolower((string) $key), $sensitiveKeys, true)
+                    ? '[REDACTED]'
+                    : $redact($item);
+            }
+
+            return $redacted;
+        };
+
+        return $redact($payload);
+    }
+
+    private function realtimeSensorResponse(
+        Sensor $sensor,
+        array $data,
+        IngressResult $result,
+    ): JsonResponse {
+        $capture = $result->capture;
+        $canonical = $result->canonical;
 
         return response()->json([
             'ok' => true,
+            'raw_event_id' => $capture->event->id,
+            'event_id' => $capture->event->logical_event_key,
+            'idempotent' => $capture->idempotent,
+            'canonical' => $canonical ? [
+                'run_id' => $canonical->run->id,
+                'status' => $canonical->run->status,
+                'mapped' => $canonical->mapped,
+                'value_ids' => $canonical->values->pluck('id')->all(),
+                'projected_value_id' => $canonical->projectableValue?->id,
+            ] : null,
             'sensor' => [
                 'id' => $sensor->id,
                 'sensor_code' => $sensor->sensor_code,
@@ -350,21 +739,40 @@ class DeviceSetupController extends Controller
         ]);
     }
 
-    public function rednodeConfig(Request $request): JsonResponse
+    private function rawEventConflictResponse(RawEventConflictException $exception): JsonResponse
     {
-        $configToken = env('REDNODE_CONFIG_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN') ?: env('MQTT_CALLBACK_TOKEN');
+        return response()->json([
+            'ok' => false,
+            'message' => $exception->getMessage(),
+            'raw_event_id' => $exception->event->id,
+            'existing_payload_hash' => $exception->event->payload_hash,
+            'incoming_payload_hash' => $exception->incomingPayloadHash,
+        ], 409);
+    }
 
-        if ($configToken && ! hash_equals($configToken, (string) $request->bearerToken())) {
+    public function rednodeConfig(
+        Request $request,
+        DeviceIngressAuthenticator $authenticator,
+    ): JsonResponse {
+        try {
+            $authenticated = $authenticator->authenticate($request);
+        } catch (DeviceIngressAuthenticationException $exception) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Token config RedNode tidak valid.',
+                'message' => $exception->getMessage(),
+            ], $exception->status);
+        }
+
+        $loggerCode = $authenticated->dataLogger->logger_code;
+        $claimedLoggerCode = (string) $request->query('logger_code', '');
+        if ($claimedLoggerCode !== '' && ! hash_equals($loggerCode, $claimedLoggerCode)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Requested logger is outside the authenticated source scope.',
             ], 403);
         }
 
-        $loggerCode = $request->query('logger_code', env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01'));
-        $dataLogger = Schema::hasTable('data_loggers')
-            ? DataLogger::where('logger_code', $loggerCode)->first()
-            : null;
+        $dataLogger = $authenticated->dataLogger;
         $serialConfig = $dataLogger && Schema::hasTable('connectivity_configs')
             ? ConnectivityConfig::where('data_logger_id', $dataLogger->id)
                 ->where(function ($query) {
@@ -447,8 +855,8 @@ class DeviceSetupController extends Controller
             'callback' => [
                 'url' => $this->rednodeSetting('REDNODE_CALLBACK_URL')
                     ?: $this->rednodeSetting('MQTT_CALLBACK_URL')
-                    ?: $publicAppUrl . '/api/realtime-sensor-status',
-                'token_required' => (bool) (env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN')),
+                    ?: $publicAppUrl.'/api/realtime-sensor-status',
+                'token_required' => true,
             ],
             'mqtt' => [
                 'enabled' => filter_var(env('REDNODE_MQTT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
@@ -458,48 +866,95 @@ class DeviceSetupController extends Controller
             ],
             'heartbeat' => [
                 'url' => $this->rednodeSetting('REDNODE_HEARTBEAT_URL')
-                    ?: $publicAppUrl . '/api/rednode/heartbeat',
+                    ?: $publicAppUrl.'/api/rednode/heartbeat',
             ],
             'connection_report' => [
                 'url' => $this->rednodeSetting('REDNODE_HEARTBEAT_URL')
-                    ?: $publicAppUrl . '/api/rednode/heartbeat',
+                    ?: $publicAppUrl.'/api/rednode/heartbeat',
             ],
             'sensors' => $sensors,
         ]);
     }
 
-    public function rednodeHeartbeat(Request $request): JsonResponse
-    {
-        $callbackToken = env('REDNODE_CALLBACK_TOKEN') ?: env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN');
-
-        if ($callbackToken && ! hash_equals($callbackToken, (string) $request->bearerToken())) {
+    public function rednodeHeartbeat(
+        Request $request,
+        DeviceIngressAuthenticator $authenticator,
+        CanonicalIngressService $ingress,
+        AuthenticatedIngressRejectionRecorder $rejections,
+    ): JsonResponse {
+        try {
+            $authenticated = $authenticator->authenticate($request);
+        } catch (DeviceIngressAuthenticationException $exception) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Token laporan koneksi RedNode tidak valid.',
-            ], 403);
+                'message' => $exception->getMessage(),
+            ], $exception->status);
         }
 
-        $data = $request->validate([
+        $exactPayload = $request->getContent();
+        if (strlen($exactPayload) > (int) config('canonical.ingestion.max_payload_bytes', 1048576)) {
+            $rejections->record('rednode_heartbeat', $authenticated, $request, 'payload_too_large', 413);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Heartbeat body exceeds the configured size limit.',
+            ], 413);
+        }
+
+        $payload = json_decode($exactPayload, true);
+        if (! is_array($payload)) {
+            $rejections->record('rednode_heartbeat', $authenticated, $request, 'malformed_json', 422);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Heartbeat body must be a JSON object.',
+            ], 422);
+        }
+
+        $validator = Validator::make($payload, [
+            'report_id' => ['nullable', 'string', 'max:191'],
             'logger_code' => ['required', 'string', 'max:255'],
             'serial_port' => ['nullable', 'string', 'max:255'],
             'pin_mapping' => ['nullable', 'string', 'max:255'],
             'connected' => ['required', 'boolean'],
-            'last_error' => ['nullable', 'string'],
-            'sensors' => ['nullable', 'array'],
+            'last_error' => ['nullable', 'string', 'max:1000'],
+            'sensors' => ['nullable', 'array', 'max:'.(int) config('canonical.ingestion.max_heartbeat_readings', 250)],
+            'sensors.*' => ['array'],
+            'sensors.*.event_id' => ['nullable', 'string', 'max:191'],
+            'sensors.*.sensor_id' => ['nullable', 'integer'],
+            'sensors.*.sensor_code' => ['nullable', 'string', 'max:255'],
+            'sensors.*.value' => ['nullable'],
+            'sensors.*.numeric_value' => ['nullable'],
+            'sensors.*.error' => ['nullable', 'string', 'max:1000'],
+            'sensors.*.received_at' => ['nullable', 'date'],
+            'sensors.*.registers' => ['nullable', 'array', 'max:'.(int) config('canonical.ingestion.max_register_items', 125)],
+            'sensors.*.registers.*' => ['integer', 'min:0', 'max:65535'],
+            'sensors.*.register_address' => ['nullable', 'integer', 'min:0', 'max:65535'],
+            'sensors.*.function_code' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $logger = DataLogger::firstOrCreate(
-            ['logger_code' => $data['logger_code']],
-            [
-                'logger_model' => 'RedNode Bliiot',
-                'vendor' => 'Bliiot',
-                'device_label' => $data['logger_code'],
-                'logger_status' => 'Active',
-            ]
-        );
+        if ($validator->fails()) {
+            $rejections->record('rednode_heartbeat', $authenticated, $request, 'validation_failed', 422);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid RedNode heartbeat envelope.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        $logger = $authenticated->dataLogger;
+        if (! hash_equals((string) $logger->logger_code, (string) $data['logger_code'])) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Heartbeat logger is outside the authenticated source scope.',
+            ], 403);
+        }
 
         $connectivity = ConnectivityConfig::firstOrCreate(
-            ['connectivity_code' => 'SERIAL-' . $logger->logger_code],
+            ['connectivity_code' => 'SERIAL-'.$logger->logger_code],
             [
                 'data_logger_id' => $logger->id,
                 'communication_type' => 'RS485',
@@ -521,13 +976,116 @@ class DeviceSetupController extends Controller
                 'reported_at' => now()->toISOString(),
             ],
         ]);
-        $this->syncRednodeHeartbeatSensors($data['sensors'] ?? [], $logger->id);
+        $reportId = trim((string) ($data['report_id'] ?? ''));
+        if ($reportId === '') {
+            $reportId = 'heartbeat-'.hash('sha256', $exactPayload);
+        }
+        $rawEventIds = [];
+
+        foreach (($data['sensors'] ?? []) as $index => $item) {
+            try {
+                $sensor = $authenticator->resolveSensor(
+                    $authenticated,
+                    $item['sensor_id'] ?? null,
+                    $item['sensor_code'] ?? null,
+                    $logger->id,
+                );
+                $result = $ingress->ingest($this->heartbeatIngressSubmission(
+                    $authenticated,
+                    $sensor,
+                    $item,
+                    $reportId,
+                    (int) $index,
+                ));
+                $rawEventIds[] = $result->capture->event->id;
+            } catch (DeviceIngressAuthenticationException $exception) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $exception->getMessage(),
+                ], $exception->status);
+            } catch (RawEventConflictException $exception) {
+                return $this->rawEventConflictResponse($exception);
+            }
+        }
 
         return response()->json([
             'ok' => true,
             'status' => $connectivity->connectivity_status,
             'last_seen_at' => $connectivity->last_seen_at?->toISOString(),
+            'report_id' => $reportId,
+            'raw_event_ids' => $rawEventIds,
         ]);
+    }
+
+    private function heartbeatIngressSubmission(
+        AuthenticatedDeviceContext $authenticated,
+        Sensor $sensor,
+        array $item,
+        string $reportId,
+        int $index,
+    ): IngressSubmission {
+        $identity = (string) ($item['sensor_code'] ?? $item['sensor_id'] ?? $index);
+        $eventKey = trim((string) ($item['event_id'] ?? ''));
+        if ($eventKey === '') {
+            $eventKey = 'heartbeat-'.hash('sha256', $reportId.'|'.$identity.'|'.$index);
+        }
+        $observedAt = ! empty($item['received_at'])
+            ? CarbonImmutable::parse((string) $item['received_at'])->utc()
+            : CarbonImmutable::now('UTC');
+        $hasValue = array_key_exists('value', $item) && $item['value'] !== null;
+        $hasNumericValue = array_key_exists('numeric_value', $item) && $item['numeric_value'] !== null;
+        $value = $hasValue ? $item['value'] : ($hasNumericValue ? $item['numeric_value'] : null);
+        $hasRegisters = ! empty($item['registers']);
+        $status = ! empty($item['error']) ? 'error' : ($value === null && ! $hasRegisters ? 'missing' : 'received');
+        $exactPayload = json_encode($item, JSON_THROW_ON_ERROR);
+        $rawItems = $this->rawItemsFromRealtimePayload($item, $sensor);
+
+        if ($status !== 'received') {
+            $rawItems = [[
+                'item_key' => 'heartbeat_value',
+                'source_parameter' => $sensor->parameter,
+                'raw_value' => $value === null ? null : (string) $value,
+                'status' => $status,
+                'reason' => ! empty($item['error']) ? (string) $item['error'] : 'No heartbeat value supplied.',
+                'metadata' => ['payload_semantics' => 'pre_normalized'],
+            ]];
+        }
+
+        $envelope = new RawEventEnvelope(
+            sourceType: 'data_logger',
+            sourceId: $authenticated->dataLogger->id,
+            logicalEventKey: $eventKey,
+            transport: 'rednode',
+            payloadClassification: $hasRegisters ? 'raw' : 'pre_normalized',
+            exactPayload: $exactPayload,
+            sourceSnapshot: $authenticated->sourceSnapshot($sensor) + [
+                'ingress_path' => 'rednode_heartbeat',
+                'report_id' => $reportId,
+            ],
+            projectId: $authenticated->projectId,
+            monitoringStationId: $authenticated->monitoringStationId,
+            dataLoggerId: $authenticated->dataLogger->id,
+            sensorId: $sensor->id,
+            contentType: 'application/json',
+            inspectionPayload: $this->redactRawInspectionPayload($item),
+            observedAt: $observedAt,
+            observedAtProvenance: ! empty($item['received_at']) ? 'device' : 'server_received',
+            observedAtFallback: empty($item['received_at']),
+            items: $rawItems,
+        );
+
+        return new IngressSubmission(
+            'rednode_heartbeat',
+            $envelope,
+            $sensor,
+            [
+                'value' => $value === null ? null : (string) $value,
+                'parameter_values' => $item['parameter_values'] ?? null,
+                ...array_key_exists('threshold_exceeded', $item)
+                    ? ['threshold_exceeded' => (bool) $item['threshold_exceeded']]
+                    : [],
+            ],
+        );
     }
 
     public function rednodeStatus(Request $request): JsonResponse
@@ -614,10 +1172,10 @@ class DeviceSetupController extends Controller
         }
 
         $command = $data['action'] === 'start'
-            ? $this->rednodeStopCommand($connectivity) . '; ' . $this->rednodeStartCommand($connectivity, $data['logger_code'], $this->rednodeRequestBaseUrl($request))
+            ? $this->rednodeStopCommand($connectivity).'; '.$this->rednodeStartCommand($connectivity, $data['logger_code'], $this->rednodeRequestBaseUrl($request))
             : $this->rednodeStopCommand($connectivity);
         $terminalLog = [
-            '$ ssh ' . $this->rednodeSshLabel($connectivity),
+            '$ ssh '.$this->rednodeSshLabel($connectivity),
             '[web] Remote SSH ke logger...',
         ];
         $result = trim($this->runRednodeSshCommand(
@@ -678,13 +1236,13 @@ class DeviceSetupController extends Controller
             try {
                 $output = trim($this->runRednodeSshCommand(
                     $connectivity,
-                    $this->rednodeStopCommand($connectivity) . '; ' . $this->rednodeStartCommand($connectivity, $logger->logger_code, $this->rednodeRequestBaseUrl($request)),
+                    $this->rednodeStopCommand($connectivity).'; '.$this->rednodeStartCommand($connectivity, $logger->logger_code, $this->rednodeRequestBaseUrl($request)),
                     70
                 ));
                 $terminalLog = array_merge(
                     [
-                        '[web] Mulai monitoring logger ' . $logger->logger_code,
-                        '$ ssh ' . $this->rednodeSshLabel($connectivity),
+                        '[web] Mulai monitoring logger '.$logger->logger_code,
+                        '$ ssh '.$this->rednodeSshLabel($connectivity),
                     ],
                     $this->rednodeTerminalOutputLines($output)
                 );
@@ -715,8 +1273,8 @@ class DeviceSetupController extends Controller
                     'message' => $message,
                     'terminal_log' => array_merge(
                         [
-                            '[web] Mulai monitoring logger ' . $logger->logger_code,
-                            '$ ssh ' . $this->rednodeSshLabel($connectivity),
+                            '[web] Mulai monitoring logger '.$logger->logger_code,
+                            '$ ssh '.$this->rednodeSshLabel($connectivity),
                         ],
                         $this->rednodeTerminalOutputLines($message)
                     ),
@@ -729,7 +1287,7 @@ class DeviceSetupController extends Controller
         return response()->json([
             'ok' => $successCount > 0,
             'message' => $successCount
-                ? 'Monitoring project dimulai untuk ' . $successCount . ' logger.'
+                ? 'Monitoring project dimulai untuk '.$successCount.' logger.'
                 : 'Monitoring project gagal dimulai. Cek IP dan credentials logger.',
             'project' => [
                 'id' => $project->id,
@@ -778,8 +1336,8 @@ class DeviceSetupController extends Controller
                 ));
                 $terminalLog = array_merge(
                     [
-                        '[web] Stop monitoring logger ' . $logger->logger_code,
-                        '$ ssh ' . $this->rednodeSshLabel($connectivity),
+                        '[web] Stop monitoring logger '.$logger->logger_code,
+                        '$ ssh '.$this->rednodeSshLabel($connectivity),
                     ],
                     $this->rednodeTerminalOutputLines($output)
                 );
@@ -810,8 +1368,8 @@ class DeviceSetupController extends Controller
                     'message' => $message,
                     'terminal_log' => array_merge(
                         [
-                            '[web] Stop monitoring logger ' . $logger->logger_code,
-                            '$ ssh ' . $this->rednodeSshLabel($connectivity),
+                            '[web] Stop monitoring logger '.$logger->logger_code,
+                            '$ ssh '.$this->rednodeSshLabel($connectivity),
                         ],
                         $this->rednodeTerminalOutputLines($message)
                     ),
@@ -824,7 +1382,7 @@ class DeviceSetupController extends Controller
         return response()->json([
             'ok' => $successCount > 0,
             'message' => $successCount
-                ? 'Monitoring project dihentikan untuk ' . $successCount . ' logger.'
+                ? 'Monitoring project dihentikan untuk '.$successCount.' logger.'
                 : 'Monitoring project gagal dihentikan. Cek IP dan credentials logger.',
             'project' => [
                 'id' => $project->id,
@@ -961,10 +1519,10 @@ class DeviceSetupController extends Controller
             'if [ -z "$NODE_BIN" ]; then echo "[error] node binary tidak ditemukan di PATH"; exit 1; fi',
             'echo "[preflight] node=$NODE_BIN"',
             'if [ ! -f test-ports.js ]; then echo "[error] test-ports.js tidak ditemukan di $(pwd)"; ls -la; exit 1; fi',
-            'env ' . $this->rednodeRuntimeEnvString($data['logger_code']) . ' "$NODE_BIN" test-ports.js --json',
+            'env '.$this->rednodeRuntimeEnvString($data['logger_code']).' "$NODE_BIN" test-ports.js --json',
         ]);
-        $command = $this->rednodeStopCommand($connectivity) . ' >/tmp/resq-rednode-stop-test.log 2>&1; '
-            . 'GATEWAY_DIR=' . escapeshellarg($gatewayPath) . ' sh -c ' . escapeshellarg($script);
+        $command = $this->rednodeStopCommand($connectivity).' >/tmp/resq-rednode-stop-test.log 2>&1; '
+            .'GATEWAY_DIR='.escapeshellarg($gatewayPath).' sh -c '.escapeshellarg($script);
         $output = trim($this->runRednodeSshCommand($connectivity, $command));
         $result = json_decode($output, true);
 
@@ -1030,55 +1588,55 @@ class DeviceSetupController extends Controller
         $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
         $nodeArgs = [
             '--json',
-            '--start-slave=' . (int) $data['start_slave_id'],
-            '--end-slave=' . (int) $data['end_slave_id'],
-            '--data-bits=' . (int) ($connectivity->data_bits ?: env('REDNODE_DATA_BITS', 8)),
-            '--stop-bits=' . (int) ($connectivity->stop_bits ?: env('REDNODE_STOP_BITS', 1)),
-            '--parity=' . ($connectivity->parity ?: env('REDNODE_PARITY', 'none')),
-            '--response-timeout=' . $responseTimeoutMs,
-            '--delay-between-slaves=' . $delayBetweenSlavesMs,
+            '--start-slave='.(int) $data['start_slave_id'],
+            '--end-slave='.(int) $data['end_slave_id'],
+            '--data-bits='.(int) ($connectivity->data_bits ?: env('REDNODE_DATA_BITS', 8)),
+            '--stop-bits='.(int) ($connectivity->stop_bits ?: env('REDNODE_STOP_BITS', 1)),
+            '--parity='.($connectivity->parity ?: env('REDNODE_PARITY', 'none')),
+            '--response-timeout='.$responseTimeoutMs,
+            '--delay-between-slaves='.$delayBetweenSlavesMs,
         ];
 
         if (! empty($data['baud_rate'])) {
-            $nodeArgs[] = '--baud-rate=' . (int) $data['baud_rate'];
+            $nodeArgs[] = '--baud-rate='.(int) $data['baud_rate'];
         }
 
         foreach ($selectedPorts as $port) {
-            $nodeArgs[] = '--port=' . $port;
+            $nodeArgs[] = '--port='.$port;
         }
 
         $terminalLog = [
-            '$ ssh ' . $this->rednodeSshLabel($connectivity),
+            '$ ssh '.$this->rednodeSshLabel($connectivity),
             '[web] Menunggu login SSH dari server aplikasi...',
-            '[web] Timeout command: ' . $timeoutSeconds . ' detik',
+            '[web] Timeout command: '.$timeoutSeconds.' detik',
         ];
-        $displayNodeCommand = 'node test-pin-led.js ' . collect($nodeArgs)
+        $displayNodeCommand = 'node test-pin-led.js '.collect($nodeArgs)
             ->map(fn ($arg) => escapeshellarg($arg))
             ->implode(' ');
         $script = implode("\n", [
             'exec 2>&1',
             'echo "[ssh] login berhasil: $(whoami)@$(hostname)"',
-            'echo ' . escapeshellarg('$ cd "$GATEWAY_DIR"'),
+            'echo '.escapeshellarg('$ cd "$GATEWAY_DIR"'),
             'cd "$GATEWAY_DIR" || { echo "[error] Gateway path tidak ditemukan: $GATEWAY_DIR"; exit 1; }',
-            'echo ' . escapeshellarg('$ pwd'),
+            'echo '.escapeshellarg('$ pwd'),
             'pwd',
             'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"',
-            'echo ' . escapeshellarg('$ command -v node'),
+            'echo '.escapeshellarg('$ command -v node'),
             'NODE_BIN="$(command -v node || true)"',
             'if [ -z "$NODE_BIN" ]; then echo "[error] node binary tidak ditemukan di PATH"; exit 1; fi',
             'echo "$NODE_BIN"',
-            'echo ' . escapeshellarg('$ test -f test-pin-led.js'),
+            'echo '.escapeshellarg('$ test -f test-pin-led.js'),
             'if [ ! -f test-pin-led.js ]; then echo "[error] test-pin-led.js tidak ditemukan di $(pwd)"; ls -la; exit 1; fi',
             'echo "[ok] test-pin-led.js ditemukan"',
-            'echo ' . escapeshellarg('$ ' . $displayNodeCommand),
-            'env ' . $this->rednodeRuntimeEnvString($data['logger_code']) . ' "$NODE_BIN" test-pin-led.js ' . collect($nodeArgs)->map(fn ($arg) => escapeshellarg($arg))->implode(' '),
+            'echo '.escapeshellarg('$ '.$displayNodeCommand),
+            'env '.$this->rednodeRuntimeEnvString($data['logger_code']).' "$NODE_BIN" test-pin-led.js '.collect($nodeArgs)->map(fn ($arg) => escapeshellarg($arg))->implode(' '),
         ]);
-        $scanCommand = 'GATEWAY_DIR=' . escapeshellarg($gatewayPath) . ' sh -c ' . escapeshellarg($script);
+        $scanCommand = 'GATEWAY_DIR='.escapeshellarg($gatewayPath).' sh -c '.escapeshellarg($script);
         $command = $request->boolean('stop_gateway')
-            ? $this->rednodeStopCommand($connectivity) . ' >/tmp/resq-rednode-stop-scan.log 2>&1; '
-                . $scanCommand . '; SCAN_STATUS=$?; '
-                . $this->rednodeStartCommand($connectivity, $data['logger_code'], $this->rednodeRequestBaseUrl($request)) . ' >/tmp/resq-rednode-restart-scan.log 2>&1; '
-                . 'exit $SCAN_STATUS'
+            ? $this->rednodeStopCommand($connectivity).' >/tmp/resq-rednode-stop-scan.log 2>&1; '
+                .$scanCommand.'; SCAN_STATUS=$?; '
+                .$this->rednodeStartCommand($connectivity, $data['logger_code'], $this->rednodeRequestBaseUrl($request)).' >/tmp/resq-rednode-restart-scan.log 2>&1; '
+                .'exit $SCAN_STATUS'
             : $scanCommand;
         if ($request->boolean('stop_gateway')) {
             $terminalLog[] = '$ stop gateway sementara';
@@ -1094,7 +1652,7 @@ class DeviceSetupController extends Controller
                 ?: ($errorLines[0] ?? $rawMessage);
             $terminalLog = array_merge(
                 $terminalLog,
-                $errorLines ?: ['[error] ' . $rawMessage]
+                $errorLines ?: ['[error] '.$rawMessage]
             );
 
             return response()->json([
@@ -1162,10 +1720,10 @@ class DeviceSetupController extends Controller
                 ->filter()
                 ->implode(', ');
 
-            return trim($typeLabel . ($parameters ? ' - ' . $parameters : ''));
+            return trim($typeLabel.($parameters ? ' - '.$parameters : ''));
         }
 
-        return trim($typeLabel . ($sensor->parameter ? ' - ' . $sensor->parameter : ''));
+        return trim($typeLabel.($sensor->parameter ? ' - '.$sensor->parameter : ''));
     }
 
     private function weatherParameterLabel(string $parameter): string
@@ -1180,62 +1738,6 @@ class DeviceSetupController extends Controller
             'solar_radiation' => 'Radiasi Matahari',
             'battery_voltage' => 'Tegangan Baterai',
         ][$parameter] ?? ucwords(str_replace('_', ' ', $parameter));
-    }
-
-    private function thresholdExceeded(?string $value, ?string $threshold): bool
-    {
-        $numericValue = $this->numericFromText($value);
-        $numericThreshold = $this->numericFromText($threshold);
-
-        return $numericValue !== null
-            && $numericThreshold !== null
-            && $numericValue > $numericThreshold;
-    }
-
-    private function syncRednodeHeartbeatSensors(array $heartbeatSensors, ?int $dataLoggerId): void
-    {
-        foreach ($heartbeatSensors as $item) {
-            if (! is_array($item) || empty($item['sensor_code']) || ! empty($item['error'])) {
-                continue;
-            }
-
-            $sensor = Sensor::where('sensor_code', $item['sensor_code'])->first();
-
-            if (! $sensor) {
-                continue;
-            }
-
-            $valueText = array_key_exists('value', $item) && $item['value'] !== null
-                ? (string) $item['value']
-                : (array_key_exists('numeric_value', $item) && $item['numeric_value'] !== null ? (string) $item['numeric_value'] : null);
-
-            if ($valueText === null) {
-                continue;
-            }
-
-            $thresholdExceeded = array_key_exists('threshold_exceeded', $item) && $item['threshold_exceeded'] !== null
-                ? (bool) $item['threshold_exceeded']
-                : $this->thresholdExceeded($valueText, $sensor->threshold ?? $sensor->rule);
-            $level = $thresholdExceeded ? 'Awas' : 'Normal';
-            $receivedAt = ! empty($item['received_at']) ? $item['received_at'] : now();
-
-            $sensor->update([
-                'value' => $valueText,
-                'alert_level' => $level,
-                'status' => $level,
-                'last_seen_at' => $receivedAt,
-            ]);
-
-            $this->upsertTelemetryReading([
-                'sensor_id' => $sensor->id,
-                'data_logger_id' => $dataLoggerId,
-                'value' => $valueText,
-                'parameter_values' => $item['parameter_values'] ?? null,
-                'alert_level' => $level,
-                'status' => $level,
-                'received_at' => $receivedAt,
-            ]);
-        }
     }
 
     private function projectDataLoggers(int $projectId)
@@ -1288,18 +1790,18 @@ class DeviceSetupController extends Controller
         }
 
         $exitMarker = '__RESQ_EXIT_STATUS__';
-        $output = $ssh->exec($command . "\nprintf '\\n" . $exitMarker . ":%s\\n' \"$?\"");
+        $output = $ssh->exec($command."\nprintf '\\n".$exitMarker.":%s\\n' \"$?\"");
         $exitStatus = $ssh->getExitStatus();
 
-        if (preg_match('/\R?' . preg_quote($exitMarker, '/') . ':(-?\d+)\s*$/', $output ?: '', $matches)) {
+        if (preg_match('/\R?'.preg_quote($exitMarker, '/').':(-?\d+)\s*$/', $output ?: '', $matches)) {
             $exitStatus = (int) $matches[1];
-            $output = preg_replace('/\R?' . preg_quote($exitMarker, '/') . ':-?\d+\s*$/', '', $output ?: '');
+            $output = preg_replace('/\R?'.preg_quote($exitMarker, '/').':-?\d+\s*$/', '', $output ?: '');
         }
 
         if ($exitStatus === null && ! is_array($this->decodeRednodeJsonOutput($output ?: ''))) {
             $message = trim($output ?: '');
             $message .= ($message === '' ? '' : "\n")
-                . sprintf(
+                .sprintf(
                     'Command SSH RedNode belum selesai atau timeout. SSH berhasil login ke %s@%s:%s, tapi proses remote berhenti sebelum exit status diterima.',
                     $user,
                     $host,
@@ -1368,7 +1870,7 @@ class DeviceSetupController extends Controller
         $port = (int) ($connectivity->rednode_ssh_port ?: $logger?->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22));
         $user = $connectivity->rednode_ssh_user ?: $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root');
 
-        return $user . '@' . $host . ':' . $port;
+        return $user.'@'.$host.':'.$port;
     }
 
     private function rednodeTerminalOutputLines(string $output): array
@@ -1430,7 +1932,7 @@ class DeviceSetupController extends Controller
         foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
             $line = trim($line);
 
-            if ($line === '' || str_starts_with($line, '#') || ! str_starts_with($line, $key . '=')) {
+            if ($line === '' || str_starts_with($line, '#') || ! str_starts_with($line, $key.'=')) {
                 continue;
             }
 
@@ -1451,38 +1953,38 @@ class DeviceSetupController extends Controller
         $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
         $runtimeEnv = $this->rednodeRuntimeEnvArray($loggerCode, $appUrl);
         $exportCommands = collect($runtimeEnv)
-            ->map(fn ($value, $key) => 'export ' . $key . '=' . escapeshellarg((string) $value))
+            ->map(fn ($value, $key) => 'export '.$key.'='.escapeshellarg((string) $value))
             ->values()
             ->all();
         $script = implode("\n", [
             'echo "[web] mulai proses remote gateway"',
             'echo "[ssh] login berhasil: $(whoami)@$(hostname)"',
-            'echo ' . escapeshellarg('$ cd "$GATEWAY_DIR"'),
+            'echo '.escapeshellarg('$ cd "$GATEWAY_DIR"'),
             'cd "$GATEWAY_DIR" || { echo "[error] Gateway path tidak ditemukan: $GATEWAY_DIR"; exit 1; }',
-            'echo ' . escapeshellarg('$ pwd'),
+            'echo '.escapeshellarg('$ pwd'),
             'pwd',
             'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"',
-            'echo ' . escapeshellarg('$ command -v node'),
+            'echo '.escapeshellarg('$ command -v node'),
             'NODE_BIN="$(command -v node || true)"',
             'NPM_BIN="$(command -v npm || true)"',
             'if [ -z "$NODE_BIN" ]; then echo "node binary not found"; exit 1; fi',
             'echo "$NODE_BIN"',
-            'echo ' . escapeshellarg('$ command -v npm'),
+            'echo '.escapeshellarg('$ command -v npm'),
             'if [ -n "$NPM_BIN" ]; then echo "$NPM_BIN"; else echo "npm not found"; fi',
             'if [ ! -f gateway.js ]; then echo "gateway.js not found in $(pwd)"; exit 1; fi',
-            'echo ' . escapeshellarg('$ runtime env'),
-            'echo ' . escapeshellarg('$ export REDNODE_CONFIG_URL=' . $runtimeEnv['REDNODE_CONFIG_URL']),
-            'echo ' . escapeshellarg('$ export REDNODE_CALLBACK_URL=' . $runtimeEnv['REDNODE_CALLBACK_URL']),
-            'echo ' . escapeshellarg('$ export REDNODE_HEARTBEAT_URL=' . $runtimeEnv['REDNODE_HEARTBEAT_URL']),
-            'echo ' . escapeshellarg('$ export REDNODE_LOGGER_CODE=' . $runtimeEnv['REDNODE_LOGGER_CODE']),
-            'echo ' . escapeshellarg('$ export APP_URL=' . $runtimeEnv['APP_URL']),
+            'echo '.escapeshellarg('$ runtime env'),
+            'echo '.escapeshellarg('$ export REDNODE_CONFIG_URL='.$runtimeEnv['REDNODE_CONFIG_URL']),
+            'echo '.escapeshellarg('$ export REDNODE_CALLBACK_URL='.$runtimeEnv['REDNODE_CALLBACK_URL']),
+            'echo '.escapeshellarg('$ export REDNODE_HEARTBEAT_URL='.$runtimeEnv['REDNODE_HEARTBEAT_URL']),
+            'echo '.escapeshellarg('$ export REDNODE_LOGGER_CODE='.$runtimeEnv['REDNODE_LOGGER_CODE']),
+            'echo '.escapeshellarg('$ export APP_URL='.$runtimeEnv['APP_URL']),
             ...$exportCommands,
             ': > gateway.log',
             'if [ -f package.json ] && [ -n "$NPM_BIN" ]; then',
-            '  echo ' . escapeshellarg('$ npm run gateway'),
+            '  echo '.escapeshellarg('$ npm run gateway'),
             '  nohup "$NPM_BIN" run gateway >> gateway.log 2>&1 < /dev/null &',
             'else',
-            '  echo ' . escapeshellarg('$ node gateway.js'),
+            '  echo '.escapeshellarg('$ node gateway.js'),
             '  nohup "$NODE_BIN" gateway.js >> gateway.log 2>&1 < /dev/null &',
             'fi',
             'echo $! > gateway.pid',
@@ -1494,13 +1996,13 @@ class DeviceSetupController extends Controller
             'exit 1',
         ]);
 
-        return 'GATEWAY_DIR=' . escapeshellarg($gatewayPath) . ' sh -c ' . escapeshellarg($script);
+        return 'GATEWAY_DIR='.escapeshellarg($gatewayPath).' sh -c '.escapeshellarg($script);
     }
 
     private function rednodeRuntimeEnvString(string $loggerCode, ?string $appUrl = null): string
     {
         return collect($this->rednodeRuntimeEnvArray($loggerCode, $appUrl))
-            ->map(fn ($value, $key) => $key . '=' . escapeshellarg((string) $value))
+            ->map(fn ($value, $key) => $key.'='.escapeshellarg((string) $value))
             ->implode(' ');
     }
 
@@ -1510,9 +2012,13 @@ class DeviceSetupController extends Controller
 
         return [
             'APP_URL' => $appUrl,
-            'REDNODE_CONFIG_URL' => $this->rednodeSetting('REDNODE_CONFIG_URL') ?: $appUrl . '/api/rednode/config',
-            'REDNODE_CALLBACK_URL' => $this->rednodeSetting('REDNODE_CALLBACK_URL') ?: $appUrl . '/api/realtime-sensor-status',
-            'REDNODE_HEARTBEAT_URL' => $this->rednodeSetting('REDNODE_HEARTBEAT_URL') ?: $appUrl . '/api/rednode/heartbeat',
+            'REDNODE_CONFIG_URL' => $this->rednodeSetting('REDNODE_CONFIG_URL') ?: $appUrl.'/api/rednode/config',
+            'REDNODE_CONFIG_TOKEN' => (string) ($this->rednodeSetting('REDNODE_CONFIG_TOKEN')
+                ?: config('canonical.ingestion.legacy_config_token')),
+            'REDNODE_CALLBACK_URL' => $this->rednodeSetting('REDNODE_CALLBACK_URL') ?: $appUrl.'/api/realtime-sensor-status',
+            'REDNODE_CALLBACK_TOKEN' => (string) ($this->rednodeSetting('REDNODE_CALLBACK_TOKEN')
+                ?: config('canonical.ingestion.legacy_callback_tokens.rednode_callback')),
+            'REDNODE_HEARTBEAT_URL' => $this->rednodeSetting('REDNODE_HEARTBEAT_URL') ?: $appUrl.'/api/rednode/heartbeat',
             'REDNODE_LOGGER_CODE' => $loggerCode,
             'REDNODE_CONFIG_REFRESH_MS' => (string) env('REDNODE_CONFIG_REFRESH_MS', 5000),
             'REDNODE_HTTP_TIMEOUT_MS' => (string) env('REDNODE_HTTP_TIMEOUT_MS', 10000),
@@ -1527,7 +2033,7 @@ class DeviceSetupController extends Controller
         $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
         $script = implode("\n", [
             'echo "[web] stop semua proses gateway lama jika ada"',
-            'echo ' . escapeshellarg('$ cd "$GATEWAY_DIR"'),
+            'echo '.escapeshellarg('$ cd "$GATEWAY_DIR"'),
             'cd "$GATEWAY_DIR" || { echo "[error] Gateway path tidak ditemukan: $GATEWAY_DIR"; exit 1; }',
             'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"',
             'STOPPED=0',
@@ -1554,12 +2060,12 @@ class DeviceSetupController extends Controller
             '  echo "stopped pid=$PID"',
             '}',
             'if [ -f gateway.pid ]; then',
-            '  echo ' . escapeshellarg('$ stop gateway.pid'),
+            '  echo '.escapeshellarg('$ stop gateway.pid'),
             '  PID="$(cat gateway.pid 2>/dev/null || true)"',
             '  if kill -0 "$PID" 2>/dev/null; then stop_pid "$PID"; fi',
             '  rm -f gateway.pid',
             'fi',
-            'echo ' . escapeshellarg('$ cari proses gateway lama'),
+            'echo '.escapeshellarg('$ cari proses gateway lama'),
             'ps -eo pid=,args= 2>/dev/null | while IFS= read -r LINE; do',
             '  PID="$(echo "$LINE" | awk \'{print $1}\')"',
             '  CMD="${LINE#*$PID }"',
@@ -1571,44 +2077,7 @@ class DeviceSetupController extends Controller
             'rm -f "$STOP_FILE"',
         ]);
 
-        return 'GATEWAY_DIR=' . escapeshellarg($gatewayPath) . ' sh -c ' . escapeshellarg($script);
-    }
-
-    private function upsertTelemetryReading(array $data, ?int $telemetryId = null): TelemetryReading
-    {
-        $reading = $telemetryId
-            ? TelemetryReading::findOrFail($telemetryId)
-            : TelemetryReading::where('sensor_id', $data['sensor_id'])
-                ->latest('received_at')
-                ->latest()
-                ->first();
-
-        if ($reading) {
-            $reading->update($data);
-        } else {
-            $reading = TelemetryReading::create($data);
-        }
-
-        TelemetryReading::where('sensor_id', $data['sensor_id'])
-            ->whereKeyNot($reading->id)
-            ->delete();
-
-        return $reading;
-    }
-
-    private function numericFromText(?string $value): ?float
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        if (is_numeric($value)) {
-            return (float) $value;
-        }
-
-        preg_match('/-?\d+(\.\d+)?/', str_replace(',', '.', $value), $matches);
-
-        return isset($matches[0]) ? (float) $matches[0] : null;
+        return 'GATEWAY_DIR='.escapeshellarg($gatewayPath).' sh -c '.escapeshellarg($script);
     }
 
     public function destroy(string $type, int $id): RedirectResponse

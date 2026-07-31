@@ -1,3 +1,12 @@
+const crypto = require('crypto');
+const mqttDeliveryCache = new Map();
+
+if (process.argv.includes('--verify-mqtt-delivery-identity')) {
+  const verification = verifyMqttDeliveryIdentity();
+  console.log(JSON.stringify(verification, null, 2));
+  process.exit(verification.failed === 0 ? 0 : 1);
+}
+
 const cors = require('cors');
 require('dotenv').config({ quiet: true });
 const express = require('express');
@@ -36,7 +45,6 @@ let mqttState = {
   lastError: null,
   startedAt: null,
 };
-
 app.use(cors({ origin: allowedOrigin }));
 app.use(express.json({ limit: '64kb' }));
 
@@ -201,6 +209,11 @@ function booleanFromValue(value) {
   return null;
 }
 
+function stableEventId(prefix, facts) {
+  const digest = crypto.createHash('sha256').update(JSON.stringify(facts)).digest('hex');
+  return `${prefix}-${digest}`;
+}
+
 function thresholdNumber(sensor) {
   return numericFromText(sensor?.threshold || sensor?.rule);
 }
@@ -294,7 +307,7 @@ function pushMqttLog(entry) {
   ].slice(0, 50);
 }
 
-async function postSensorUpdate(callback, sensor, evaluation) {
+async function postSensorUpdate(callback, sensor, evaluation, evidence = {}) {
   if (!callback?.url || !evaluation) {
     return;
   }
@@ -314,13 +327,33 @@ async function postSensorUpdate(callback, sensor, evaluation) {
     headers.Authorization = `Bearer ${callback.token}`;
   }
 
+  const observedAt = evidence.observedAt || new Date().toISOString();
+  const registers = Array.isArray(evidence.registers) ? evidence.registers : [];
+  const rawPayload = evidence.rawPayload;
   const response = await fetch(callback.url, {
     method: 'POST',
     headers,
     body: JSON.stringify({
+      event_id: evidence.eventId || stableEventId('gateway', {
+        transport: evidence.transport,
+        sensorId,
+        sensorCode,
+        observedAt,
+        registers,
+        rawPayload,
+      }),
+      envelope_version: '1',
+      transport: evidence.transport || 'modbus_tcp',
+      payload_classification: evidence.payloadClassification
+        || (registers.length ? 'raw' : 'pre_normalized'),
+      observed_at: observedAt,
       ...(sensorId ? { sensor_id: sensorId } : {}),
       ...(sensorCode && !sensorId ? { sensor_code: sensorCode } : {}),
       ...(evaluation.data_logger_id ? { data_logger_id: evaluation.data_logger_id } : {}),
+      ...(registers.length ? { registers } : {}),
+      ...(evidence.registerAddress !== undefined ? { register_address: evidence.registerAddress } : {}),
+      ...(evidence.functionCode ? { function_code: evidence.functionCode } : {}),
+      ...(rawPayload !== undefined ? { raw_payload: rawPayload } : {}),
       value: evaluation.valueText,
       ...(evaluation.thresholdExceeded !== null && evaluation.thresholdExceeded !== undefined
         ? { threshold_exceeded: evaluation.thresholdExceeded }
@@ -448,7 +481,20 @@ async function runPollOnce() {
   const sensor = pollJob.payload.sensor;
   const evaluation = evaluateSensorValue(sensorValueFromRow(result.rows?.[0], sensor), sensor);
 
-  await postSensorUpdate(pollJob.payload.callback, sensor, evaluation);
+  await postSensorUpdate(pollJob.payload.callback, sensor, evaluation, {
+    eventId: stableEventId('modbus', {
+      sensor: sensor?.db_id || sensor?.sensor_id || sensor?.code || sensor?.sensor_code,
+      observedAt: result.stats?.lastUpdate,
+      registers: (result.rows || []).map((row) => row.uint16),
+      registerAddress: result.address,
+      functionCode: result.functionCode,
+    }),
+    observedAt: result.stats?.lastUpdate || new Date().toISOString(),
+    transport: 'modbus_tcp',
+    registers: (result.rows || []).map((row) => row.uint16),
+    registerAddress: result.address,
+    functionCode: result.functionCode,
+  });
 
   pollJob.lastResult = {
     ...result,
@@ -527,7 +573,7 @@ function mqttCallbackFromEnv() {
 
   return {
     url: callbackUrl,
-    token: process.env.MQTT_CALLBACK_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || '',
+    token: process.env.MQTT_CALLBACK_TOKEN || '',
   };
 }
 
@@ -594,6 +640,124 @@ function readingFromMqtt(message, incomingTopic, configuredSensor) {
     value: numericValue,
     valueText: numericValue === null ? String(rawValue ?? '') : `${numericValue.toFixed(2)}${unit}`,
     thresholdExceeded,
+  };
+}
+
+function mqttDeliveryIdentity(config, incomingTopic, buffer, packet, clientId) {
+  let objectPayload = {};
+  try {
+    const parsed = JSON.parse(buffer.toString());
+    objectPayload = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    objectPayload = {};
+  }
+
+  const sourceEventId = publisherEventId(objectPayload);
+  const sourceObservedAt = objectPayload.observed_at || objectPayload.observedAt
+    || objectPayload.received_at || objectPayload.receivedAt
+    || objectPayload.timestamp || null;
+  const payloadSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  const now = Date.now();
+  const parsedSourceTime = sourceObservedAt === null ? NaN : Date.parse(String(sourceObservedAt));
+  const observedAt = Number.isFinite(parsedSourceTime)
+    ? new Date(parsedSourceTime).toISOString()
+    : new Date(now).toISOString();
+
+  if (sourceEventId !== null) {
+    const facts = {
+      brokerUrl: config?.brokerUrl || null,
+      topic: incomingTopic,
+      sourceEventId,
+      sourceObservedAt: sourceObservedAt === null ? null : String(sourceObservedAt),
+      payloadSha256,
+    };
+
+    return {
+      eventId: stableEventId('mqtt', facts),
+      observedAt,
+    };
+  }
+
+  const qos = toInteger(packet?.qos, 0);
+  const messageId = toInteger(packet?.messageId, null);
+  const identity = {
+    eventId: `mqtt-${crypto.randomUUID()}`,
+    observedAt,
+  };
+
+  if (qos < 1 || messageId === null) {
+    return identity;
+  }
+
+  const cacheKey = stableEventId('mqtt-session-delivery', {
+    brokerUrl: config?.brokerUrl || null,
+    clientId: clientId || null,
+    topic: incomingTopic,
+    messageId,
+    qos,
+  });
+  const ttlMs = Math.min(Math.max(toInteger(process.env.MQTT_DEDUP_WINDOW_MS, 60000), 1000), 3600000);
+
+  for (const [key, cached] of mqttDeliveryCache) {
+    if (cached.expiresAt <= now) {
+      mqttDeliveryCache.delete(key);
+    }
+  }
+
+  const cached = mqttDeliveryCache.get(cacheKey);
+  if (packet?.dup === true && cached?.payloadSha256 === payloadSha256) {
+    return cached.identity;
+  }
+
+  while (mqttDeliveryCache.size >= 1000) {
+    mqttDeliveryCache.delete(mqttDeliveryCache.keys().next().value);
+  }
+
+  mqttDeliveryCache.set(cacheKey, { identity, payloadSha256, expiresAt: now + ttlMs });
+
+  return identity;
+}
+
+function publisherEventId(payload) {
+  const candidate = payload.event_id ?? payload.eventId
+    ?? payload.message_id ?? payload.messageId ?? null;
+
+  if ((typeof candidate !== 'string' && typeof candidate !== 'number') || String(candidate).trim() === '') {
+    return null;
+  }
+
+  return String(candidate).trim();
+}
+
+function verifyMqttDeliveryIdentity() {
+  const config = { brokerUrl: 'mqtt://verification.invalid' };
+  const topic = 'resq/telemetry/verification';
+  const clientId = 'verification-client';
+  const payload = Buffer.from('{"value":30.2}');
+
+  mqttDeliveryCache.clear();
+  const qos0First = mqttDeliveryIdentity(config, topic, payload, { qos: 0 }, clientId);
+  const qos0Second = mqttDeliveryIdentity(config, topic, payload, { qos: 0 }, clientId);
+  const qos1First = mqttDeliveryIdentity(config, topic, payload, { qos: 1, messageId: 17, dup: false }, clientId);
+  const qos1Duplicate = mqttDeliveryIdentity(config, topic, payload, { qos: 1, messageId: 17, dup: true }, clientId);
+  const qos1ReusedPacketId = mqttDeliveryIdentity(config, topic, payload, { qos: 1, messageId: 17, dup: false }, clientId);
+  const publisherPayload = Buffer.from('{"event_id":"publisher-17","value":30.2}');
+  const publisherFirst = mqttDeliveryIdentity(config, topic, publisherPayload, { qos: 0 }, clientId);
+  const publisherRetry = mqttDeliveryIdentity(config, topic, publisherPayload, { qos: 0 }, clientId);
+  const assertions = {
+    identical_qos0_deliveries_are_distinct: qos0First.eventId !== qos0Second.eventId,
+    qos1_dup_redelivery_reuses_active_session_id: qos1First.eventId === qos1Duplicate.eventId,
+    qos1_non_dup_packet_id_reuse_is_distinct: qos1First.eventId !== qos1ReusedPacketId.eventId,
+    publisher_event_id_is_stable: publisherFirst.eventId === publisherRetry.eventId,
+  };
+
+  mqttDeliveryCache.clear();
+
+  return {
+    suite: 'mqtt-delivery-identity/1.0.0',
+    passed: Object.values(assertions).filter(Boolean).length,
+    failed: Object.values(assertions).filter((passed) => !passed).length,
+    assertions,
   };
 }
 
@@ -683,6 +847,7 @@ function stopMqtt() {
     lastError: mqttState.lastError,
     startedAt: null,
   };
+  mqttDeliveryCache.clear();
 }
 
 function startMqtt(payload) {
@@ -723,7 +888,10 @@ function startMqtt(payload) {
     startedAt: new Date().toISOString(),
   };
 
-  mqttClient.on('connect', () => {
+  mqttClient.on('connect', (connack) => {
+    if (!connack?.sessionPresent) {
+      mqttDeliveryCache.clear();
+    }
     mqttState.connected = true;
     mqttState.lastError = null;
     mqttClient.subscribe(topic, (error) => {
@@ -747,7 +915,7 @@ function startMqtt(payload) {
     stats.lastError = error.message;
   });
 
-  mqttClient.on('message', (incomingTopic, buffer) => {
+  mqttClient.on('message', (incomingTopic, buffer, packet) => {
     const message = buffer.toString();
     const sensor = mqttState.config?.sensor;
     const reading = readingFromMqtt(message, incomingTopic, sensor);
@@ -762,15 +930,29 @@ function startMqtt(payload) {
       }
       : reading;
 
+    const receivedAt = new Date().toISOString();
+    const deliveryIdentity = mqttDeliveryIdentity(
+      mqttState.config,
+      incomingTopic,
+      buffer,
+      packet,
+      mqttClient.options?.clientId,
+    );
     mqttState.lastMessage = {
       topic: incomingTopic,
       payload: message,
       evaluation,
-      receivedAt: new Date().toISOString(),
+      receivedAt,
     };
     pushMqttLog(mqttState.lastMessage);
 
-    postSensorUpdate(mqttState.config?.callback, sensor, evaluation).catch((error) => {
+    postSensorUpdate(mqttState.config?.callback, sensor, evaluation, {
+      eventId: deliveryIdentity.eventId,
+      observedAt: deliveryIdentity.observedAt,
+      transport: 'mqtt',
+      rawPayload: message,
+      payloadClassification: 'pre_normalized',
+    }).catch((error) => {
       mqttState.lastError = error.message;
       stats.err += 1;
       stats.lastError = error.message;

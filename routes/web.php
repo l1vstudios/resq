@@ -1,11 +1,17 @@
 <?php
 
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\DeviceSetupController;
+use App\Http\Controllers\CanonicalCatalogController;
+use App\Http\Controllers\CanonicalIngressRolloutController;
+use App\Http\Controllers\CanonicalTraceReplayController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeviceSetupController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\MappingWorkbenchController;
 use App\Http\Controllers\ProjectSetupController;
 use App\Http\Controllers\RegisteredDataController;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -59,6 +65,33 @@ Route::middleware('auth')->group(function () {
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');
     Route::post('/credentials', [DeviceSetupController::class, 'storeCredential'])->name('credentials.store');
     Route::get('/telemetry', [RegisteredDataController::class, 'telemetry'])->name('telemetry.index');
+    Route::get('/canonical-catalog', [CanonicalCatalogController::class, 'index'])->name('canonical-catalog.index');
+    Route::prefix('mapping-workbench')->name('mapping-workbench.')->middleware('can:manage-canonical-mappings')->group(function () {
+        Route::get('/', [MappingWorkbenchController::class, 'index'])->name('index');
+        Route::post('/profiles', [MappingWorkbenchController::class, 'storeProfile'])->name('profiles.store');
+        Route::get('/versions/{version}', [MappingWorkbenchController::class, 'show'])->name('show');
+        Route::post('/versions/{version}/rules', [MappingWorkbenchController::class, 'saveRule'])->name('rules.save');
+        Route::delete('/versions/{version}/rules/{rule}', [MappingWorkbenchController::class, 'destroyRule'])->name('rules.destroy');
+        Route::post('/versions/{version}/validate', [MappingWorkbenchController::class, 'validateVersion'])->name('validate');
+        Route::post('/versions/{version}/preview', [MappingWorkbenchController::class, 'preview'])->name('preview');
+        Route::post('/versions/{version}/publish', [MappingWorkbenchController::class, 'publish'])->name('publish');
+        Route::post('/versions/{version}/clone', [MappingWorkbenchController::class, 'clone'])->name('clone');
+        Route::post('/versions/{version}/activate', [MappingWorkbenchController::class, 'activate'])->name('activate');
+        Route::post('/assignments/{assignment}/rollback', [MappingWorkbenchController::class, 'rollback'])->name('rollback');
+    });
+    Route::prefix('canonical-ingress-rollout')->name('canonical-ingress-rollout.')->middleware('can:manage-canonical-mappings')->group(function () {
+        Route::get('/', [CanonicalIngressRolloutController::class, 'index'])->name('index');
+        Route::post('/transition', [CanonicalIngressRolloutController::class, 'transition'])->name('transition');
+    });
+    Route::prefix('canonical-trace')->name('canonical-trace.')->middleware('can:manage-canonical-mappings')->group(function () {
+        Route::get('/', [CanonicalTraceReplayController::class, 'index'])->name('index');
+        Route::get('/raw/{event}', [CanonicalTraceReplayController::class, 'raw'])->name('raw');
+        Route::get('/values/{value}', [CanonicalTraceReplayController::class, 'value'])->name('value');
+        Route::post('/replays', [CanonicalTraceReplayController::class, 'create'])->name('replays.create');
+        Route::get('/replays/{batch}', [CanonicalTraceReplayController::class, 'batch'])->name('replays.show');
+        Route::post('/replays/{batch}/dry-run', [CanonicalTraceReplayController::class, 'dryRun'])->name('replays.dry-run');
+        Route::post('/replays/{batch}/execute', [CanonicalTraceReplayController::class, 'execute'])->name('replays.execute');
+    });
     Route::get('/telemetry/live-data', [RegisteredDataController::class, 'telemetryData'])->name('telemetry.live-data');
     Route::post('/telemetry', [DeviceSetupController::class, 'storeTelemetry'])->name('telemetry.store');
     Route::get('/command-test', [RegisteredDataController::class, 'commandTest'])->name('command-test.index');
@@ -67,13 +100,13 @@ Route::middleware('auth')->group(function () {
 });
 
 // customers route
-Route::get('/customers', [App\Http\Controllers\CustomerController::class, 'index'])->name('customers.list');
+Route::get('/customers', [CustomerController::class, 'index'])->name('customers.list');
 
-//Update User Details
-Route::post('/update-profile/{id}', [App\Http\Controllers\HomeController::class, 'updateProfile'])->name('updateProfile');
-Route::post('/update-password/{id}', [App\Http\Controllers\HomeController::class, 'updatePassword'])->name('updatePassword');
+// Update User Details
+Route::post('/update-profile/{id}', [HomeController::class, 'updateProfile'])->name('updateProfile');
+Route::post('/update-password/{id}', [HomeController::class, 'updatePassword'])->name('updatePassword');
 
-Route::get('{any}', [App\Http\Controllers\HomeController::class, 'index'])->name('index');
+Route::get('{any}', [HomeController::class, 'index'])->name('index');
 
-//Language Translation
-Route::get('index/{locale}', [App\Http\Controllers\HomeController::class, 'lang']);
+// Language Translation
+Route::get('index/{locale}', [HomeController::class, 'lang']);
