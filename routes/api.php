@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeviceSetupController;
+use App\Http\Controllers\PublicTelemetryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,3 +28,12 @@ Route::get('/rednode/config', [DeviceSetupController::class, 'rednodeConfig'])
 
 Route::post('/rednode/heartbeat', [DeviceSetupController::class, 'rednodeHeartbeat'])
     ->name('api.rednode.heartbeat');
+
+Route::get('/public/telemetry/latest', [PublicTelemetryController::class, 'latest'])
+    ->name('api.public.telemetry.latest');
+
+Route::get('/public/sensors/{sensorCode}/latest', [PublicTelemetryController::class, 'sensor'])
+    ->name('api.public.sensors.latest');
+
+Route::get('/public/projects/{projectCode}/live', [PublicTelemetryController::class, 'project'])
+    ->name('api.public.projects.live');
