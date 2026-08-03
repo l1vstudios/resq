@@ -22,6 +22,19 @@
     .domain-meteorology { border-left-color: #556ee6; }
     .domain-hydrology { border-left-color: #34c38f; }
     .domain-geotechnical { border-left-color: #f1b44c; }
+    .canonical-domain-icon {
+        width: 52px;
+        height: 52px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff !important;
+        font-size: 26px;
+    }
+    .canonical-domain-icon i { color: #fff !important; }
+    .domain-icon-meteorology { background-color: #556ee6; }
+    .domain-icon-hydrology { background-color: #34c38f; }
+    .domain-icon-geotechnical { background-color: #f1b44c; }
     .badge-rdm { background-color: #556ee6; }
     .badge-rdp { background-color: #34c38f; }
     .badge-ppc { background-color: #f1b44c; }
@@ -82,8 +95,8 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center mb-3">
                                             <div class="avatar-sm me-3">
-                                                <span class="avatar-title rounded-circle bg-primary bg-soft text-primary font-size-18">
-                                                    @if($key == 'meteorology') <i class="bx bx-cloud-rain"></i>
+                                                <span class="avatar-title rounded-circle canonical-domain-icon domain-icon-{{ $key }}">
+                                                    @if($key == 'meteorology') <i class="bx bx-cloud-light-rain"></i>
                                                     @elseif($key == 'hydrology') <i class="bx bx-water"></i>
                                                     @else <i class="bx bx-landscape"></i> @endif
                                                 </span>
