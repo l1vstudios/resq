@@ -22,6 +22,15 @@ class DashboardController extends Controller
             $monitoringStations = collect(config('resq_dummy.monitoring_stations'));
             $warningStations = collect(config('resq_dummy.warning_stations'));
 
+            $mapClusters = $this->dummyMapClusters($clusters);
+            $mapSensors = $this->dummyMapSensors($sensors, $monitoringStations, $clusters);
+            $mapWarningStations = $this->dummyMapWarningStations($warningStations, $sensors, $clusters);
+            $mapPayload = [
+                'clusters' => $mapClusters,
+                'sensors' => $mapSensors,
+                'warningStations' => $mapWarningStations,
+            ];
+
             return view('modules.dashboard.index', [
                 'dashboardTotals' => [
                     'projects' => 1,
@@ -39,9 +48,10 @@ class DashboardController extends Controller
                         'status' => $cluster['status'],
                     ];
                 })->values(),
-                'mapClusters' => $this->dummyMapClusters($clusters),
-                'mapSensors' => $this->dummyMapSensors($sensors, $monitoringStations, $clusters),
-                'mapWarningStations' => $this->dummyMapWarningStations($warningStations, $sensors, $clusters),
+                'mapClusters' => $mapClusters,
+                'mapSensors' => $mapSensors,
+                'mapWarningStations' => $mapWarningStations,
+                'dashboardAlertActive' => $this->payloadHasActiveAlert($mapPayload),
             ]);
         }
 
@@ -58,6 +68,15 @@ class DashboardController extends Controller
                 ];
             });
 
+        $mapClusters = $this->mapClusters();
+        $mapSensors = $this->mapSensors();
+        $mapWarningStations = $this->mapWarningStations();
+        $mapPayload = [
+            'clusters' => $mapClusters,
+            'sensors' => $mapSensors,
+            'warningStations' => $mapWarningStations,
+        ];
+
         return view('modules.dashboard.index', [
             'dashboardTotals' => [
                 'projects' => Project::count(),
@@ -68,9 +87,10 @@ class DashboardController extends Controller
                 'provinces' => GeospatialWorkspace::distinct('province')->count('province'),
             ],
             'coverageRows' => $coverageRows,
-            'mapClusters' => $this->mapClusters(),
-            'mapSensors' => $this->mapSensors(),
-            'mapWarningStations' => $this->mapWarningStations(),
+            'mapClusters' => $mapClusters,
+            'mapSensors' => $mapSensors,
+            'mapWarningStations' => $mapWarningStations,
+            'dashboardAlertActive' => $this->payloadHasActiveAlert($mapPayload),
         ]);
     }
 
@@ -81,19 +101,35 @@ class DashboardController extends Controller
             $sensors = collect(config('resq_dummy.sensors'));
             $monitoringStations = collect(config('resq_dummy.monitoring_stations'));
             $warningStations = collect(config('resq_dummy.warning_stations'));
-
-            return response()->json([
+            $payload = [
                 'clusters' => $this->dummyMapClusters($clusters),
                 'sensors' => $this->dummyMapSensors($sensors, $monitoringStations, $clusters),
                 'warningStations' => $this->dummyMapWarningStations($warningStations, $sensors, $clusters),
-            ]);
+                'generated_at' => now()->toISOString(),
+            ];
+            $payload['alert_active'] = $this->payloadHasActiveAlert($payload);
+
+            return $this->noStoreJson($payload);
         }
 
-        return response()->json([
+        $payload = [
             'clusters' => $this->mapClusters(),
             'sensors' => $this->mapSensors(),
             'warningStations' => $this->mapWarningStations(),
-        ]);
+            'generated_at' => now()->toISOString(),
+        ];
+        $payload['alert_active'] = $this->payloadHasActiveAlert($payload);
+
+        return $this->noStoreJson($payload);
+    }
+
+    private function noStoreJson(array $payload): JsonResponse
+    {
+        return response()
+            ->json($payload)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     private function provinceCoordinates(): array
@@ -221,6 +257,7 @@ class DashboardController extends Controller
                                 ? 'Awas'
                                 : $sensor->status,
                             'last_seen' => optional($sensor->last_seen_at)->diffForHumans(),
+                            'threshold_exceeded' => $thresholdExceeded,
                         ];
                     })
                     ->values();
@@ -232,7 +269,7 @@ class DashboardController extends Controller
                     'public_warning_enabled' => $station->public_warning_enabled,
                     'ack_response' => $station->ack_response,
                     'danger_sensors' => $dangerSensors,
-                    'is_danger' => $this->isDangerStatus($station->status) || $dangerSensors->isNotEmpty(),
+                    'is_danger' => $dangerSensors->isNotEmpty(),
                     'lat' => $lat ? (float) $lat : null,
                     'lng' => $lng ? (float) $lng : null,
                 ];
@@ -244,6 +281,25 @@ class DashboardController extends Controller
     private function isDangerStatus(?string $status): bool
     {
         return in_array($status, ['Danger', 'Bahaya', 'Awas', 'Siaga'], true);
+    }
+
+    private function payloadHasActiveAlert(array $payload): bool
+    {
+        $sensors = collect($payload['sensors'] ?? []);
+        $warningStations = collect($payload['warningStations'] ?? []);
+
+        return $sensors->contains(fn ($sensor) => $this->isRealtimeDangerItem($sensor))
+            || $warningStations->contains(function ($station) {
+                return collect($station['danger_sensors'] ?? [])
+                    ->contains(fn ($sensor) => $this->isRealtimeDangerItem($sensor));
+            });
+    }
+
+    private function isRealtimeDangerItem(array $item): bool
+    {
+        return ($item['threshold_exceeded'] ?? false)
+            || $this->isDangerStatus($item['status'] ?? null)
+            || $this->isDangerStatus($item['alert_level'] ?? null);
     }
 
     private function thresholdExceeded($value, $threshold): bool
@@ -350,6 +406,7 @@ class DashboardController extends Controller
                     'alert_level' => $sensor['alert_level'] ?? $sensor['status'] ?? 'Normal',
                     'status' => $sensor['status'] ?? 'Normal',
                     'last_seen' => $sensor['last_seen'] ?? '-',
+                    'threshold_exceeded' => $this->thresholdExceeded($sensor['value'] ?? null, $sensor['threshold'] ?? null),
                 ])
                 ->values();
 
@@ -360,7 +417,7 @@ class DashboardController extends Controller
                 'public_warning_enabled' => $station['public_warning_enabled'] ?? false,
                 'ack_response' => $station['ack_response'] ?? '-',
                 'danger_sensors' => $dangerSensors,
-                'is_danger' => $this->isDangerStatus($station['status'] ?? null) || $dangerSensors->isNotEmpty(),
+                'is_danger' => $dangerSensors->isNotEmpty(),
                 'lat' => $coords['lat'],
                 'lng' => $coords['lng'],
             ];

@@ -109,7 +109,7 @@ class RegisteredDataController extends Controller
         $workspaces = GeospatialWorkspace::with(['project', 'monitoringStations', 'warningStations'])->latest()->get();
         $monitoringStations = MonitoringStation::with(['workspace', 'warningStations', 'sensors'])->latest()->get();
         $warningStations = WarningStation::with(['workspace', 'monitoringStation'])->latest()->get();
-        $sensors = Sensor::with(['workspace', 'monitoringStation', 'warningStation', 'mstPrefix'])->latest()->get();
+        $sensors = Sensor::with(['workspace', 'monitoringStation', 'dataLogger', 'warningStation', 'mstPrefix'])->latest()->get();
         $mstPrefixModels = Schema::hasTable('mst_prefixes') ? MstPrefix::latest()->get() : collect();
         $hasDataLoggers = Schema::hasTable('data_loggers');
         $hasConnectivity = Schema::hasTable('connectivity_configs');
@@ -179,6 +179,8 @@ class RegisteredDataController extends Controller
             'cluster_id' => $sensor->workspace?->workspace_code,
             'monitoring_station_db_id' => $sensor->monitoring_station_id,
             'monitoring_station_id' => $sensor->monitoringStation?->station_code,
+            'data_logger_id' => $sensor->dataLogger?->logger_code,
+            'data_logger_db_id' => $sensor->data_logger_id,
             'warning_station_id' => $sensor->warningStation?->station_code,
             'mst_prefix' => $sensor->mstPrefix?->prefix_code,
             'slave_id' => $sensor->slave_id,
@@ -309,35 +311,40 @@ class RegisteredDataController extends Controller
 
     private function connectivityFromModels($connectivity)
     {
-        return collect($connectivity)->map(fn (ConnectivityConfig $item) => [
-            'db_id' => $item->id,
-            'data_logger_db_id' => $item->data_logger_id,
-            'id' => $item->connectivity_code,
-            'logger_id' => $item->dataLogger?->logger_code,
-            'communication_type' => $item->communication_type,
-            'protocol' => $item->protocol,
-            'host_or_endpoint' => $item->host_or_endpoint,
-            'port' => $item->port,
-            'topic_or_api_path' => $item->topic_or_api_path,
-            'gateway_id' => $item->gateway_id,
-            'serial_port' => $item->serial_port,
-            'baud_rate' => $item->baud_rate,
-            'data_bits' => $item->data_bits,
-            'stop_bits' => $item->stop_bits,
-            'parity' => $item->parity,
-            'timeout_ms' => $item->timeout_ms,
-            'pin_mapping' => $item->pin_mapping,
-            'monitored_sensor_ids' => $item->monitored_sensor_ids ?? [],
-            'rednode_host' => $item->rednode_host,
-            'rednode_ssh_port' => $item->rednode_ssh_port,
-            'rednode_ssh_user' => $item->rednode_ssh_user,
-            'rednode_gateway_path' => $item->rednode_gateway_path,
-            'rednode_poll_interval_ms' => $item->rednode_poll_interval_ms,
-            'sim_number' => $item->sim_number,
-            'imei' => $item->imei,
-            'apn' => $item->apn,
-            'connectivity_status' => $item->connectivity_status,
-        ]);
+        return collect($connectivity)->map(function (ConnectivityConfig $item) {
+            $serialSettings = $item->serial_settings ?? [];
+
+            return array_merge([
+                'db_id' => $item->id,
+                'data_logger_db_id' => $item->data_logger_id,
+                'id' => $item->connectivity_code,
+                'logger_id' => $item->dataLogger?->logger_code,
+                'communication_type' => $item->communication_type,
+                'protocol' => $item->protocol,
+                'host_or_endpoint' => $item->host_or_endpoint,
+                'port' => $item->port,
+                'topic_or_api_path' => $item->topic_or_api_path,
+                'gateway_id' => $item->gateway_id,
+                'sim_number' => $item->sim_number,
+                'imei' => $item->imei,
+                'apn' => $item->apn,
+                'connectivity_status' => $item->connectivity_status,
+            ], [
+                'serial_port' => $item->serial_port ?? $serialSettings['serial_port'] ?? $item->host_or_endpoint,
+                'baud_rate' => $item->baud_rate ?? $serialSettings['baud_rate'] ?? null,
+                'data_bits' => $item->data_bits ?? $serialSettings['data_bits'] ?? null,
+                'stop_bits' => $item->stop_bits ?? $serialSettings['stop_bits'] ?? null,
+                'parity' => $item->parity ?? $serialSettings['parity'] ?? null,
+                'timeout_ms' => $item->timeout_ms ?? $serialSettings['timeout_ms'] ?? null,
+                'pin_mapping' => $item->pin_mapping ?? $serialSettings['pin_mapping'] ?? $item->topic_or_api_path,
+                'monitored_sensor_ids' => $item->monitored_sensor_ids ?? $serialSettings['monitored_sensor_ids'] ?? [],
+                'rednode_host' => $item->rednode_host,
+                'rednode_ssh_port' => $item->rednode_ssh_port,
+                'rednode_ssh_user' => $item->rednode_ssh_user,
+                'rednode_gateway_path' => $item->rednode_gateway_path,
+                'rednode_poll_interval_ms' => $item->rednode_poll_interval_ms ?? $serialSettings['rednode_poll_interval_ms'] ?? null,
+            ]);
+        });
     }
 
     private function credentialsFromMonitoring($monitoringStations)

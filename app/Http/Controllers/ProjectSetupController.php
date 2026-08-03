@@ -2,14 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConnectivityConfig;
+use App\Models\DataLogger;
+use App\Models\DeviceCredential;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
 use App\Models\MstPrefix;
 use App\Models\Project;
 use App\Models\Province;
 use App\Models\ResponsePlan;
+use App\Models\CanonicalParameter;
 use App\Models\Sensor;
+use App\Models\SensorMappingProfile;
+use App\Models\TelemetryReading;
 use App\Models\WarningStation;
+use App\Services\CanonicalMappingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -18,9 +25,256 @@ use Illuminate\View\View;
 
 class ProjectSetupController extends Controller
 {
+    public function __construct(private readonly CanonicalMappingService $canonicalMapping)
+    {
+    }
+
     public function index(): View
     {
         return view('modules.projects.index', $this->viewData());
+    }
+
+    public function startMonitoring(Request $request)
+    {
+        $data = $request->validate(['project_id' => 'required|exists:resq_projects,id']);
+        $project = Project::findOrFail($data['project_id']);
+        $loggers = $this->projectDataLoggers($project)
+            ->map(fn (DataLogger $dataLogger) => $this->setMonitoringRuntime($dataLogger, true))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'ok' => true,
+            'message' => count($loggers)
+                ? 'Monitoring project berhasil dimulai.'
+                : 'Monitoring project dimulai, tetapi belum ada logger pada project ini.',
+            'loggers' => $loggers,
+        ]);
+    }
+
+    public function stopMonitoring(Request $request)
+    {
+        $data = $request->validate(['project_id' => 'required|exists:resq_projects,id']);
+        $project = Project::findOrFail($data['project_id']);
+        $loggers = $this->projectDataLoggers($project)
+            ->map(fn (DataLogger $dataLogger) => $this->setMonitoringRuntime($dataLogger, false))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Monitoring project berhasil dihentikan.',
+            'loggers' => $loggers,
+        ]);
+    }
+
+    public function liveMonitoring(Request $request)
+    {
+        $data = $request->validate(['project_id' => 'nullable|exists:resq_projects,id']);
+
+        if (empty($data['project_id'])) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Project tidak dipilih.',
+                'summary' => ['loggers' => 0, 'online_loggers' => 0, 'sensors' => 0, 'fresh_sensors' => 0],
+                'sensors' => [],
+                'generated_at' => now()->toISOString(),
+            ]);
+        }
+
+        $project = Project::findOrFail($data['project_id']);
+        $workspaces = $project->workspaces ?? collect();
+
+        $projectSensors = collect();
+        $loggerIds = [];
+        $loggerById = collect();
+        $sensorLoggerFallbacks = [];
+
+        foreach ($workspaces as $workspace) {
+            foreach ($workspace->monitoringStations ?? collect() as $station) {
+                $stationLoggers = collect($station->dataLoggers ?? []);
+                foreach ($station->dataLoggers ?? collect() as $dataLogger) {
+                    $loggerIds[] = $dataLogger->id;
+                    $loggerById->put($dataLogger->id, $dataLogger);
+                }
+
+                foreach ($station->sensors ?? collect() as $sensor) {
+                    $projectSensors->push($sensor);
+                    $fallbackLogger = $sensor->dataLogger ?? $stationLoggers->first();
+                    if ($fallbackLogger) {
+                        $sensorLoggerFallbacks[$sensor->id] = $fallbackLogger->id;
+                        $loggerIds[] = $fallbackLogger->id;
+                        $loggerById->put($fallbackLogger->id, $fallbackLogger);
+                    }
+                }
+            }
+        }
+
+        $loggerIds = array_values(array_unique($loggerIds));
+        $sensorIds = $projectSensors->pluck('id')->all();
+        $onlineLoggerIds = $this->onlineLoggerIds($loggerIds);
+
+        $latestReadings = TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])
+            ->when(! empty($sensorIds), fn ($q) => $q->whereIn('sensor_id', $sensorIds))
+            ->latest('received_at')
+            ->latest()
+            ->limit(500)
+            ->get()
+            ->unique('sensor_id')
+            ->keyBy('sensor_id');
+
+        $freshWindowSeconds = 30;
+        $freshCount = 0;
+        $sensors = [];
+
+        foreach ($projectSensors as $sensor) {
+            $reading = $latestReadings->get($sensor->id);
+            $receivedAt = $reading?->received_at;
+
+            $isFresh = $receivedAt
+                ? $receivedAt->greaterThanOrEqualTo(now()->subSeconds($freshWindowSeconds))
+                : false;
+
+            $loggerId = $reading?->data_logger_id
+                ?? $sensor->data_logger_id
+                ?? ($sensorLoggerFallbacks[$sensor->id] ?? null);
+
+            if ($isFresh && $loggerId && ! in_array($loggerId, $onlineLoggerIds)) {
+                $onlineLoggerIds[] = $loggerId;
+            }
+
+            if ($isFresh) {
+                $freshCount++;
+            }
+
+            $sensors[] = [
+                'id' => $sensor->id,
+                'logger_code' => $reading?->dataLogger?->logger_code
+                    ?? $sensor->dataLogger?->logger_code
+                    ?? $loggerById->get($loggerId)?->logger_code
+                    ?? '-',
+                'station' => $sensor->monitoringStation?->name ?? '-',
+                'sensor_code' => $sensor->sensor_code,
+                'sensor_label' => $sensor->parameter,
+                'sensor_type' => $sensor->type,
+                'value' => $this->liveSensorValue($sensor, $reading?->value ?? $sensor->value),
+                'status' => $reading?->status ?? $sensor->status,
+                'parameter_values' => $this->liveParameterValues($sensor, $reading?->value ?? $sensor->value),
+                'received_at' => optional($receivedAt)->toISOString(),
+                'fresh' => $isFresh,
+                'online' => $loggerId ? in_array($loggerId, $onlineLoggerIds) : false,
+            ];
+        }
+
+        return response()->json([
+            'ok' => true,
+            'summary' => [
+                'loggers' => count($loggerIds),
+                'online_loggers' => count(array_unique($onlineLoggerIds)),
+                'sensors' => count($sensorIds),
+                'fresh_sensors' => $freshCount,
+            ],
+            'sensors' => $sensors,
+            'generated_at' => now()->toISOString(),
+        ]);
+    }
+
+    private function projectDataLoggers(Project $project)
+    {
+        $loggers = collect();
+
+        foreach ($project->workspaces ?? collect() as $workspace) {
+            foreach ($workspace->monitoringStations ?? collect() as $station) {
+                foreach ($station->dataLoggers ?? collect() as $dataLogger) {
+                    $loggers->push($dataLogger);
+                }
+
+                foreach ($station->sensors ?? collect() as $sensor) {
+                    if ($sensor->dataLogger) {
+                        $loggers->push($sensor->dataLogger);
+                    }
+                }
+            }
+        }
+
+        return $loggers->unique('id')->values();
+    }
+
+    private function onlineLoggerIds(array $loggerIds): array
+    {
+        if (empty($loggerIds) || ! Schema::hasTable('connectivity_configs')) {
+            return [];
+        }
+
+        return ConnectivityConfig::whereIn('data_logger_id', $loggerIds)
+            ->where('protocol', 'Modbus RTU')
+            ->get()
+            ->filter(function (ConnectivityConfig $connectivity) {
+                $runtime = $connectivity->runtime_state ?? [];
+                $lastSeenAt = $runtime['last_seen_at'] ?? null;
+
+                return $lastSeenAt
+                    && \Illuminate\Support\Carbon::parse($lastSeenAt)->greaterThanOrEqualTo(now()->subSeconds(30));
+            })
+            ->pluck('data_logger_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function setMonitoringRuntime(DataLogger $dataLogger, bool $enabled): array
+    {
+        $connectivity = ConnectivityConfig::firstOrCreate(
+            ['connectivity_code' => 'REDNODE-' . $dataLogger->logger_code],
+            [
+                'data_logger_id' => $dataLogger->id,
+                'communication_type' => 'RS485',
+                'protocol' => 'Modbus RTU',
+                'host_or_endpoint' => env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'),
+                'gateway_id' => $dataLogger->logger_code,
+                'connectivity_status' => 'Offline',
+            ]
+        );
+
+        $runtime = $connectivity->runtime_state ?? [];
+        $connectivity->update([
+            'data_logger_id' => $dataLogger->id,
+            'connectivity_status' => $enabled ? 'Online' : 'Offline',
+            'runtime_state' => array_merge($runtime, [
+                'monitoring_enabled' => $enabled,
+                'last_action' => $enabled ? 'start' : 'stop',
+                'last_commanded_at' => now()->toISOString(),
+                'last_error' => $enabled ? null : ($runtime['last_error'] ?? null),
+            ]),
+        ]);
+
+        return [
+            'logger_code' => $dataLogger->logger_code,
+            'ok' => true,
+            'message' => $enabled
+                ? 'Gateway akan start polling saat config berikutnya diambil.'
+                : 'Gateway akan stop polling saat config berikutnya diambil.',
+            'terminal_log' => [
+                $enabled
+                    ? 'Runtime logger diset Online dari web.'
+                    : 'Runtime logger diset Offline dari web.',
+            ],
+        ];
+    }
+
+    private function liveSensorValue(Sensor $sensor, mixed $value): mixed
+    {
+        $mapped = $this->canonicalMapping->mappedParameterValue($sensor, $value);
+
+        return $mapped['value_text'] ?? $value;
+    }
+
+    private function liveParameterValues(Sensor $sensor, mixed $value): array
+    {
+        $mapped = $this->canonicalMapping->mappedParameterValue($sensor, $value);
+
+        return $mapped ? [$mapped] : [];
     }
 
     public function storeProject(Request $request): RedirectResponse
@@ -113,6 +367,7 @@ class ProjectSetupController extends Controller
         $data = $request->validate([
             'workspace_id' => ['required', 'exists:geospatial_workspaces,id'],
             'monitoring_station_id' => ['required', 'exists:monitoring_stations,id'],
+            'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
             'warning_station_id' => ['nullable', 'exists:warning_stations,id'],
             'mst_prefix_id' => ['required', 'exists:mst_prefixes,id'],
             'slave_id' => ['required', 'string', 'max:255'],
@@ -230,9 +485,46 @@ class ProjectSetupController extends Controller
         ];
 
         abort_unless(isset($models[$type]), 404);
+
+        if ($type === 'sensor') {
+            $this->cleanupSensorReferences($id);
+        }
+
         $models[$type]::findOrFail($id)->delete();
 
         return back()->with('message', 'Data berhasil dihapus.');
+    }
+
+    private function cleanupSensorReferences(int $sensorId): void
+    {
+        // Hapus ID sensor dari monitored_sensor_ids di semua connectivity configs
+        $connectivities = ConnectivityConfig::whereJsonContains('serial_settings->monitored_sensor_ids', $sensorId)->get();
+
+        foreach ($connectivities as $connectivity) {
+            $settings = $connectivity->serial_settings ?? [];
+            $sensorIds = collect($settings['monitored_sensor_ids'] ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id !== $sensorId)
+                ->values()
+                ->all();
+            $settings['monitored_sensor_ids'] = $sensorIds;
+            $connectivity->update(['serial_settings' => $settings]);
+        }
+
+        // Hapus telemetry readings yang terkait sensor ini
+        if (Schema::hasTable('telemetry_readings')) {
+            TelemetryReading::where('sensor_id', $sensorId)->delete();
+        }
+
+        // Hapus response plans yang terkait sensor ini
+        if (Schema::hasTable('response_plans')) {
+            ResponsePlan::where('sensor_id', $sensorId)->delete();
+        }
+
+        // Hapus sensor mapping profiles yang terkait sensor ini
+        if (Schema::hasTable('sensor_mapping_profiles')) {
+            SensorMappingProfile::where('sensor_id', $sensorId)->delete();
+        }
     }
 
     private function viewData(): array
@@ -247,6 +539,10 @@ class ProjectSetupController extends Controller
                 'monitoringStations' => collect(config('resq_dummy.monitoring_stations')),
                 'warningStations' => collect(config('resq_dummy.warning_stations')),
                 'sensors' => collect(config('resq_dummy.sensors')),
+                'dataLoggers' => collect(config('resq_dummy.data_loggers')),
+                'connectivity' => collect(config('resq_dummy.connectivity')),
+                'credentials' => collect(config('resq_dummy.credentials')),
+                'telemetryReadings' => collect([]),
                 'mstPrefixes' => collect([]),
                 'responsePlans' => collect([]),
                 'provinces' => $provinces,
@@ -258,8 +554,24 @@ class ProjectSetupController extends Controller
         $workspaceModels = GeospatialWorkspace::with('project')->latest()->get();
         $monitoringModels = MonitoringStation::with('workspace')->latest()->get();
         $warningModels = WarningStation::with(['workspace', 'monitoringStation'])->latest()->get();
-        $sensorModels = Sensor::with(['workspace', 'monitoringStation', 'warningStation', 'mstPrefix'])->latest()->get();
+        $sensorQuery = Sensor::with(['workspace', 'monitoringStation', 'dataLogger', 'warningStation', 'mstPrefix']);
+        if (Schema::hasTable('sensor_mapping_profiles')) {
+            $sensorQuery->with('mappingProfile');
+        }
+        $sensorModels = $sensorQuery->latest()->get();
         $mstPrefixes = Schema::hasTable('mst_prefixes') ? MstPrefix::latest()->get() : collect();
+        $dataLoggerModels = Schema::hasTable('data_loggers')
+            ? DataLogger::with('monitoringStation')->latest()->get()
+            : collect();
+        $connectivityModels = Schema::hasTable('connectivity_configs')
+            ? ConnectivityConfig::with('dataLogger')->latest()->get()
+            : collect();
+        $credentialModels = Schema::hasTable('device_credentials')
+            ? DeviceCredential::with('dataLogger')->latest()->get()
+            : collect();
+        $telemetryModels = Schema::hasTable('telemetry_readings')
+            ? TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])->latest('received_at')->latest()->limit(100)->get()
+            : collect();
 
         $projects = $projectModels->map(fn (Project $project) => [
             'db_id' => $project->id,
@@ -329,11 +641,13 @@ class ProjectSetupController extends Controller
             'db_id' => $sensor->id,
             'workspace_db_id' => $sensor->workspace_id,
             'monitoring_station_db_id' => $sensor->monitoring_station_id,
+            'data_logger_db_id' => $sensor->data_logger_id,
             'warning_station_db_id' => $sensor->warning_station_id,
             'mst_prefix_db_id' => $sensor->mst_prefix_id,
             'id' => $sensor->sensor_code,
             'cluster_id' => $sensor->workspace?->workspace_code,
             'monitoring_station_id' => $sensor->monitoringStation?->station_code,
+            'data_logger_id' => $sensor->dataLogger?->logger_code,
             'warning_station_id' => $sensor->warningStation?->station_code,
             'mst_prefix' => $sensor->mstPrefix?->prefix_code,
             'slave_id' => $sensor->slave_id,
@@ -355,6 +669,7 @@ class ProjectSetupController extends Controller
             'rule' => $sensor->rule,
             'status' => $sensor->status,
             'last_seen' => optional($sensor->last_seen_at)->diffForHumans(),
+            'is_canonical_mapped' => $sensor->relationLoaded('mappingProfile') && $sensor->mappingProfile !== null,
         ]);
 
         return [
@@ -364,9 +679,15 @@ class ProjectSetupController extends Controller
             'monitoringStations' => $monitoringStations,
             'warningStations' => $warningStations,
             'sensors' => $sensors,
+            'dataLoggers' => $this->dataLoggersFromModels($dataLoggerModels),
+            'connectivity' => $this->connectivityFromModels($connectivityModels),
+            'credentials' => $this->credentialsFromModels($credentialModels),
+            'telemetryReadings' => $this->telemetryFromModels($telemetryModels),
             'mstPrefixes' => $mstPrefixes,
             'responsePlans' => ResponsePlan::latest()->get(),
             'provinces' => $provinces,
+            'canonicalParameters' => Schema::hasTable('canonical_parameters') ? CanonicalParameter::orderBy('domain')->orderBy('field_identity')->get() : collect(),
+            'sensorMappingProfiles' => Schema::hasTable('sensor_mapping_profiles') ? SensorMappingProfile::with(['sensor', 'canonicalParameter'])->latest()->get() : collect(),
             'databaseReady' => true,
         ];
     }
@@ -381,6 +702,76 @@ class ProjectSetupController extends Controller
         }
 
         return config('indonesia.provinces') ?? [];
+    }
+
+    private function dataLoggersFromModels($dataLoggers)
+    {
+        return collect($dataLoggers)->map(fn (DataLogger $logger) => [
+            'db_id' => $logger->id,
+            'id' => $logger->logger_code,
+            'monitoring_station_db_id' => $logger->monitoring_station_id,
+            'monitoring_station_id' => $logger->monitoringStation?->station_code,
+            'serial_number' => $logger->serial_number,
+            'logger_model' => $logger->logger_model,
+            'vendor' => $logger->vendor,
+            'firmware_version' => $logger->firmware_version,
+            'device_label' => $logger->device_label,
+            'logger_status' => $logger->logger_status,
+        ]);
+    }
+
+    private function connectivityFromModels($connectivity)
+    {
+        return collect($connectivity)->map(fn (ConnectivityConfig $item) => [
+            'db_id' => $item->id,
+            'data_logger_db_id' => $item->data_logger_id,
+            'id' => $item->connectivity_code,
+            'logger_id' => $item->dataLogger?->logger_code,
+            'communication_type' => $item->communication_type,
+            'protocol' => $item->protocol,
+            'host_or_endpoint' => $item->host_or_endpoint,
+            'port' => $item->port,
+            'topic_or_api_path' => $item->topic_or_api_path,
+            'gateway_id' => $item->gateway_id,
+            'sim_number' => $item->sim_number,
+            'imei' => $item->imei,
+            'apn' => $item->apn,
+            'connectivity_status' => $item->connectivity_status,
+        ]);
+    }
+
+    private function credentialsFromModels($credentials)
+    {
+        return collect($credentials)->map(fn (DeviceCredential $credential) => [
+            'db_id' => $credential->id,
+            'data_logger_db_id' => $credential->data_logger_id,
+            'id' => $credential->credential_code,
+            'logger_id' => $credential->dataLogger?->logger_code,
+            'device_token' => $credential->device_token,
+            'mqtt_username' => $credential->mqtt_username,
+            'mqtt_password_hash' => $credential->mqtt_password_hash,
+            'certificate_ref' => $credential->certificate_ref,
+            'credential_status' => $credential->credential_status,
+            'created_at' => optional($credential->created_at)->format('Y-m-d H:i:s'),
+            'revoked_at' => optional($credential->revoked_at)->format('Y-m-d H:i:s'),
+        ]);
+    }
+
+    private function telemetryFromModels($readings)
+    {
+        return collect($readings)->map(fn (TelemetryReading $reading) => [
+            'db_id' => $reading->id,
+            'sensor_db_id' => $reading->sensor_id,
+            'sensor_id' => $reading->sensor?->sensor_code,
+            'monitoring_station_id' => $reading->sensor?->monitoringStation?->station_code,
+            'data_logger_db_id' => $reading->data_logger_id,
+            'data_logger_id' => $reading->dataLogger?->logger_code,
+            'value' => $reading->value,
+            'alert_level' => $reading->alert_level,
+            'status' => $reading->status,
+            'received_at' => optional($reading->received_at ?? $reading->created_at)->diffForHumans(),
+            'received_at_input' => optional($reading->received_at)->format('Y-m-d\TH:i'),
+        ]);
     }
 
     private function applyProvinceCoordinates(array $data): array

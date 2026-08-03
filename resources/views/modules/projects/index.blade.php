@@ -29,10 +29,10 @@
         'river_flow' => 'River Flow / Debit',
         'weather_station' => 'Weather Station',
         'temperature' => 'Temperature',
-        'humidity' => 'Humidity',
-        'pressure' => 'Pressure',
-        'wind_speed' => 'Wind Speed',
-        'wind_direction' => 'Wind Direction',
+        'humidity' => 'Kelembapan',
+        'pressure' => 'Tekanan Udara',
+        'wind_speed' => 'Kecepatan Angin',
+        'wind_direction' => 'Arah Angin',
         'battery_bms' => 'Battery / BMS',
         'solar_charger' => 'Solar Charger',
         'device_health' => 'Device Health',
@@ -123,6 +123,7 @@
                     <li class="nav-item" role="presentation"><button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring-tab-pane" type="button" role="tab">Monitoring Station</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="warning-tab" data-bs-toggle="tab" data-bs-target="#warning-tab-pane" type="button" role="tab">Warning Station</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-tab-pane" type="button" role="tab">Sensor & Data</button></li>
+                    <li class="nav-item" role="presentation"><button class="nav-link" id="canonical-tab" data-bs-toggle="tab" data-bs-target="#canonical-tab-pane" type="button" role="tab">Canonical Data</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="operation-tab" data-bs-toggle="tab" data-bs-target="#operation-tab-pane" type="button" role="tab">Operational & Response</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="user-setup-tab" data-bs-toggle="tab" data-bs-target="#user-setup-tab-pane" type="button" role="tab">User Setup</button></li>
                 </ul>
@@ -544,7 +545,47 @@
     <div class="tab-pane fade" id="data-tab-pane" role="tabpanel" aria-labelledby="data-tab" tabindex="0">
         <div class="row">
             <div class="col-xl-4">
-                <div class="card h-100">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Data Logger Setup</h4>
+                        <form method="POST" action="{{ route('data-loggers.store') }}" id="project-data-logger-form">
+                            @csrf
+                            <div class="mb-3">
+                                <label class="form-label">Monitoring Station</label>
+                                <select name="monitoring_station_id" class="form-select" required @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>
+                                    @foreach ($monitoringStations->whereNotNull('db_id') as $station)
+                                        <option value="{{ $station['db_id'] }}">{{ $station['id'] }} - {{ $station['name'] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Logger ID</label>
+                                <input name="logger_code" class="form-control" placeholder="DL-PDG-001" required @disabled(! $databaseReady)>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3"><label class="form-label">Serial Number</label><input name="serial_number" class="form-control" @disabled(! $databaseReady)></div>
+                                <div class="col-md-6 mb-3"><label class="form-label">Model</label><input name="logger_model" class="form-control" @disabled(! $databaseReady)></div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3"><label class="form-label">Vendor</label><input name="vendor" class="form-control" @disabled(! $databaseReady)></div>
+                                <div class="col-md-6 mb-3"><label class="form-label">Firmware</label><input name="firmware_version" class="form-control" @disabled(! $databaseReady)></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label">Device Label / QR</label><input name="device_label" class="form-control" @disabled(! $databaseReady)></div>
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <select name="logger_status" class="form-select" required @disabled(! $databaseReady)>
+                                    <option>Active</option>
+                                    <option>Inactive</option>
+                                    <option>Maintenance</option>
+                                    <option>Fault</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>Save / Update Logger</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Sensor & Data Configuration</h4>
                         <form method="POST" action="{{ route('project-sensors.store') }}" id="sensor-form">
@@ -656,9 +697,51 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Sensor Registry</h4>
+                        <h5 class="font-size-14 mb-3">Data Logger Registry</h5>
+                        <div class="table-responsive mb-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>Logger ID</th><th>Monitoring</th><th>Serial</th><th>Model</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                    @forelse ($dataLoggers as $logger)
+                                        <tr>
+                                            <td>{{ $logger['id'] ?? '-' }}</td>
+                                            <td>{{ $logger['monitoring_station_id'] ?? '-' }}</td>
+                                            <td>{{ $logger['serial_number'] ?? '-' }}</td>
+                                            <td>{{ $logger['logger_model'] ?? '-' }}</td>
+                                            <td><span class="badge {{ ($logger['logger_status'] ?? '') === 'Active' ? 'bg-success' : 'bg-secondary' }}">{{ $logger['logger_status'] ?? '-' }}</span></td>
+                                            <td class="text-end">
+                                                @isset($logger['db_id'])
+                                                    <div class="d-inline-flex gap-1">
+                                                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            data-edit-form="#project-data-logger-form"
+                                                            data-edit-fields="{{ base64_encode(json_encode([
+                                                                'monitoring_station_id' => $logger['monitoring_station_db_id'] ?? '',
+                                                                'logger_code' => $logger['id'] ?? '',
+                                                                'serial_number' => $logger['serial_number'] ?? '',
+                                                                'logger_model' => $logger['logger_model'] ?? '',
+                                                                'vendor' => $logger['vendor'] ?? '',
+                                                                'firmware_version' => $logger['firmware_version'] ?? '',
+                                                                'device_label' => $logger['device_label'] ?? '',
+                                                                'logger_status' => $logger['logger_status'] ?? 'Active',
+                                                            ])) }}">Edit</button>
+                                                        <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'data-logger', 'id' => $logger['db_id']]) }}">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                                                        </form>
+                                                    </div>
+                                                @endisset
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="6" class="text-center text-muted">Belum ada data logger.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
-	                                <thead class="table-light"><tr><th>ID</th><th>Type</th><th>Data Type</th><th>Prefix</th><th>Slave</th><th>Start Address</th><th>FC</th><th>Qty</th><th>Poll</th><th>Monitoring</th><th>Warning</th><th></th></tr></thead>
+	                                <thead class="table-light"><tr><th>ID</th><th>Type</th><th>Data Type</th><th>Prefix</th><th>Slave</th><th>Start Address</th><th>FC</th><th>Qty</th><th>Poll</th><th>Monitoring</th><th>Warning</th><th>Canonical</th><th></th></tr></thead>
                                 <tbody>
                                     @foreach ($sensors as $sensor)
                                         @php
@@ -669,6 +752,18 @@
                                         @endphp
                                         <tr>
 	                                            <td>{{ $sensor['id'] }}</td><td><div>{{ $sensorTypes[$sensor['type'] ?? ''] ?? ($sensor['type'] ?? '-') }}</div>@if($sensorWeatherParameters)<small class="text-muted">{{ $sensorWeatherParameters }}</small>@elseif(! empty($sensor['parameter']))<small class="text-muted">{{ $sensor['parameter'] }}</small>@endif</td><td>{{ $dataLoggerTypes[$sensor['data_type'] ?? ''] ?? ($sensor['data_type'] ?? '-') }}</td><td>{{ $sensor['mst_prefix'] ?? '-' }}</td><td>{{ $sensor['slave_id'] ?? '-' }}</td><td>{{ $sensor['address'] ?? '-' }}</td><td>{{ $sensor['function_code'] ?? 'FC03' }}</td><td>{{ $sensor['quantity'] ?? 1 }}</td><td>{{ $sensor['poll_interval_ms'] ?? 1000 }} ms</td><td>{{ $sensor['monitoring_station_id'] }}</td><td>{{ $sensor['warning_station_id'] }}</td>
+                                            <td>
+                                                @if($sensor['is_canonical_mapped'] ?? false)
+                                                    <span class="badge bg-success-subtle text-success">Sudah Mapping</span>
+                                                @else
+                                                    <div class="d-flex flex-column align-items-start gap-2">
+                                                        <span class="badge bg-danger-subtle text-danger">Belum Mapping Canonical</span>
+                                                        <a href="{{ route('canonical-database.index') }}#mapping" class="btn btn-outline-danger btn-sm">
+                                                            Mapping
+                                                        </a>
+                                                    </div>
+                                                @endif
+                                            </td>
                                             <td class="text-end">
                                                 @isset($sensor['db_id'])
                                                     <div class="d-inline-flex gap-1">
@@ -703,6 +798,139 @@
                                             </td>
                                         </tr>
                                     @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="canonical-tab-pane" role="tabpanel" aria-labelledby="canonical-tab" tabindex="0">
+        <div class="row">
+            <div class="col-xl-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Canonical Data Mapping</h4>
+                        <form method="POST" action="{{ route('canonical-mapping.store') }}" id="canonical-mapping-form">
+                            @csrf
+                            <div class="mb-3">
+                                <label class="form-label">Sensor</label>
+                                <select class="form-select" name="sensor_id" required>
+                                    <option value="" disabled selected>Pilih Sensor...</option>
+                                    @foreach($sensors->whereNotNull('db_id') as $s)
+                                        <option value="{{ $s['db_id'] }}">{{ $s['id'] }} - {{ $sensorTypes[$s['type'] ?? ''] ?? ($s['type'] ?? '-') }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Profile Code</label>
+                                <input type="text" class="form-control" name="profile_code" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Canonical Parameter</label>
+                                <select class="form-select" name="canonical_parameter_id" required>
+                                    <option value="" disabled selected>Pilih Parameter...</option>
+                                    @foreach($canonicalParameters ?? [] as $cp)
+                                        <option value="{{ $cp->id }}">{{ $cp->domain }} / {{ $cp->field_identity }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Source Parameter (Opsional)</label>
+                                <input type="text" class="form-control" name="source_parameter">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Value Origin</label>
+                                <select class="form-select" name="value_origin" required>
+                                    <option value="direct_measurement">Direct Measurement</option>
+                                    <option value="device_processed">Device Processed</option>
+                                    <option value="system_calculated">System Calculated</option>
+                                </select>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Scale Factor</label>
+                                    <input type="number" step="0.0001" class="form-control" name="scale_factor" value="1" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Offset</label>
+                                    <input type="number" step="0.0001" class="form-control" name="offset" value="0" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status" required>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Mapping</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-8">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Mapping List</h4>
+                        <div class="table-responsive">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Profile Code</th>
+                                        <th>Sensor</th>
+                                        <th>Canonical Parameter</th>
+                                        <th>Origin</th>
+                                        <th>Scale/Offset</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($sensorMappingProfiles ?? [] as $profile)
+                                    <tr>
+                                        <td>{{ $profile->profile_code }}</td>
+                                        <td>{{ $profile->sensor->sensor_code ?? '-' }}</td>
+                                        <td>{{ $profile->canonicalParameter->field_identity ?? '-' }}</td>
+                                        <td>{{ str_replace('_', ' ', Str::title($profile->value_origin)) }}</td>
+                                        <td>{{ $profile->scale_factor ?? 1 }} / {{ $profile->offset ?? 0 }}</td>
+                                        <td>
+                                            @if($profile->status === 'active')
+                                                <span class="badge bg-success">Active</span>
+                                            @else
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="d-inline-flex gap-1">
+                                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                                    data-edit-form="#canonical-mapping-form"
+                                                    data-edit-fields="{{ base64_encode(json_encode([
+                                                        'sensor_id' => $profile->sensor_id,
+                                                        'profile_code' => $profile->profile_code,
+                                                        'canonical_parameter_id' => $profile->canonical_parameter_id,
+                                                        'source_parameter' => $profile->source_parameter ?? '',
+                                                        'value_origin' => $profile->value_origin,
+                                                        'scale_factor' => $profile->scale_factor ?? 1,
+                                                        'offset' => $profile->offset ?? 0,
+                                                        'status' => $profile->status,
+                                                    ])) }}">Edit</button>
+                                                <form method="POST" action="{{ route('canonical-mapping.destroy', $profile->id) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @empty
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">Belum ada mapping Canonical Data.</td>
+                                    </tr>
+                                    @endforelse
                                 </tbody>
                             </table>
                         </div>

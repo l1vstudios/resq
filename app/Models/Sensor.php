@@ -12,6 +12,7 @@ class Sensor extends Model
     protected $fillable = [
         'workspace_id',
         'monitoring_station_id',
+        'data_logger_id',
         'warning_station_id',
         'mst_prefix_id',
         'slave_id',
@@ -39,6 +40,7 @@ class Sensor extends Model
     protected $casts = [
         'weather_parameters' => 'array',
         'last_seen_at' => 'datetime',
+        'weather_parameters' => 'array',
     ];
 
     public function workspace()
@@ -56,6 +58,11 @@ class Sensor extends Model
         return $this->belongsTo(WarningStation::class);
     }
 
+    public function dataLogger()
+    {
+        return $this->belongsTo(DataLogger::class);
+    }
+
     public function mstPrefix()
     {
         return $this->belongsTo(MstPrefix::class);
@@ -64,5 +71,10 @@ class Sensor extends Model
     public function telemetryReadings()
     {
         return $this->hasMany(TelemetryReading::class);
+    }
+
+    public function mappingProfile()
+    {
+        return $this->hasOne(SensorMappingProfile::class);
     }
 }

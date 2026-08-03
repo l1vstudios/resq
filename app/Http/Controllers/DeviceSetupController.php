@@ -9,9 +9,11 @@ use App\Models\MstPrefix;
 use App\Models\Project;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
+use App\Services\CanonicalMappingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
@@ -19,6 +21,10 @@ use phpseclib3\Net\SSH2;
 
 class DeviceSetupController extends Controller
 {
+    public function __construct(private readonly CanonicalMappingService $canonicalMapping)
+    {
+    }
+
     public function storeMstPrefix(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -306,35 +312,65 @@ class DeviceSetupController extends Controller
             'sensor_id' => ['nullable', 'required_without:sensor_code', 'exists:sensors,id'],
             'sensor_code' => ['nullable', 'required_without:sensor_id', 'string', 'exists:sensors,sensor_code'],
             'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
+            'data_logger_code' => ['nullable', 'string', 'exists:data_loggers,logger_code'],
             'value' => ['nullable', 'string', 'max:255'],
+            'display_value' => ['nullable', 'string', 'max:255'],
+            'raw_value' => ['nullable', 'string', 'max:255'],
+            'numeric_value' => ['nullable', 'numeric'],
             'parameter_values' => ['nullable', 'array'],
             'threshold_exceeded' => ['nullable', 'boolean'],
+            'observed_at' => ['nullable', 'date'],
+            'payload' => ['nullable', 'array'],
         ]);
 
         $sensor = ! empty($data['sensor_id'])
             ? Sensor::findOrFail($data['sensor_id'])
             : Sensor::where('sensor_code', $data['sensor_code'])->firstOrFail();
+        $dataLoggerId = $data['data_logger_id'] ?? $sensor->data_logger_id;
+        if (! $dataLoggerId && ! empty($data['data_logger_code'])) {
+            $dataLoggerId = DataLogger::where('logger_code', $data['data_logger_code'])->value('id');
+        }
+
+        $mappingValue = array_key_exists('raw_value', $data) ? $data['raw_value'] : ($data['value'] ?? null);
+        $displayValue = $data['display_value'] ?? $data['value'] ?? null;
+        $readingValue = $this->canonicalMapping->activeProfileForSensor($sensor) && array_key_exists('raw_value', $data)
+            ? $data['raw_value']
+            : $displayValue;
         $thresholdExceeded = array_key_exists('threshold_exceeded', $data)
             ? (bool) $data['threshold_exceeded']
-            : $this->thresholdExceeded($data['value'] ?? null, $sensor->threshold ?? $sensor->rule);
+            : $this->thresholdExceeded($data['numeric_value'] ?? $displayValue, $sensor->threshold ?? $sensor->rule);
         $level = $thresholdExceeded ? 'Awas' : 'Normal';
 
         $sensor->update([
-            'value' => $data['value'],
+            'value' => $displayValue,
             'alert_level' => $level,
             'status' => $level,
             'last_seen_at' => now(),
         ]);
 
-        $this->upsertTelemetryReading([
+        $telemetryPayload = [
             'sensor_id' => $sensor->id,
-            'data_logger_id' => $data['data_logger_id'] ?? null,
-            'value' => $data['value'],
-            'parameter_values' => $data['parameter_values'] ?? null,
+            'data_logger_id' => $dataLoggerId,
+            'value' => $readingValue,
             'alert_level' => $level,
             'status' => $level,
             'received_at' => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('telemetry_readings', 'parameter_values')) {
+            $telemetryPayload['parameter_values'] = $data['parameter_values'] ?? null;
+        }
+
+        $this->upsertTelemetryReading($telemetryPayload);
+
+        $canonicalObservation = $this->canonicalMapping->storeObservation(
+            $sensor,
+            $mappingValue,
+            $dataLoggerId,
+            ! empty($data['observed_at']) ? Carbon::parse($data['observed_at']) : now(),
+            $data['payload'] ?? $request->all()
+        );
+        $mappedValue = $this->canonicalMapping->mappedParameterValue($sensor, $mappingValue);
 
         return response()->json([
             'ok' => true,
@@ -342,10 +378,13 @@ class DeviceSetupController extends Controller
                 'id' => $sensor->id,
                 'sensor_code' => $sensor->sensor_code,
                 'value' => $sensor->value,
-                'parameter_values' => $data['parameter_values'] ?? [],
+                'raw_value' => $mappingValue,
                 'alert_level' => $sensor->alert_level,
                 'status' => $sensor->status,
                 'last_seen_at' => optional($sensor->last_seen_at)->toISOString(),
+                'canonical_observation_id' => $canonicalObservation?->id,
+                'canonical_parameter_value' => $mappedValue,
+                'parameter_values' => $data['parameter_values'] ?? ($mappedValue ? [$mappedValue] : []),
             ],
         ]);
     }
@@ -361,10 +400,11 @@ class DeviceSetupController extends Controller
             ], 403);
         }
 
-        $loggerCode = $request->query('logger_code', env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01'));
+        $requestedLoggerCode = $request->query('logger_code', env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01'));
         $dataLogger = Schema::hasTable('data_loggers')
-            ? DataLogger::where('logger_code', $loggerCode)->first()
+            ? $this->resolveRednodeLogger($requestedLoggerCode)
             : null;
+        $loggerCode = $dataLogger?->logger_code ?? $requestedLoggerCode;
         $serialConfig = $dataLogger && Schema::hasTable('connectivity_configs')
             ? ConnectivityConfig::where('data_logger_id', $dataLogger->id)
                 ->where(function ($query) {
@@ -374,11 +414,12 @@ class DeviceSetupController extends Controller
                 ->latest()
                 ->first()
             : null;
-        $selectedSensorIds = collect($serialConfig?->monitored_sensor_ids ?? [])
+        $serialSettings = $serialConfig?->serial_settings ?? [];
+        $selectedSensorIds = collect($serialConfig?->monitored_sensor_ids ?? ($serialSettings['monitored_sensor_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
             ->filter()
             ->values();
-        $rednodePollIntervalMs = (int) ($serialConfig?->rednode_poll_interval_ms ?: env('REDNODE_POLL_INTERVAL_MS', 1000));
+        $rednodePollIntervalMs = (int) ($serialConfig?->rednode_poll_interval_ms ?: ($serialSettings['rednode_poll_interval_ms'] ?? env('REDNODE_POLL_INTERVAL_MS', 1000)));
 
         $sensorQuery = Sensor::with(['monitoringStation', 'mstPrefix'])
             ->whereNotNull('slave_id')
@@ -396,31 +437,20 @@ class DeviceSetupController extends Controller
         }
 
         $sensors = $sensorQuery->get()
-            ->map(fn (Sensor $sensor) => [
-                'sensor_id' => $sensor->id,
-                'sensor_code' => $sensor->sensor_code,
-                'sensor_label' => $this->sensorLabel($sensor),
-                'sensor_type' => $sensor->type,
-                'parameter' => $sensor->parameter,
-                'weather_parameters' => $sensor->weather_parameters ?? [],
-                'weather_parameter_labels' => collect($sensor->weather_parameters ?? [])
-                    ->map(fn ($parameter) => $this->weatherParameterLabel((string) $parameter))
-                    ->values(),
-                'monitoring_station_id' => $sensor->monitoringStation?->station_code,
-                'prefix' => $sensor->mstPrefix?->prefix_code,
-                'slave_id' => (int) $sensor->slave_id,
-                'address' => (int) $sensor->address,
-                'function_code' => $sensor->function_code ?: 'FC03',
-                'quantity' => (int) ($sensor->quantity ?: 1),
-                'poll_interval_ms' => $rednodePollIntervalMs > 0 ? $rednodePollIntervalMs : (int) ($sensor->poll_interval_ms ?: 1000),
-                'data_type' => $sensor->data_type ?: 'uint16',
-                'scale_factor' => (float) ($sensor->scale_factor ?: 1),
-                'offset' => (float) ($sensor->offset ?: 0),
-                'unit' => $sensor->unit,
-                'threshold' => $sensor->threshold,
-                'rule' => $sensor->rule,
-                'status' => $sensor->status,
-            ])
+            ->map(function (Sensor $sensor) use ($rednodePollIntervalMs) {
+                return array_merge($this->canonicalMapping->rednodeSensorConfig($sensor), [
+                    'sensor_label' => $this->sensorLabel($sensor),
+                    'weather_parameter_labels' => collect($sensor->weather_parameters ?? [])
+                        ->map(fn ($parameter) => $this->weatherParameterLabel((string) $parameter))
+                        ->values(),
+                    'monitoring_station_id' => $sensor->monitoringStation?->station_code,
+                    'prefix' => $sensor->mstPrefix?->prefix_code,
+                    'poll_interval_ms' => $rednodePollIntervalMs > 0
+                        ? $rednodePollIntervalMs
+                        : (int) ($sensor->poll_interval_ms ?: 1000),
+                    'status' => $sensor->status,
+                ]);
+            })
             ->values();
 
         $publicAppUrl = $this->rednodePublicAppUrl();
@@ -431,16 +461,17 @@ class DeviceSetupController extends Controller
             'logger' => [
                 'id' => $dataLogger?->id,
                 'logger_code' => $dataLogger?->logger_code ?: $loggerCode,
+                'requested_logger_code' => $requestedLoggerCode,
                 'device_label' => $dataLogger?->device_label ?: 'RedNode Bliiot',
             ],
             'serial' => [
-                'port' => $serialConfig?->serial_port ?: $serialConfig?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'),
-                'baud_rate' => (int) ($serialConfig?->baud_rate ?: env('REDNODE_BAUD_RATE', 9600)),
-                'data_bits' => (int) ($serialConfig?->data_bits ?: env('REDNODE_DATA_BITS', 8)),
-                'stop_bits' => (int) ($serialConfig?->stop_bits ?: env('REDNODE_STOP_BITS', 1)),
-                'parity' => $serialConfig?->parity ?: env('REDNODE_PARITY', 'none'),
-                'timeout_ms' => (int) ($serialConfig?->timeout_ms ?: env('REDNODE_TIMEOUT_MS', 1500)),
-                'pin_mapping' => $serialConfig?->pin_mapping ?: $serialConfig?->topic_or_api_path,
+                'port' => $serialConfig?->serial_port ?: ($serialSettings['serial_port'] ?? ($serialConfig?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'))),
+                'baud_rate' => (int) ($serialConfig?->baud_rate ?: ($serialSettings['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600))),
+                'data_bits' => (int) ($serialConfig?->data_bits ?: ($serialSettings['data_bits'] ?? env('REDNODE_DATA_BITS', 8))),
+                'stop_bits' => (int) ($serialConfig?->stop_bits ?: ($serialSettings['stop_bits'] ?? env('REDNODE_STOP_BITS', 1))),
+                'parity' => $serialConfig?->parity ?: ($serialSettings['parity'] ?? env('REDNODE_PARITY', 'none')),
+                'timeout_ms' => (int) ($serialConfig?->timeout_ms ?: ($serialSettings['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500))),
+                'pin_mapping' => $serialConfig?->pin_mapping ?: ($serialSettings['pin_mapping'] ?? $serialConfig?->topic_or_api_path),
                 'monitored_sensor_ids' => $selectedSensorIds,
                 'poll_interval_ms' => $rednodePollIntervalMs,
             ],
@@ -466,6 +497,28 @@ class DeviceSetupController extends Controller
             ],
             'sensors' => $sensors,
         ]);
+    }
+
+    private function resolveRednodeLogger(string $loggerCode): ?DataLogger
+    {
+        $logger = DataLogger::where('logger_code', $loggerCode)->first();
+
+        if ($logger) {
+            return $logger;
+        }
+
+        $baseCode = preg_replace('/-\d+$/', '', $loggerCode) ?: $loggerCode;
+        if ($baseCode !== $loggerCode) {
+            $logger = DataLogger::where('logger_code', $baseCode)->first();
+            if ($logger) {
+                return $logger;
+            }
+        }
+
+        return DataLogger::where('logger_code', 'like', $baseCode . '%')
+            ->orWhere('logger_code', 'like', $loggerCode . '%')
+            ->orderBy('logger_code')
+            ->first();
     }
 
     public function rednodeHeartbeat(Request $request): JsonResponse
@@ -1182,7 +1235,7 @@ class DeviceSetupController extends Controller
         ][$parameter] ?? ucwords(str_replace('_', ' ', $parameter));
     }
 
-    private function thresholdExceeded(?string $value, ?string $threshold): bool
+    private function thresholdExceeded(mixed $value, ?string $threshold): bool
     {
         $numericValue = $this->numericFromText($value);
         $numericThreshold = $this->numericFromText($threshold);
@@ -1205,9 +1258,14 @@ class DeviceSetupController extends Controller
                 continue;
             }
 
-            $valueText = array_key_exists('value', $item) && $item['value'] !== null
-                ? (string) $item['value']
-                : (array_key_exists('numeric_value', $item) && $item['numeric_value'] !== null ? (string) $item['numeric_value'] : null);
+            $mappingValue = array_key_exists('raw_value', $item) && $item['raw_value'] !== null
+                ? $item['raw_value']
+                : ($item['value'] ?? null);
+            $valueText = array_key_exists('display_value', $item) && $item['display_value'] !== null
+                ? (string) $item['display_value']
+                : (array_key_exists('value', $item) && $item['value'] !== null
+                    ? (string) $item['value']
+                    : (array_key_exists('numeric_value', $item) && $item['numeric_value'] !== null ? (string) $item['numeric_value'] : null));
 
             if ($valueText === null) {
                 continue;
@@ -1226,15 +1284,29 @@ class DeviceSetupController extends Controller
                 'last_seen_at' => $receivedAt,
             ]);
 
-            $this->upsertTelemetryReading([
+            $telemetryPayload = [
                 'sensor_id' => $sensor->id,
                 'data_logger_id' => $dataLoggerId,
-                'value' => $valueText,
-                'parameter_values' => $item['parameter_values'] ?? null,
+                'value' => $this->canonicalMapping->activeProfileForSensor($sensor) && array_key_exists('raw_value', $item)
+                    ? (string) $item['raw_value']
+                    : $valueText,
                 'alert_level' => $level,
                 'status' => $level,
                 'received_at' => $receivedAt,
-            ]);
+            ];
+
+            if (Schema::hasColumn('telemetry_readings', 'parameter_values')) {
+                $telemetryPayload['parameter_values'] = $item['parameter_values'] ?? null;
+            }
+
+            $this->upsertTelemetryReading($telemetryPayload);
+            $this->canonicalMapping->storeObservation(
+                $sensor,
+                $mappingValue,
+                $dataLoggerId,
+                $receivedAt instanceof \DateTimeInterface ? Carbon::parse($receivedAt) : Carbon::parse((string) $receivedAt),
+                $item
+            );
         }
     }
 
@@ -1596,7 +1668,7 @@ class DeviceSetupController extends Controller
         return $reading;
     }
 
-    private function numericFromText(?string $value): ?float
+    private function numericFromText(mixed $value): ?float
     {
         if ($value === null || $value === '') {
             return null;
@@ -1606,7 +1678,7 @@ class DeviceSetupController extends Controller
             return (float) $value;
         }
 
-        preg_match('/-?\d+(\.\d+)?/', str_replace(',', '.', $value), $matches);
+        preg_match('/-?\d+(\.\d+)?/', str_replace(',', '.', (string) $value), $matches);
 
         return isset($matches[0]) ? (float) $matches[0] : null;
     }
@@ -1622,8 +1694,20 @@ class DeviceSetupController extends Controller
         ];
 
         abort_unless(isset($models[$type]), 404);
+        if ($type === 'data-logger') {
+            $this->cleanupDataLoggerReferences($id);
+        }
+
         $models[$type]::findOrFail($id)->delete();
 
         return back()->with('message', 'Data berhasil dihapus.');
+    }
+
+    private function cleanupDataLoggerReferences(int $dataLoggerId): void
+    {
+        Sensor::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
+        ConnectivityConfig::where('data_logger_id', $dataLoggerId)->delete();
+        DeviceCredential::where('data_logger_id', $dataLoggerId)->delete();
+        TelemetryReading::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
     }
 }

@@ -39,6 +39,8 @@ class ConnectivityConfig extends Model
         'last_seen_at',
         'last_error',
         'last_payload',
+        'serial_settings',
+        'runtime_state',
     ];
 
     protected $casts = [
@@ -46,6 +48,8 @@ class ConnectivityConfig extends Model
         'rednode_ssh_password' => 'encrypted',
         'last_seen_at' => 'datetime',
         'last_payload' => 'array',
+        'serial_settings' => 'array',
+        'runtime_state' => 'array',
     ];
 
     public function dataLogger()

@@ -47,4 +47,9 @@ class DataLogger extends Model
     {
         return $this->hasMany(DeviceCredential::class);
     }
+
+    public function sensors()
+    {
+        return $this->hasMany(Sensor::class);
+    }
 }

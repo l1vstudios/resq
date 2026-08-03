@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CanonicalDatabaseController;
 use App\Http\Controllers\DeviceSetupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProjectSetupController;
@@ -28,6 +29,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/project-configuration', [DashboardController::class, 'index'])->name('project-configuration');
     Route::get('/projects', [ProjectSetupController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectSetupController::class, 'storeProject'])->name('projects.store');
+    Route::get('/canonical-database', [CanonicalDatabaseController::class, 'index'])->name('canonical-database.index');
+    Route::post('/canonical-parameters', [CanonicalDatabaseController::class, 'storeParameter'])->name('canonical-parameters.store');
+    Route::delete('/canonical-parameters/{parameter}', [CanonicalDatabaseController::class, 'destroyParameter'])->name('canonical-parameters.destroy');
+    Route::post('/canonical-mapping', [CanonicalDatabaseController::class, 'storeMapping'])->name('canonical-mapping.store');
+    Route::delete('/canonical-mapping/{profile}', [CanonicalDatabaseController::class, 'destroyMapping'])->name('canonical-mapping.destroy');
     Route::post('/project-workspaces', [ProjectSetupController::class, 'storeWorkspace'])->name('project-workspaces.store');
     Route::post('/project-monitoring-stations', [ProjectSetupController::class, 'storeMonitoringStation'])->name('project-monitoring-stations.store');
     Route::post('/project-warning-stations', [ProjectSetupController::class, 'storeWarningStation'])->name('project-warning-stations.store');
@@ -50,7 +56,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/rednode-port-test', [DeviceSetupController::class, 'rednodePortTest'])->name('rednode-port-test.store');
     Route::get('/rednode-pin-scan', [RegisteredDataController::class, 'rednodePinScan'])->name('rednode-pin-scan.index');
     Route::post('/rednode-pin-scan', [DeviceSetupController::class, 'rednodePinScan'])->name('rednode-pin-scan.store');
-    Route::get('/rednode-status', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status.show');
+    Route::get('/rednode-status', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status');
+    Route::get('/rednode-status/show', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status.show');
     Route::get('/data-loggers', [RegisteredDataController::class, 'dataLoggers'])->name('data-loggers.index');
     Route::post('/data-loggers', [DeviceSetupController::class, 'storeDataLogger'])->name('data-loggers.store');
     Route::post('/data-loggers/test-remote', [DeviceSetupController::class, 'testDataLoggerRemote'])->name('data-loggers.test-remote');

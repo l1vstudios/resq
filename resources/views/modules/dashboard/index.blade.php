@@ -436,6 +436,7 @@
         var clusters = @json($mapClusters ?? []);
         var sensorPoints = @json($mapSensors ?? []);
         var warningStations = @json($mapWarningStations ?? []);
+        var initialAlertActive = @json($dashboardAlertActive ?? false);
         var mapDataUrl = @json(route('dashboard.map-data'));
         var sirenAudio = new Audio(@json(asset('sound/sirene.mp3')));
         var sirenShouldPlay = false;
@@ -477,6 +478,10 @@
         }
 
         function hasDangerState(data) {
+            if (typeof data.alert_active === 'boolean') {
+                return data.alert_active;
+            }
+
             var clusters = data.clusters || [];
             var sensorPoints = data.sensors || [];
             var warningStations = data.warningStations || [];
@@ -484,7 +489,7 @@
             return clusters.some(isDanger)
                 || sensorPoints.some(isDanger)
                 || warningStations.some(function (station) {
-                    return isDanger(station) || (station.danger_sensors || []).some(isDanger);
+                    return Boolean(station.is_danger) || (station.danger_sensors || []).some(isDanger);
                 });
         }
 
@@ -504,6 +509,13 @@
 
             sirenAudio.play()
                 .then(function () {
+                    if (!sirenShouldPlay) {
+                        sirenAudio.pause();
+                        sirenAudio.currentTime = 0;
+                        sirenIsPlaying = false;
+                        return;
+                    }
+
                     sirenIsPlaying = true;
                 })
                 .catch(function () {
@@ -630,7 +642,7 @@
             });
 
             warningStations.forEach(function (station) {
-                var stationDanger = isDanger(station);
+                var stationDanger = Boolean(station.is_danger);
                 var color = stationDanger ? '#f46a6a' : (statusColors[station.status] || '#f1b44c');
                 var warningReadings = '';
 
@@ -701,7 +713,8 @@
         renderMapData({
             clusters: clusters,
             sensors: sensorPoints,
-            warningStations: warningStations
+            warningStations: warningStations,
+            alert_active: initialAlertActive
         });
 
         var mapRefreshInFlight = false;
@@ -712,20 +725,32 @@
             }
 
             mapRefreshInFlight = true;
-            fetch(mapDataUrl, {
+            var url = new URL(mapDataUrl, window.location.origin);
+            url.searchParams.set('_', Date.now());
+
+            fetch(url.toString(), {
                 headers: {
-                    'Accept': 'application/json'
-                }
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-store'
+                },
+                cache: 'no-store'
             })
                 .then(function (response) {
-                    return response.ok ? response.json() : null;
+                    if (!response.ok) {
+                        syncSiren(false);
+                        return null;
+                    }
+
+                    return response.json();
                 })
                 .then(function (data) {
                     if (data) {
                         renderMapData(data);
                     }
                 })
-                .catch(function () {})
+                .catch(function () {
+                    syncSiren(false);
+                })
                 .finally(function () {
                     mapRefreshInFlight = false;
                 });

@@ -61,6 +61,11 @@
                                 Project Setup
                             </a>
                         </li>
+                        <li class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('canonical-database.index') }}" class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'active' : '' }}">
+                                Canonical Database
+                            </a>
+                        </li>
 
                     </ul>
                 </li>
@@ -84,6 +89,11 @@
                         <li>
                             <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
                                 Warning Station
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('sensors.index') }}" class="{{ request()->routeIs('sensors.*') ? 'active' : '' }}">
+                                Sensors
                             </a>
                         </li>
                     </ul>
@@ -132,6 +142,15 @@
                     <a href="{{ route('command-test.index') }}#command-test" class="waves-effect {{ request()->routeIs('command-test.*') ? 'active' : '' }}">
                         <i class="bx bx-send"></i>
                         <span>Command Test</span>
+                    </a>
+                </li>
+
+                <li class="menu-title">Administration</li>
+
+                <li class="{{ request()->routeIs('admins.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('admins.index') }}" class="waves-effect {{ request()->routeIs('admins.*') ? 'active' : '' }}">
+                        <i class="bx bx-user-circle"></i>
+                        <span>Admin Management</span>
                     </a>
                 </li>
 
