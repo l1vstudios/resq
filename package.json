@@ -11,7 +11,7 @@
     "scripts": {
         "dev": "vite",
         "modbus:server": "node modbus-server/server.js",
-        "rednode:gateway": "node modbus-server/gateway.js",
+        "gateway": "node modbus-server/gateway.js",
         "mqtt:gateway": "MQTT_AUTOSTART=true node modbus-server/server.js",
         "rednode:gateway": "node rednode-gateway/gateway.js",
         "rednode:test-pins": "node rednode-gateway/test-pin-led.js",

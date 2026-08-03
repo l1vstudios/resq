@@ -1550,7 +1550,7 @@ class DeviceSetupController extends Controller
             'echo ' . escapeshellarg('$ export APP_URL=' . $runtimeEnv['APP_URL']),
             ...$exportCommands,
             ': > gateway.log',
-            'if [ -f package.json ] && [ -n "$NPM_BIN" ]; then',
+            'if [ -f package.json ] && [ -n "$NPM_BIN" ] && grep -q \'"gateway"\' package.json; then',
             '  echo ' . escapeshellarg('$ npm run gateway'),
             '  nohup "$NPM_BIN" run gateway >> gateway.log 2>&1 < /dev/null &',
             'else',
