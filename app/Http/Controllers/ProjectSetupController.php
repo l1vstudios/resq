@@ -268,7 +268,7 @@ class ProjectSetupController extends Controller
     {
         $mapped = $this->canonicalMapping->mappedParameterValue($sensor, $value);
 
-        return $mapped['value_text'] ?? $value;
+        return $mapped['value_text'] ?? $this->valueWithUnit($value, $sensor->unit);
     }
 
     private function liveParameterValues(Sensor $sensor, mixed $value): array
@@ -276,6 +276,24 @@ class ProjectSetupController extends Controller
         $mapped = $this->canonicalMapping->mappedParameterValue($sensor, $value);
 
         return $mapped ? [$mapped] : [];
+    }
+
+    private function valueWithUnit(mixed $value, ?string $unit): string
+    {
+        $text = trim((string) ($value ?? '-'));
+        $unit = trim((string) $unit);
+
+        if ($text === '' || $text === '-' || $unit === '' || $unit === '0') {
+            return $text === '' ? '-' : $text;
+        }
+
+        if (! preg_match('/-?\d+([,.]\d+)?/', $text)) {
+            return $text;
+        }
+
+        return Str::endsWith(Str::lower($text), Str::lower($unit))
+            ? $text
+            : trim($text . ' ' . $unit);
     }
 
     public function storeProject(Request $request): RedirectResponse

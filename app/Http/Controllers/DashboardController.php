@@ -11,6 +11,7 @@ use App\Models\TelemetryReading;
 use App\Models\WarningStation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -202,7 +203,7 @@ class DashboardController extends Controller
                 $fallback = $workspace ? ($provinceCoordinates[$workspace->province] ?? ['lat' => null, 'lng' => null]) : ['lat' => null, 'lng' => null];
                 $lat = $station?->latitude ?: $workspace?->latitude ?: $fallback['lat'];
                 $lng = $station?->longitude ?: $workspace?->longitude ?: $fallback['lng'];
-                $value = $reading?->value ?? $sensor->value;
+                $value = $this->valueWithUnit($reading?->value ?? $sensor->value, $sensor->unit);
                 $statusValue = $reading?->status ?? $sensor->status;
                 $alertValue = $reading?->alert_level ?? $sensor->alert_level;
                 $thresholdExceeded = $this->thresholdExceeded($value, $sensor->threshold);
@@ -223,6 +224,9 @@ class DashboardController extends Controller
                     'value' => $value,
                     'parameter_values' => collect($reading?->parameter_values ?? [])
                         ->filter(fn ($item) => is_array($item))
+                        ->map(fn ($item) => array_merge($item, [
+                            'value_text' => $this->valueWithUnit($item['value_text'] ?? ($item['value'] ?? null), $item['unit'] ?? null),
+                        ]))
                         ->values(),
                     'threshold' => $sensor->threshold,
                     'unit' => $sensor->unit,
@@ -264,7 +268,7 @@ class DashboardController extends Controller
                         return [
                             'name' => $sensor->sensor_code,
                             'parameter' => $sensor->parameter,
-                            'value' => $sensor->value,
+                            'value' => $this->valueWithUnit($sensor->value, $sensor->unit),
                             'threshold' => $sensor->threshold,
                             'alert_level' => $thresholdExceeded && ! $this->isDangerStatus($sensor->alert_level)
                                 ? 'Awas'
@@ -316,6 +320,24 @@ class DashboardController extends Controller
         return ($item['threshold_exceeded'] ?? false)
             || $this->isDangerStatus($item['status'] ?? null)
             || $this->isDangerStatus($item['alert_level'] ?? null);
+    }
+
+    private function valueWithUnit(mixed $value, ?string $unit): string
+    {
+        $text = trim((string) ($value ?? '-'));
+        $unit = trim((string) $unit);
+
+        if ($text === '' || $text === '-' || $unit === '' || $unit === '0') {
+            return $text === '' ? '-' : $text;
+        }
+
+        if (! preg_match('/-?\d+([,.]\d+)?/', $text)) {
+            return $text;
+        }
+
+        return Str::endsWith(Str::lower($text), Str::lower($unit))
+            ? $text
+            : trim($text . ' ' . $unit);
     }
 
     private function thresholdExceeded($value, $threshold): bool

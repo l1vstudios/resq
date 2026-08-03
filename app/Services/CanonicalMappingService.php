@@ -226,17 +226,32 @@ class CanonicalMappingService
         $displayValue = $numericValue !== null
             ? rtrim(rtrim(number_format($numericValue, 4, '.', ''), '0'), '.')
             : $this->stringValue($value);
+        $unit = $parameter->canonical_unit ?: $sensor->unit;
 
         return [
             'label' => $parameter->field_identity,
             'parameter' => $parameter->field_identity,
             'value' => $numericValue,
-            'value_text' => trim(($displayValue ?? '-') . ' ' . ($parameter->canonical_unit ?? '')),
-            'unit' => $parameter->canonical_unit,
+            'value_text' => $this->withUnit($displayValue ?? '-', $unit),
+            'unit' => $unit,
             'domain' => $parameter->domain,
             'origin' => $this->canonicalValueOrigin($profile->value_origin),
             'profile_code' => $profile->profile_code,
         ];
+    }
+
+    private function withUnit(mixed $value, ?string $unit): string
+    {
+        $text = trim((string) ($value ?? '-'));
+        $unit = trim((string) $unit);
+
+        if ($text === '' || $text === '-' || $unit === '' || $unit === '0') {
+            return $text === '' ? '-' : $text;
+        }
+
+        return Str::endsWith(Str::lower($text), Str::lower($unit))
+            ? $text
+            : trim($text . ' ' . $unit);
     }
 
     private function canonicalTablesReady(): bool

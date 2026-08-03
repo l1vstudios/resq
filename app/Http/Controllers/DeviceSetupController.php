@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use phpseclib3\Net\SSH2;
@@ -954,7 +955,8 @@ class DeviceSetupController extends Controller
                     'parameter' => $item['parameter'] ?? null,
                     'label' => $item['label'] ?? $this->weatherParameterLabel((string) ($item['parameter'] ?? '')),
                     'value' => $item['value'] ?? null,
-                    'value_text' => $item['value_text'] ?? null,
+                    'value_text' => $this->valueWithUnit($item['value_text'] ?? ($item['value'] ?? null), $item['unit'] ?? null),
+                    'unit' => $item['unit'] ?? null,
                     'raw' => $item['raw'] ?? null,
                 ] : null)
                 ->filter()
@@ -972,7 +974,7 @@ class DeviceSetupController extends Controller
                 'logger_code' => $reading?->dataLogger?->logger_code ?: $logger?->logger_code,
                 'value' => $sensor->type === 'weather_station' && $parameterValues->isNotEmpty()
                     ? $parameterValues->pluck('value_text')->filter()->implode(', ')
-                    : ($reading?->value ?? $sensor->value),
+                    : $this->valueWithUnit($reading?->value ?? $sensor->value, $sensor->unit),
                 'status' => $fresh ? ($reading?->status ?? $sensor->status ?? 'Normal') : ($loggerOnline ? 'Online - Tunggu Data' : 'Data Lama'),
                 'alert_level' => $reading?->alert_level ?? $sensor->alert_level,
                 'fresh' => (bool) $fresh,
@@ -1699,6 +1701,24 @@ class DeviceSetupController extends Controller
         preg_match('/-?\d+(\.\d+)?/', str_replace(',', '.', (string) $value), $matches);
 
         return isset($matches[0]) ? (float) $matches[0] : null;
+    }
+
+    private function valueWithUnit(mixed $value, ?string $unit): string
+    {
+        $text = trim((string) ($value ?? '-'));
+        $unit = trim((string) $unit);
+
+        if ($text === '' || $text === '-' || $unit === '' || $unit === '0') {
+            return $text === '' ? '-' : $text;
+        }
+
+        if (! preg_match('/-?\d+([,.]\d+)?/', $text)) {
+            return $text;
+        }
+
+        return Str::endsWith(Str::lower($text), Str::lower($unit))
+            ? $text
+            : trim($text . ' ' . $unit);
     }
 
     public function destroy(string $type, int $id): RedirectResponse
