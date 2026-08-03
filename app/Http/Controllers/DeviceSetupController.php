@@ -423,6 +423,11 @@ class DeviceSetupController extends Controller
             ->filter()
             ->values();
         $rednodePollIntervalMs = (int) ($serialConfig?->rednode_poll_interval_ms ?: ($serialSettings['rednode_poll_interval_ms'] ?? env('REDNODE_POLL_INTERVAL_MS', 1000)));
+        $runtimeState = $serialConfig?->runtime_state ?? [];
+        $monitoringEnabled = array_key_exists('monitoring_enabled', $runtimeState)
+            ? (bool) $runtimeState['monitoring_enabled']
+            : $serialConfig?->connectivity_status !== 'Offline';
+        $lastAction = $runtimeState['last_action'] ?? ($monitoringEnabled ? 'start' : 'stop');
 
         $sensorQuery = Sensor::with(['monitoringStation', 'mstPrefix'])
             ->whereNotNull('slave_id')
@@ -485,8 +490,9 @@ class DeviceSetupController extends Controller
                 'poll_interval_ms' => $rednodePollIntervalMs,
             ],
             'monitoring' => [
-                'enabled' => $serialConfig?->connectivity_status !== 'Offline',
-                'last_action' => $serialConfig?->connectivity_status === 'Offline' ? 'stop' : 'start',
+                'enabled' => $monitoringEnabled,
+                'last_action' => $lastAction,
+                'requested_at' => $runtimeState['requested_at'] ?? null,
                 'last_seen_at' => optional($serialConfig?->last_seen_at)->toISOString(),
                 'last_error' => $serialConfig?->last_error,
             ],
@@ -681,6 +687,24 @@ class DeviceSetupController extends Controller
             ], 422);
         }
 
+        if (! $this->rednodeHasSshCredentials($connectivity)) {
+            $this->updateRednodeRuntimeState($connectivity, $data['action']);
+
+            return response()->json([
+                'ok' => true,
+                'message' => $data['action'] === 'start'
+                    ? 'Perintah start dikirim via config. Gateway RedNode akan mulai saat polling config berikutnya.'
+                    : 'Perintah stop dikirim via config. Gateway RedNode akan berhenti polling sensor saat polling config berikutnya.',
+                'online' => $data['action'] === 'start',
+                'last_seen_at' => $connectivity->fresh()->last_seen_at?->toISOString(),
+                'output' => '',
+                'terminal_log' => [
+                    '[web] SSH RedNode belum lengkap, pakai mode config polling.',
+                    '[web] Gateway membaca perintah dari /api/rednode/config.',
+                ],
+            ]);
+        }
+
         $command = $data['action'] === 'start'
             ? $this->rednodeStopCommand($connectivity) . '; ' . $this->rednodeStartCommand($connectivity, $data['logger_code'], $this->rednodeRequestBaseUrl($request))
             : $this->rednodeStopCommand($connectivity);
@@ -694,11 +718,7 @@ class DeviceSetupController extends Controller
             $data['action'] === 'start' ? 70 : 35
         ));
         $terminalLog = array_merge($terminalLog, $this->rednodeTerminalOutputLines($result));
-        $connectivity->update([
-            'connectivity_status' => $data['action'] === 'start' ? 'Online' : 'Offline',
-            'last_seen_at' => now(),
-            'last_error' => $data['action'] === 'start' ? null : 'Gateway RedNode dihentikan dari web.',
-        ]);
+        $this->updateRednodeRuntimeState($connectivity, $data['action'], true);
         $message = $data['action'] === 'start'
             ? 'Remote SSH berhasil restart bersih RedNode di logger.'
             : 'Remote SSH berhasil menghentikan RedNode di logger.';
@@ -744,6 +764,22 @@ class DeviceSetupController extends Controller
             }
 
             try {
+                if (! $this->rednodeHasSshCredentials($connectivity)) {
+                    $this->updateRednodeRuntimeState($connectivity, 'start');
+
+                    return [
+                        'logger_code' => $logger->logger_code,
+                        'station' => $logger->monitoringStation?->station_code,
+                        'ok' => true,
+                        'message' => 'Perintah start dikirim via config. Gateway RedNode akan mulai saat polling config berikutnya.',
+                        'terminal_log' => [
+                            '[web] Mulai monitoring logger ' . $logger->logger_code,
+                            '[web] SSH RedNode belum lengkap, pakai mode config polling.',
+                            '[web] Gateway membaca perintah dari /api/rednode/config.',
+                        ],
+                    ];
+                }
+
                 $output = trim($this->runRednodeSshCommand(
                     $connectivity,
                     $this->rednodeStopCommand($connectivity) . '; ' . $this->rednodeStartCommand($connectivity, $logger->logger_code, $this->rednodeRequestBaseUrl($request)),
@@ -756,11 +792,7 @@ class DeviceSetupController extends Controller
                     ],
                     $this->rednodeTerminalOutputLines($output)
                 );
-                $connectivity->update([
-                    'connectivity_status' => 'Online',
-                    'last_seen_at' => now(),
-                    'last_error' => null,
-                ]);
+                $this->updateRednodeRuntimeState($connectivity, 'start', true);
 
                 return [
                     'logger_code' => $logger->logger_code,
@@ -839,6 +871,22 @@ class DeviceSetupController extends Controller
             }
 
             try {
+                if (! $this->rednodeHasSshCredentials($connectivity)) {
+                    $this->updateRednodeRuntimeState($connectivity, 'stop');
+
+                    return [
+                        'logger_code' => $logger->logger_code,
+                        'station' => $logger->monitoringStation?->station_code,
+                        'ok' => true,
+                        'message' => 'Perintah stop dikirim via config. Gateway RedNode akan berhenti polling sensor saat polling config berikutnya.',
+                        'terminal_log' => [
+                            '[web] Stop monitoring logger ' . $logger->logger_code,
+                            '[web] SSH RedNode belum lengkap, pakai mode config polling.',
+                            '[web] Gateway membaca perintah dari /api/rednode/config.',
+                        ],
+                    ];
+                }
+
                 $output = trim($this->runRednodeSshCommand(
                     $connectivity,
                     $this->rednodeStopCommand($connectivity),
@@ -851,11 +899,7 @@ class DeviceSetupController extends Controller
                     ],
                     $this->rednodeTerminalOutputLines($output)
                 );
-                $connectivity->update([
-                    'connectivity_status' => 'Offline',
-                    'last_seen_at' => now(),
-                    'last_error' => 'Monitoring dihentikan dari web.',
-                ]);
+                $this->updateRednodeRuntimeState($connectivity, 'stop', true);
 
                 return [
                     'logger_code' => $logger->logger_code,
@@ -1352,6 +1396,40 @@ class DeviceSetupController extends Controller
                 ->latest()
                 ->first()
             : null;
+    }
+
+    private function rednodeHasSshCredentials(ConnectivityConfig $connectivity): bool
+    {
+        $logger = $connectivity->relationLoaded('dataLogger')
+            ? $connectivity->dataLogger
+            : $connectivity->dataLogger()->first();
+        $host = trim((string) ($connectivity->rednode_host ?: $logger?->remote_host ?: env('REDNODE_SSH_HOST')));
+        $user = trim((string) ($connectivity->rednode_ssh_user ?: $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root')));
+        $password = (string) ($connectivity->rednode_ssh_password ?: $logger?->remote_ssh_password ?: env('REDNODE_SSH_PASSWORD'));
+
+        return $host !== '' && $user !== '' && $password !== '';
+    }
+
+    private function updateRednodeRuntimeState(ConnectivityConfig $connectivity, string $action, bool $sshConfirmed = false): void
+    {
+        $isStart = $action === 'start';
+
+        $connectivity->update([
+            'connectivity_status' => $isStart
+                ? ($sshConfirmed ? 'Online' : 'Starting')
+                : 'Offline',
+            'last_seen_at' => $sshConfirmed ? now() : $connectivity->last_seen_at,
+            'last_error' => $isStart
+                ? ($sshConfirmed ? null : 'Menunggu gateway RedNode membaca perintah start dari web.')
+                : 'Monitoring dihentikan dari web.',
+            'runtime_state' => [
+                'monitoring_enabled' => $isStart,
+                'last_action' => $action,
+                'requested_at' => now()->toISOString(),
+                'source' => 'web',
+                'ssh_confirmed' => $sshConfirmed,
+            ],
+        ]);
     }
 
     private function runRednodeSshCommand(ConnectivityConfig $connectivity, string $command, int $timeoutSeconds = 25): string
