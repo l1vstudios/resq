@@ -19,6 +19,7 @@ use App\Models\WarningStation;
 use App\Services\CanonicalMappingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -435,7 +436,7 @@ class ProjectSetupController extends Controller
             'status' => ['required', 'string', 'max:50'],
         ]);
         $data['weather_parameters'] = $data['type'] === 'weather_station'
-            ? collect($data['weather_parameters'] ?? [])->unique()->values()->all()
+            ? $this->weatherParametersForSensor((int) $data['quantity'], $data['weather_parameters'] ?? [], $data['parameter'] ?? null)
             : null;
 
         $addressAlreadyUsed = Sensor::query()
@@ -471,6 +472,46 @@ class ProjectSetupController extends Controller
         ]);
 
         return back()->with('message', 'Response plan berhasil ditambahkan.');
+    }
+
+    private function weatherParametersForSensor(int $quantity, array $selected = [], ?string $hint = null): array
+    {
+        $configured = collect($selected)
+            ->filter()
+            ->unique()
+            ->values();
+        $defaults = collect($this->defaultWeatherParameters($hint));
+
+        return $configured
+            ->merge($defaults->reject(fn ($parameter) => $configured->contains($parameter)))
+            ->take(max($quantity, $configured->count(), 1))
+            ->values()
+            ->all();
+    }
+
+    private function defaultWeatherParameters(?string $hint = null): array
+    {
+        $base = [
+            'temperature',
+            'humidity',
+            'pressure',
+            'wind_speed',
+            'wind_direction',
+            'rainfall',
+            'solar_radiation',
+            'battery_voltage',
+        ];
+        $hint = Str::lower((string) $hint);
+
+        if (Str::contains($hint, ['angin', 'wind'])) {
+            return ['wind_speed', 'wind_direction', ...array_values(array_diff($base, ['wind_speed', 'wind_direction']))];
+        }
+
+        if (Str::contains($hint, ['hujan', 'rain'])) {
+            return ['rainfall', ...array_values(array_diff($base, ['rainfall']))];
+        }
+
+        return $base;
     }
 
     public function destroy(string $type, int $id): RedirectResponse

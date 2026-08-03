@@ -73,6 +73,30 @@ function weatherParameterLabel(parameter) {
   }[parameter] || String(parameter || '').replace(/_/g, ' ');
 }
 
+function defaultWeatherParameters(sensor) {
+  const base = [
+    'temperature',
+    'humidity',
+    'pressure',
+    'wind_speed',
+    'wind_direction',
+    'rainfall',
+    'solar_radiation',
+    'battery_voltage',
+  ];
+  const hint = String(sensor?.parameter || sensor?.sensor_label || '').toLowerCase();
+
+  if (hint.includes('angin') || hint.includes('wind')) {
+    return ['wind_speed', 'wind_direction', ...base.filter((parameter) => !['wind_speed', 'wind_direction'].includes(parameter))];
+  }
+
+  if (hint.includes('hujan') || hint.includes('rain')) {
+    return ['rainfall', ...base.filter((parameter) => parameter !== 'rainfall')];
+  }
+
+  return base;
+}
+
 function httpJson(method, urlString, body = null, headers = {}) {
   const url = new URL(urlString);
   const payload = body ? Buffer.from(JSON.stringify(body)) : null;
@@ -446,13 +470,19 @@ function mappedParameterValue(sensor, value) {
 }
 
 function weatherValuesFromRegisters(registers, sensor) {
-  const parameters = Array.isArray(sensor.weather_parameters) ? sensor.weather_parameters : [];
-
   if (sensor.sensor_type !== 'weather_station' && sensor.type !== 'weather_station') {
     return [];
   }
 
-  if (!parameters.length) {
+  const configured = Array.isArray(sensor.weather_parameters)
+    ? sensor.weather_parameters.filter(Boolean)
+    : [];
+  const parameters = [
+    ...configured,
+    ...defaultWeatherParameters(sensor).filter((parameter) => !configured.includes(parameter)),
+  ].slice(0, Math.max(registers.length, configured.length, 1));
+
+  if (!parameters.length || !registers.length) {
     return [];
   }
 

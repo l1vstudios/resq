@@ -993,17 +993,52 @@
 <script>
     (function () {
         const sensorType = document.querySelector('#sensor-form [name="type"]');
+        const quantity = document.querySelector('#sensor-form [name="quantity"]');
+        const parameter = document.querySelector('#sensor-form [name="parameter"]');
         const weatherWrap = document.getElementById('weather-parameters-wrap');
 
         if (!sensorType || !weatherWrap) {
             return;
         }
 
+        function defaultWeatherParameterValues() {
+            const base = ['temperature', 'humidity', 'pressure', 'wind_speed', 'wind_direction', 'rainfall', 'solar_radiation', 'battery_voltage'];
+            const hint = String(parameter?.value || '').toLowerCase();
+
+            if (hint.includes('angin') || hint.includes('wind')) {
+                return ['wind_speed', 'wind_direction'].concat(base.filter((item) => !['wind_speed', 'wind_direction'].includes(item)));
+            }
+
+            if (hint.includes('hujan') || hint.includes('rain')) {
+                return ['rainfall'].concat(base.filter((item) => item !== 'rainfall'));
+            }
+
+            return base;
+        }
+
+        function applyDefaultWeatherChecks() {
+            const checks = Array.from(weatherWrap.querySelectorAll('input[type="checkbox"]'));
+            const selected = checks.filter((check) => check.checked);
+
+            if (sensorType.value !== 'weather_station' || selected.length) {
+                return;
+            }
+
+            const limit = Math.max(parseInt(quantity?.value || '1', 10) || 1, 1);
+            const defaults = defaultWeatherParameterValues().slice(0, limit);
+            checks.forEach((check) => {
+                check.checked = defaults.includes(check.value);
+            });
+        }
+
         function syncWeatherParameters() {
             weatherWrap.classList.toggle('d-none', sensorType.value !== 'weather_station');
+            applyDefaultWeatherChecks();
         }
 
         sensorType.addEventListener('change', syncWeatherParameters);
+        quantity?.addEventListener('change', applyDefaultWeatherChecks);
+        parameter?.addEventListener('input', applyDefaultWeatherChecks);
         syncWeatherParameters();
     })();
 

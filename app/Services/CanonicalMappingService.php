@@ -31,6 +31,7 @@ class CanonicalMappingService
     {
         $profile = $this->activeProfileForSensor($sensor);
         $parameter = $profile?->canonicalParameter;
+        $quantity = (int) ($profile?->data_length ?? $sensor->quantity ?? 1);
 
         return [
             'sensor_id' => $sensor->id,
@@ -38,11 +39,11 @@ class CanonicalMappingService
             'sensor_label' => $sensor->parameter ?: $sensor->type,
             'sensor_type' => $sensor->type,
             'parameter' => $sensor->parameter,
-            'weather_parameters' => $sensor->weather_parameters ?? [],
+            'weather_parameters' => $this->weatherParametersForSensor($sensor, $quantity),
             'slave_id' => $profile?->slave_id ?? $sensor->slave_id ?? 1,
             'function_code' => $profile?->function_code ?? $sensor->function_code ?? 'FC03',
             'address' => $profile?->register_address ?? $sensor->address ?? 0,
-            'quantity' => $profile?->data_length ?? $sensor->quantity ?? 1,
+            'quantity' => $quantity,
             'poll_interval_ms' => $sensor->poll_interval_ms ?? 1000,
             'data_type' => $profile?->value_type ?? $sensor->data_type ?? 'float32',
             'byte_order' => $profile?->byte_order,
@@ -63,6 +64,50 @@ class CanonicalMappingService
                 'canonical_domain' => $parameter?->domain,
             ] : null,
         ];
+    }
+
+    private function weatherParametersForSensor(Sensor $sensor, int $quantity): array
+    {
+        if ($sensor->type !== 'weather_station') {
+            return $sensor->weather_parameters ?? [];
+        }
+
+        $configured = collect($sensor->weather_parameters ?? [])
+            ->filter()
+            ->unique()
+            ->values();
+        $defaults = collect($this->defaultWeatherParameters($sensor->parameter));
+
+        return $configured
+            ->merge($defaults->reject(fn ($parameter) => $configured->contains($parameter)))
+            ->take(max($quantity, $configured->count(), 1))
+            ->values()
+            ->all();
+    }
+
+    private function defaultWeatherParameters(?string $hint = null): array
+    {
+        $base = [
+            'temperature',
+            'humidity',
+            'pressure',
+            'wind_speed',
+            'wind_direction',
+            'rainfall',
+            'solar_radiation',
+            'battery_voltage',
+        ];
+        $hint = Str::lower((string) $hint);
+
+        if (Str::contains($hint, ['angin', 'wind'])) {
+            return ['wind_speed', 'wind_direction', ...array_values(array_diff($base, ['wind_speed', 'wind_direction']))];
+        }
+
+        if (Str::contains($hint, ['hujan', 'rain'])) {
+            return ['rainfall', ...array_values(array_diff($base, ['rainfall']))];
+        }
+
+        return $base;
     }
 
     public function storeObservation(
