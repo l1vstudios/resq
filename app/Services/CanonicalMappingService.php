@@ -133,7 +133,7 @@ class CanonicalMappingService
         $numericValue = $this->applyMappingRules($value, $profile);
         $valueOrigin = $this->canonicalValueOrigin($profile->value_origin);
 
-        $rawData = RawDataIngestion::create([
+        $rawDataPayload = [
             'monitoring_station_id' => $sensor->monitoring_station_id,
             'data_logger_id' => $dataLoggerId ?? $sensor->data_logger_id,
             'sensor_id' => $sensor->id,
@@ -153,22 +153,38 @@ class CanonicalMappingService
             'observed_at' => $observedAt,
             'received_at' => $receivedAt,
             'reception_status' => 'received',
-        ]);
+        ];
+        $rawData = RawDataIngestion::where('sensor_id', $sensor->id)
+            ->where('source_parameter', $profile->source_parameter)
+            ->where('register_address', $profile->register_address)
+            ->latest('received_at')
+            ->latest()
+            ->first();
+
+        if ($rawData) {
+            $rawData->update($rawDataPayload);
+        } else {
+            $rawData = RawDataIngestion::create($rawDataPayload);
+        }
 
         $fieldValue = $numericValue ?? $this->stringValue($value);
-        $observation = CanonicalObservation::firstOrNew([
-            'monitoring_station_id' => $sensor->monitoring_station_id,
-            'sensor_id' => $sensor->id,
-            'domain' => $parameter->domain,
-            'observed_at' => $observedAt,
-        ]);
+        $observation = CanonicalObservation::where('sensor_id', $sensor->id)
+            ->where('domain', $parameter->domain)
+            ->where('sensor_mapping_profile_id', $profile->id)
+            ->latest('received_at')
+            ->latest()
+            ->first() ?: new CanonicalObservation();
 
         if (! $observation->exists) {
             $observation->canonical_observation_uid = (string) Str::uuid();
         }
 
         $observation->fill([
+            'monitoring_station_id' => $sensor->monitoring_station_id,
+            'sensor_id' => $sensor->id,
             'data_logger_id' => $dataLoggerId ?? $sensor->data_logger_id,
+            'domain' => $parameter->domain,
+            'observed_at' => $observedAt,
             'received_at' => $receivedAt,
             'field_values' => [$parameter->field_identity => $fieldValue],
             'field_units' => [$parameter->field_identity => $parameter->canonical_unit],
@@ -189,6 +205,18 @@ class CanonicalMappingService
             ],
         ]);
         $observation->save();
+
+        CanonicalObservation::where('sensor_id', $sensor->id)
+            ->where('domain', $parameter->domain)
+            ->where('sensor_mapping_profile_id', $profile->id)
+            ->whereKeyNot($observation->id)
+            ->delete();
+
+        RawDataIngestion::where('sensor_id', $sensor->id)
+            ->where('source_parameter', $profile->source_parameter)
+            ->where('register_address', $profile->register_address)
+            ->whereKeyNot($rawData->id)
+            ->delete();
 
         CanonicalParameterValue::updateOrCreate(
             [
