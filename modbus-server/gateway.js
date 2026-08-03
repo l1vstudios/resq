@@ -73,6 +73,21 @@ function weatherParameterLabel(parameter) {
   }[parameter] || String(parameter || '').replace(/_/g, ' ');
 }
 
+function weatherParameterUnit(parameter, sensor) {
+  const unit = {
+    temperature: '°C',
+    humidity: '%',
+    pressure: 'hPa',
+    wind_speed: 'm/s',
+    wind_direction: '°',
+    rainfall: 'mm',
+    solar_radiation: 'W/m²',
+    battery_voltage: 'V',
+  }[parameter] || String(sensor?.unit || '').trim();
+
+  return unit && unit !== '0' ? ` ${unit}` : '';
+}
+
 function defaultWeatherParameters(sensor) {
   const base = [
     'temperature',
@@ -416,17 +431,19 @@ function valueFromRegisters(registers, sensor) {
 }
 
 function evaluate(sensor, registers) {
-  const raw = valueFromRegisters(registers, sensor);
+  const parameterValues = weatherValuesFromRegisters(registers, sensor);
+  const raw = parameterValues.length ? parameterValues[0].raw : valueFromRegisters(registers, sensor);
   const scale = Number(sensor.scale_factor ?? 1);
   const offset = Number(sensor.offset ?? 0);
   const numericRaw = Number(raw);
-  const value = Number.isFinite(numericRaw)
+  const value = parameterValues.length
+    ? parameterValues[0].value
+    : Number.isFinite(numericRaw)
     ? (numericRaw * (Number.isFinite(scale) ? scale : 1)) + (Number.isFinite(offset) ? offset : 0)
     : raw;
   const numericValue = Number(value);
   const threshold = numericFromText(sensor.threshold || sensor.rule);
   const thresholdExceeded = threshold === null || !Number.isFinite(numericValue) ? null : numericValue > threshold;
-  const parameterValues = weatherValuesFromRegisters(registers, sensor);
   const mappedValue = parameterValues.length || !Number.isFinite(numericValue)
     ? null
     : mappedParameterValue(sensor, numericValue);
@@ -500,7 +517,7 @@ function weatherValuesFromRegisters(registers, sensor) {
       label: weatherParameterLabel(parameter),
       raw,
       value,
-      value_text: `${Number(value).toFixed(2)}${unitSuffix(sensor)}`,
+      value_text: `${Number(value).toFixed(2)}${weatherParameterUnit(parameter, sensor)}`,
     };
   });
 }

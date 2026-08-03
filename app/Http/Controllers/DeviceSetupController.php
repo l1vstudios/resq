@@ -333,7 +333,9 @@ class DeviceSetupController extends Controller
 
         $mappingValue = array_key_exists('raw_value', $data) ? $data['raw_value'] : ($data['value'] ?? null);
         $displayValue = $data['display_value'] ?? $data['value'] ?? null;
-        $readingValue = $this->canonicalMapping->activeProfileForSensor($sensor) && array_key_exists('raw_value', $data)
+        $readingValue = $sensor->type !== 'weather_station'
+            && $this->canonicalMapping->activeProfileForSensor($sensor)
+            && array_key_exists('raw_value', $data)
             ? $data['raw_value']
             : $displayValue;
         $thresholdExceeded = array_key_exists('threshold_exceeded', $data)
@@ -968,7 +970,9 @@ class DeviceSetupController extends Controller
                 'parameter_values' => $parameterValues,
                 'station' => $sensor->monitoringStation?->station_code,
                 'logger_code' => $reading?->dataLogger?->logger_code ?: $logger?->logger_code,
-                'value' => $reading?->value ?? $sensor->value,
+                'value' => $sensor->type === 'weather_station' && $parameterValues->isNotEmpty()
+                    ? $parameterValues->pluck('value_text')->filter()->implode(', ')
+                    : ($reading?->value ?? $sensor->value),
                 'status' => $fresh ? ($reading?->status ?? $sensor->status ?? 'Normal') : ($loggerOnline ? 'Online - Tunggu Data' : 'Data Lama'),
                 'alert_level' => $reading?->alert_level ?? $sensor->alert_level,
                 'fresh' => (bool) $fresh,
@@ -1299,7 +1303,9 @@ class DeviceSetupController extends Controller
             $telemetryPayload = [
                 'sensor_id' => $sensor->id,
                 'data_logger_id' => $dataLoggerId,
-                'value' => $this->canonicalMapping->activeProfileForSensor($sensor) && array_key_exists('raw_value', $item)
+                'value' => $sensor->type !== 'weather_station'
+                    && $this->canonicalMapping->activeProfileForSensor($sensor)
+                    && array_key_exists('raw_value', $item)
                     ? (string) $item['raw_value']
                     : $valueText,
                 'alert_level' => $level,
