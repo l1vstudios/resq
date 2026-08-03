@@ -7,6 +7,7 @@ use App\Models\MonitoringStation;
 use App\Models\Project;
 use App\Models\Province;
 use App\Models\Sensor;
+use App\Models\TelemetryReading;
 use App\Models\WarningStation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
@@ -184,31 +185,45 @@ class DashboardController extends Controller
     private function mapSensors()
     {
         $provinceCoordinates = $this->provinceCoordinates();
-
-        return Sensor::with(['workspace', 'monitoringStation', 'warningStation'])
+        $sensorModels = Sensor::with(['workspace', 'monitoringStation', 'warningStation'])->get();
+        $latestReadings = TelemetryReading::query()
+            ->whereIn('sensor_id', $sensorModels->pluck('id'))
+            ->latest('received_at')
+            ->latest()
             ->get()
-            ->map(function (Sensor $sensor) use ($provinceCoordinates) {
+            ->unique('sensor_id')
+            ->keyBy('sensor_id');
+
+        return $sensorModels
+            ->map(function (Sensor $sensor) use ($provinceCoordinates, $latestReadings) {
+                $reading = $latestReadings->get($sensor->id);
                 $workspace = $sensor->workspace;
                 $station = $sensor->monitoringStation;
                 $fallback = $workspace ? ($provinceCoordinates[$workspace->province] ?? ['lat' => null, 'lng' => null]) : ['lat' => null, 'lng' => null];
                 $lat = $station?->latitude ?: $workspace?->latitude ?: $fallback['lat'];
                 $lng = $station?->longitude ?: $workspace?->longitude ?: $fallback['lng'];
-                $thresholdExceeded = $this->thresholdExceeded($sensor->value, $sensor->threshold);
-                $isDanger = $this->isDangerStatus($sensor->status)
-                    || $this->isDangerStatus($sensor->alert_level)
+                $value = $reading?->value ?? $sensor->value;
+                $statusValue = $reading?->status ?? $sensor->status;
+                $alertValue = $reading?->alert_level ?? $sensor->alert_level;
+                $thresholdExceeded = $this->thresholdExceeded($value, $sensor->threshold);
+                $isDanger = $this->isDangerStatus($statusValue)
+                    || $this->isDangerStatus($alertValue)
                     || $thresholdExceeded;
-                $status = $thresholdExceeded && ! $this->isDangerStatus($sensor->status)
+                $status = $thresholdExceeded && ! $this->isDangerStatus($statusValue)
                     ? 'Awas'
-                    : $sensor->status;
-                $alertLevel = $thresholdExceeded && ! $this->isDangerStatus($sensor->alert_level)
+                    : $statusValue;
+                $alertLevel = $thresholdExceeded && ! $this->isDangerStatus($alertValue)
                     ? 'Awas'
-                    : $sensor->alert_level;
+                    : $alertValue;
 
                 return [
                     'name' => $sensor->sensor_code,
                     'type' => $sensor->type,
                     'parameter' => $sensor->parameter,
-                    'value' => $sensor->value,
+                    'value' => $value,
+                    'parameter_values' => collect($reading?->parameter_values ?? [])
+                        ->filter(fn ($item) => is_array($item))
+                        ->values(),
                     'threshold' => $sensor->threshold,
                     'unit' => $sensor->unit,
                     'alert_level' => $alertLevel,
@@ -216,7 +231,8 @@ class DashboardController extends Controller
                     'warning_station' => $sensor->warningStation?->station_code,
                     'province' => $workspace?->province,
                     'status' => $status,
-                    'last_seen' => optional($sensor->last_seen_at)->diffForHumans(),
+                    'last_seen' => optional($reading?->received_at ?? $sensor->last_seen_at)->diffForHumans(),
+                    'received_at' => optional($reading?->received_at ?? $sensor->last_seen_at)->toISOString(),
                     'threshold_exceeded' => $thresholdExceeded,
                     'is_danger' => $isDanger,
                     'lat' => $lat ? (float) $lat : null,

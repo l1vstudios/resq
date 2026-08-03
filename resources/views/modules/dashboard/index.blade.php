@@ -36,10 +36,24 @@
     .sensor-live-icon {
         background: transparent;
         border: 0;
+        overflow: visible;
+    }
+
+    .sensor-map-marker-wrap {
+        align-items: center;
+        display: inline-flex;
+        gap: 8px;
+        left: 0;
+        pointer-events: auto;
+        position: absolute;
+        top: 0;
+        transform: translate(-50%, -50%);
+        white-space: nowrap;
     }
 
     .sensor-pulse-marker {
         --sensor-color: #50a5f1;
+        flex: 0 0 auto;
         position: relative;
         display: block;
         width: 18px;
@@ -73,6 +87,46 @@
         inset: -18px;
         animation-duration: .78s;
         border-width: 3px;
+    }
+
+    .sensor-map-label {
+        background: rgba(255, 255, 255, .96);
+        border: 1px solid rgba(80, 165, 241, .35);
+        border-radius: 6px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, .12);
+        color: #343a40;
+        display: block;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.15;
+        max-width: 220px;
+        overflow: hidden;
+        padding: 5px 7px;
+        pointer-events: none;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sensor-map-label small {
+        color: #74788d;
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .sensor-map-label.danger {
+        animation: dangerLabelBlink .72s ease-in-out infinite alternate;
+        background: rgba(244, 106, 106, .98);
+        border-color: #ffffff;
+        box-shadow: 0 0 0 4px rgba(244, 106, 106, .18), 0 8px 22px rgba(244, 106, 106, .34);
+        color: #ffffff;
+    }
+
+    .sensor-map-label.danger small {
+        color: rgba(255, 255, 255, .9);
     }
 
     .danger-map-radius {
@@ -159,6 +213,17 @@
         100% {
             opacity: .56;
             stroke-opacity: 1;
+        }
+    }
+
+    @keyframes dangerLabelBlink {
+        0% {
+            filter: brightness(.94);
+            transform: translateY(0);
+        }
+        100% {
+            filter: brightness(1.18);
+            transform: translateY(-1px);
         }
     }
 
@@ -538,12 +603,60 @@
         }
 
         function sensorReadingHtml(sensor) {
+            var parameterValues = Array.isArray(sensor.parameter_values) ? sensor.parameter_values : [];
+            var multiParameterHtml = parameterValues.length
+                ? '<div class="mt-2"><strong>Multi Parameter:</strong><br>' + parameterValues.map(function (item) {
+                    var label = item.label || item.parameter || '-';
+                    var value = item.value_text || item.value || '-';
+
+                    return '<span class="badge bg-info-subtle text-info border border-info-subtle me-1 mb-1">' +
+                        escapeHtml(label) + ': ' + escapeHtml(value) +
+                    '</span>';
+                }).join('') + '</div>'
+                : '';
+
             return '<div class="map-danger-reading">' +
                 '<div><strong>Current Value :</strong> ' + escapeHtml(sensor.value || '-') + '</div>' +
                 '<div><strong>Threshold:</strong> ' + escapeHtml(sensor.threshold || '-') + '</div>' +
                 '<div><strong>Alert:</strong> ' + escapeHtml(sensor.alert_level || sensor.status || '-') + '</div>' +
                 '<div><strong>Update:</strong> ' + escapeHtml(sensor.last_seen || '-') + '</div>' +
+                multiParameterHtml +
             '</div>';
+        }
+
+        function markerLabelValue(sensor) {
+            var values = Array.isArray(sensor.parameter_values) ? sensor.parameter_values : [];
+
+            if (values.length) {
+                return values.slice(0, 2).map(function (item) {
+                    return item.value_text || item.value || '-';
+                }).join(', ');
+            }
+
+            return sensor.value || sensor.status || '-';
+        }
+
+        function sensorDisplayPoint(sensor, indexByCoordinate) {
+            var key = [
+                Number(sensor.lat || 0).toFixed(5),
+                Number(sensor.lng || 0).toFixed(5)
+            ].join(',');
+            var index = indexByCoordinate[key] || 0;
+
+            indexByCoordinate[key] = index + 1;
+
+            if (index === 0) {
+                return [sensor.lat, sensor.lng];
+            }
+
+            var angle = ((index - 1) % 8) * (Math.PI / 4);
+            var ring = Math.floor((index - 1) / 8) + 1;
+            var offset = 0.00045 * ring;
+
+            return [
+                Number(sensor.lat) + (Math.sin(angle) * offset),
+                Number(sensor.lng) + (Math.cos(angle) * offset)
+            ];
         }
 
         var map = L.map('sensor-cluster-map', {
@@ -599,17 +712,26 @@
                 ).addTo(clusterLayer);
             });
 
+            var sensorIndexByCoordinate = {};
             sensorPoints.forEach(function (sensor) {
                 var sensorDanger = isDanger(sensor);
                 var color = sensorDanger ? '#f46a6a' : (statusColors[sensor.status] || '#50a5f1');
                 var statusClass = sensorDanger
                     ? 'danger'
                     : (sensor.status === 'Waspada' ? 'warning' : 'live');
+                var displayPoint = sensorDisplayPoint(sensor, sensorIndexByCoordinate);
+                var labelValue = markerLabelValue(sensor);
                 var sensorIcon = L.divIcon({
-                    className: 'sensor-live-icon',
-                    html: '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>',
-                    iconSize: sensorDanger ? [52, 52] : [30, 30],
-                    iconAnchor: sensorDanger ? [26, 26] : [15, 15],
+                    className: 'sensor-live-icon' + (sensorDanger ? ' sensor-live-icon-danger' : ''),
+                    html: '<span class="sensor-map-marker-wrap">' +
+                        '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>' +
+                        '<span class="sensor-map-label ' + (sensorDanger ? 'danger' : '') + '">' +
+                            escapeHtml(sensor.name || '-') +
+                            '<small>' + escapeHtml(labelValue) + '</small>' +
+                        '</span>' +
+                    '</span>',
+                    iconSize: [1, 1],
+                    iconAnchor: [0, 0],
                     popupAnchor: [0, -14]
                 });
                 var sensorPopupBody =
@@ -622,7 +744,7 @@
                     sensorReadingHtml(sensor);
 
                 if (sensorDanger) {
-                    L.circle([sensor.lat, sensor.lng], {
+                    L.circle(displayPoint, {
                         radius: 120000,
                         color: '#f46a6a',
                         fillColor: '#f46a6a',
@@ -632,7 +754,7 @@
                     }).addTo(sensorLayer);
                 }
 
-                L.marker([sensor.lat, sensor.lng], {
+                L.marker(displayPoint, {
                     icon: sensorIcon,
                     title: sensor.name
                 }).bindPopup(sensorDanger
