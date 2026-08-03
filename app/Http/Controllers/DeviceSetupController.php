@@ -458,6 +458,12 @@ class DeviceSetupController extends Controller
         return response()->json([
             'ok' => true,
             'generated_at' => now()->toISOString(),
+            'logger_code' => $loggerCode,
+            'requested_logger_code' => $requestedLoggerCode,
+            'data_logger_id' => $dataLogger?->id,
+            'message' => $sensors->isEmpty()
+                ? 'Tidak ada sensor untuk logger ini. Pastikan Sensor & Data sudah memilih Data Logger atau station logger yang sama.'
+                : null,
             'logger' => [
                 'id' => $dataLogger?->id,
                 'logger_code' => $dataLogger?->logger_code ?: $loggerCode,
@@ -474,6 +480,12 @@ class DeviceSetupController extends Controller
                 'pin_mapping' => $serialConfig?->pin_mapping ?: ($serialSettings['pin_mapping'] ?? $serialConfig?->topic_or_api_path),
                 'monitored_sensor_ids' => $selectedSensorIds,
                 'poll_interval_ms' => $rednodePollIntervalMs,
+            ],
+            'monitoring' => [
+                'enabled' => $serialConfig?->connectivity_status !== 'Offline',
+                'last_action' => $serialConfig?->connectivity_status === 'Offline' ? 'stop' : 'start',
+                'last_seen_at' => optional($serialConfig?->last_seen_at)->toISOString(),
+                'last_error' => $serialConfig?->last_error,
             ],
             'callback' => [
                 'url' => $this->rednodeSetting('REDNODE_CALLBACK_URL')
