@@ -35,6 +35,11 @@ class ProjectSetupController extends Controller
         return view('modules.projects.index', $this->viewData());
     }
 
+    public function monitoring(): View
+    {
+        return view('modules.projects.monitoring', $this->viewData());
+    }
+
     public function startMonitoring(Request $request)
     {
         $data = $request->validate(['project_id' => 'required|exists:resq_projects,id']);

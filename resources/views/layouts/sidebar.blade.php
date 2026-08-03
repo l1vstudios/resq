@@ -50,14 +50,21 @@
                     </a>
                 </li>
 
+                <li class="{{ request()->routeIs('monitoring.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('monitoring.index') }}" class="waves-effect {{ request()->routeIs('monitoring.*') ? 'active' : '' }}">
+                        <i class="bx bx-pulse"></i>
+                        <span>Monitoring</span>
+                    </a>
+                </li>
+
                 <li class="mm-active">
                     <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
                         <i class="bx bx-cog"></i>
                         <span>Configuration</span>
                     </a>
                     <ul class="sub-menu mm-show" aria-expanded="true">
-                        <li class="{{ request()->routeIs('projects.*') ? 'mm-active' : '' }}">
-                            <a href="{{ route('projects.index') }}" class="{{ request()->routeIs('projects.*') ? 'active' : '' }}">
+                        <li class="{{ request()->routeIs('projects.index') ? 'mm-active' : '' }}">
+                            <a href="{{ route('projects.index') }}" class="{{ request()->routeIs('projects.index') ? 'active' : '' }}">
                                 Project Setup
                             </a>
                         </li>
@@ -89,11 +96,6 @@
                         <li>
                             <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
                                 Warning Station
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('sensors.index') }}" class="{{ request()->routeIs('sensors.*') ? 'active' : '' }}">
-                                Sensors
                             </a>
                         </li>
                     </ul>

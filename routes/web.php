@@ -26,6 +26,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/map-data', [DashboardController::class, 'mapData'])->name('dashboard.map-data');
+    Route::get('/monitoring', [ProjectSetupController::class, 'monitoring'])->name('monitoring.index');
     Route::get('/project-configuration', [DashboardController::class, 'index'])->name('project-configuration');
     Route::get('/projects', [ProjectSetupController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectSetupController::class, 'storeProject'])->name('projects.store');
