@@ -244,9 +244,9 @@
     if ($selectedRednodeSensorIds->isEmpty()) {
         $selectedRednodeSensorIds = $sensorConfigs->pluck('db_id')->filter()->map(fn ($id) => (int) $id)->values();
     }
-    $rednodeStatusBaseUrl = url('/rednode-status');
+    $rednodeStatusBaseUrl = '/rednode-status';
     $rednodeStatusUrl = $rednodeStatusBaseUrl . '?logger_code=' . urlencode($rednodeLoggerCode);
-    $rednodeControlUrl = route('rednode-control.store');
+    $rednodeControlUrl = route('rednode-control.store', [], false);
 @endphp
 
 <div class="card modbus-shell mb-4" id="modbus-monitor" data-api-base="{{ $gatewayBaseUrl }}">

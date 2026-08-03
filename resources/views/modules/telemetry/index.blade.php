@@ -183,8 +183,8 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        var liveDataUrl = @json(route('telemetry.live-data'));
-        var telemetryDestroyBaseUrl = @json(url('/device-setup/telemetry'));
+        var liveDataUrl = @json(route('telemetry.live-data', [], false));
+        var telemetryDestroyBaseUrl = @json('/device-setup/telemetry');
         var csrfToken = @json(csrf_token());
         var latestRows = document.getElementById('latest-sensor-state-rows');
         var historyRows = document.getElementById('telemetry-history-rows');

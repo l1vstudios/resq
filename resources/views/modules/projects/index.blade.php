@@ -70,9 +70,9 @@
     $selectedMonitoringStation = $monitoringStations->first();
     $selectedWarningStation = $warningStations->first();
     $selectedSensor = $sensors->first();
-    $projectMonitoringStartUrl = route('projects.start-monitoring');
-    $projectMonitoringStopUrl = route('projects.stop-monitoring');
-    $projectMonitoringLiveUrl = route('projects.live-monitoring');
+    $projectMonitoringStartUrl = route('projects.start-monitoring', [], false);
+    $projectMonitoringStopUrl = route('projects.stop-monitoring', [], false);
+    $projectMonitoringLiveUrl = route('projects.live-monitoring', [], false);
 @endphp
 
 @if (session('message'))

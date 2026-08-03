@@ -437,8 +437,8 @@
         var sensorPoints = @json($mapSensors ?? []);
         var warningStations = @json($mapWarningStations ?? []);
         var initialAlertActive = @json($dashboardAlertActive ?? false);
-        var mapDataUrl = @json(route('dashboard.map-data'));
-        var sirenAudio = new Audio(@json(asset('sound/sirene.mp3')));
+        var mapDataUrl = @json(route('dashboard.map-data', [], false));
+        var sirenAudio = new Audio(@json('/sound/sirene.mp3'));
         var sirenShouldPlay = false;
         var sirenIsPlaying = false;
 
