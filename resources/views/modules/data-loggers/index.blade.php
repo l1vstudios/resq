@@ -423,7 +423,7 @@
                 setMessage('Mengubah .env logger ke mode ' + modeLabel + ' dan restart gateway via SSH...', 'info');
 
                 try {
-                    const response = await fetch(@json(route('data-loggers.gateway-mode')), {
+                    const response = await fetch(@json(route('data-loggers.gateway-mode', [], false)), {
                         method: 'POST',
                         headers: {
                             'Accept': 'application/json',
@@ -474,7 +474,7 @@
             setMessage('Sedang ping IP logger dari server. Ini belum mengecek login SSH.', 'info');
 
             try {
-                const response = await fetch(@json(route('data-loggers.test-remote')), {
+                const response = await fetch(@json(route('data-loggers.test-remote', [], false)), {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
