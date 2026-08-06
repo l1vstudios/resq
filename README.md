@@ -44,8 +44,10 @@ Jika topic memakai pola `resq/telemetry/SNS-PDG-001`, `sensor_code` juga bisa di
 Untuk RedNode Bliiot yang membaca sensor RS485 Modbus RTU langsung dari serial, web RESQ sekarang menyediakan konfigurasi di:
 
 ```text
-GET /api/rednode/config?logger_code=REDNODE-BLIIOT-01
+GET /api/rednode/config
 ```
+
+Laravel akan memilih Data Logger dari database berdasarkan IP RedNode yang tersimpan di `rednode_host` pada Connectivity atau `remote_host` pada Data Logger. Jika perlu override manual, endpoint tetap bisa dipanggil dengan `?logger_code=DL-PDG-001`.
 
 Runner RedNode akan mengambil `slave_id`, `address`, `function_code`, `quantity`, `poll_interval_ms`, `threshold`, `scale_factor`, `offset`, dan `unit` dari sensor yang dipilih di tab RedNode. Hasil polling dikirim balik ke Laravel lewat `/api/realtime-sensor-status`, jadi telemetry langsung masuk database.
 
@@ -80,7 +82,12 @@ REDNODE_HEARTBEAT_URL=http://IP-LAPTOP-ATAU-SERVER:8000/api/rednode/heartbeat
 REDNODE_HEARTBEAT_MS=1000
 REDNODE_CONFIG_REFRESH_MS=5000
 REDNODE_POLL_INTERVAL_MS=1000
-REDNODE_LOGGER_CODE=REDNODE-BLIIOT-01
+# Opsional. Kosongkan agar logger dipilih dari database berdasarkan identity/claim device.
+# REDNODE_LOGGER_CODE=DL-PDG-001
+# Opsional tapi disarankan untuk multi logger via internet.
+# REDNODE_DEVICE_UID=RN-BL118-0001
+# REDNODE_SERIAL_NUMBER=BL118-0001
+# REDNODE_FIRMWARE_VERSION=BL118-1.0.0
 REDNODE_SSH_HOST=192.168.3.1
 REDNODE_SSH_PORT=22
 REDNODE_SSH_USER=root
@@ -99,9 +106,23 @@ Jalankan gateway:
 
 ```bash
 npm run rednode:gateway
+# atau di folder /root/rednode-gateway:
+node gateway.js
+```
+
+Di halaman **Data Loggers**, tombol **Start Development** dan **Start Production** akan SSH ke logger, mengubah `.env` di `REDNODE_GATEWAY_PATH`, lalu restart gateway. Set URL target di `.env` server:
+
+```dotenv
+REDNODE_DEVELOPMENT_APP_URL=http://192.168.3.10:8000
+REDNODE_PRODUCTION_APP_URL=http://139.59.100.220
 ```
 
 Jika `MQTT_CALLBACK_TOKEN`, `MODBUS_CALLBACK_TOKEN`, atau `REDNODE_CONFIG_TOKEN` diisi di Laravel, samakan token tersebut di env RedNode supaya device boleh mengambil konfigurasi dan mengirim telemetry.
+
+Jika logger code dikosongkan, gateway mengirim identity perangkat seperti UID,
+serial number, firmware, hostname, dan MAC address saat mengambil config. Device
+yang belum dikenal akan muncul di Data Loggers sebagai Detected Gateway Devices,
+lalu bisa di-claim/simpan sebagai Data Logger yang benar.
 
 ## About Laravel
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConnectivityConfig;
 use App\Models\DataLogger;
+use App\Models\DataLoggerDiscovery;
 use App\Models\DeviceCredential;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
@@ -112,11 +113,20 @@ class RegisteredDataController extends Controller
         $sensors = Sensor::with(['workspace', 'monitoringStation', 'dataLogger', 'warningStation', 'mstPrefix'])->latest()->get();
         $mstPrefixModels = Schema::hasTable('mst_prefixes') ? MstPrefix::latest()->get() : collect();
         $hasDataLoggers = Schema::hasTable('data_loggers');
+        $hasDataLoggerDiscoveries = Schema::hasTable('data_logger_discoveries');
         $hasConnectivity = Schema::hasTable('connectivity_configs');
         $hasCredentials = Schema::hasTable('device_credentials');
 
+        $dataLoggerRelations = ['monitoringStation'];
+        if ($hasDataLoggerDiscoveries) {
+            $dataLoggerRelations[] = 'discoveries';
+        }
+
         $dataLoggerModels = $hasDataLoggers
-            ? DataLogger::with('monitoringStation')->latest()->get()
+            ? DataLogger::with($dataLoggerRelations)->latest()->get()
+            : collect();
+        $dataLoggerDiscoveryModels = $hasDataLoggerDiscoveries
+            ? DataLoggerDiscovery::with('matchedDataLogger')->latest('last_seen_at')->latest()->limit(25)->get()
             : collect();
         $connectivityModels = $hasConnectivity
             ? ConnectivityConfig::with('dataLogger')->latest()->get()
@@ -218,6 +228,7 @@ class RegisteredDataController extends Controller
             'dataLoggers' => $hasDataLoggers
                 ? $this->dataLoggersFromModels($dataLoggerModels)
                 : $this->dataLoggersFromMonitoring($monitoring),
+            'dataLoggerDiscoveries' => $this->dataLoggerDiscoveriesFromModels($dataLoggerDiscoveryModels),
             'connectivity' => $hasConnectivity
                 ? $this->connectivityFromModels($connectivityModels)
                 : $this->connectivityFromMonitoring($monitoring),
@@ -243,11 +254,59 @@ class RegisteredDataController extends Controller
 
     private function dataLoggersFromModels($dataLoggers)
     {
-        return collect($dataLoggers)->map(fn (DataLogger $logger) => [
-            'db_id' => $logger->id,
-            'id' => $logger->logger_code,
-            'monitoring_station_db_id' => $logger->monitoring_station_id,
-            'monitoring_station_id' => $logger->monitoringStation?->station_code,
+        return collect($dataLoggers)->map(function (DataLogger $logger) {
+            $latestDiscovery = $logger->relationLoaded('discoveries')
+                ? $logger->discoveries
+                    ->sortByDesc(fn (DataLoggerDiscovery $discovery) => optional($discovery->last_seen_at)->timestamp ?? 0)
+                    ->first()
+                : null;
+
+            return [
+                'db_id' => $logger->id,
+                'id' => $logger->logger_code,
+                'monitoring_station_db_id' => $logger->monitoring_station_id,
+                'monitoring_station_id' => $logger->monitoringStation?->station_code,
+                'serial_number' => $logger->serial_number,
+                'logger_model' => $logger->logger_model,
+                'vendor' => $logger->vendor,
+                'firmware_version' => $logger->firmware_version,
+                'device_label' => $logger->device_label,
+                'remote_host' => $logger->remote_host,
+                'remote_ssh_port' => $logger->remote_ssh_port,
+                'remote_ssh_user' => $logger->remote_ssh_user,
+                'remote_gateway_path' => $logger->remote_gateway_path,
+                'remote_last_tested_at' => optional($logger->remote_last_tested_at)->format('Y-m-d H:i:s'),
+                'remote_last_status' => $logger->remote_last_status,
+                'remote_last_message' => $logger->remote_last_message,
+                'logger_status' => $logger->logger_status,
+                'metadata' => $this->dataLoggerMetadata($logger, $latestDiscovery),
+            ];
+        });
+    }
+
+    private function dataLoggerMetadata(DataLogger $logger, ?DataLoggerDiscovery $latestDiscovery): array
+    {
+        $payload = $latestDiscovery?->last_payload ?? [];
+        $macAddresses = $latestDiscovery?->mac_addresses ?? [];
+        $firstMacAddress = collect($macAddresses)->first();
+        $detectedDeviceUid = $latestDiscovery?->device_uid;
+        $uniqueDeviceKey = $detectedDeviceUid
+            ?: $logger->serial_number
+            ?: $firstMacAddress
+            ?: $logger->logger_code;
+        $uniqueDeviceKeySource = $detectedDeviceUid
+            ? 'device_uid'
+            : ($logger->serial_number
+                ? 'serial_number'
+                : ($firstMacAddress
+                    ? 'mac_address'
+                    : 'logger_code'));
+
+        return [
+            'unique_device_key' => $uniqueDeviceKey,
+            'unique_device_key_source' => $uniqueDeviceKeySource,
+            'logger_code' => $logger->logger_code,
+            'monitoring_station' => $logger->monitoringStation?->station_code,
             'serial_number' => $logger->serial_number,
             'logger_model' => $logger->logger_model,
             'vendor' => $logger->vendor,
@@ -260,7 +319,38 @@ class RegisteredDataController extends Controller
             'remote_last_tested_at' => optional($logger->remote_last_tested_at)->format('Y-m-d H:i:s'),
             'remote_last_status' => $logger->remote_last_status,
             'remote_last_message' => $logger->remote_last_message,
-            'logger_status' => $logger->logger_status,
+            'detected_device_uid' => $detectedDeviceUid ?: $uniqueDeviceKey,
+            'detected_device_uid_source' => $detectedDeviceUid ? 'reported_by_device' : 'fallback_unique_key',
+            'detected_logger_code' => $latestDiscovery?->logger_code,
+            'detected_serial_number' => $latestDiscovery?->serial_number,
+            'detected_hostname' => $latestDiscovery?->hostname,
+            'detected_ip' => $latestDiscovery?->request_ip,
+            'detected_mac_addresses' => $macAddresses,
+            'detected_last_seen_at' => optional($latestDiscovery?->last_seen_at)->format('Y-m-d H:i:s'),
+            'detected_status' => $latestDiscovery?->status,
+            'gateway_version' => $payload['gateway_version'] ?? null,
+            'platform' => $payload['platform'] ?? null,
+        ];
+    }
+
+    private function dataLoggerDiscoveriesFromModels($discoveries)
+    {
+        return collect($discoveries)->map(fn (DataLoggerDiscovery $discovery) => [
+            'db_id' => $discovery->id,
+            'matched_data_logger_id' => $discovery->matched_data_logger_id,
+            'matched_logger_code' => $discovery->matchedDataLogger?->logger_code,
+            'device_uid' => $discovery->device_uid,
+            'logger_code' => $discovery->logger_code,
+            'serial_number' => $discovery->serial_number,
+            'logger_model' => $discovery->logger_model,
+            'vendor' => $discovery->vendor,
+            'firmware_version' => $discovery->firmware_version,
+            'device_label' => $discovery->device_label,
+            'hostname' => $discovery->hostname,
+            'request_ip' => $discovery->request_ip,
+            'mac_addresses' => $discovery->mac_addresses ?? [],
+            'last_seen_at' => optional($discovery->last_seen_at)->format('Y-m-d H:i:s'),
+            'status' => $discovery->status,
         ]);
     }
 

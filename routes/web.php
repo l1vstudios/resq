@@ -59,9 +59,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/rednode-pin-scan', [DeviceSetupController::class, 'rednodePinScan'])->name('rednode-pin-scan.store');
     Route::get('/rednode-status', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status');
     Route::get('/rednode-status/show', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status.show');
+    Route::get('/mini-server', [DeviceSetupController::class, 'miniServer'])->name('mini-server.index');
+    Route::post('/mini-server/scan', [DeviceSetupController::class, 'miniServerScan'])->name('mini-server.scan');
     Route::get('/data-loggers', [RegisteredDataController::class, 'dataLoggers'])->name('data-loggers.index');
     Route::post('/data-loggers', [DeviceSetupController::class, 'storeDataLogger'])->name('data-loggers.store');
     Route::post('/data-loggers/test-remote', [DeviceSetupController::class, 'testDataLoggerRemote'])->name('data-loggers.test-remote');
+    Route::post('/data-loggers/gateway-mode', [DeviceSetupController::class, 'applyDataLoggerGatewayMode'])->name('data-loggers.gateway-mode');
     Route::get('/connectivity', [RegisteredDataController::class, 'connectivity'])->name('connectivity.index');
     Route::post('/connectivity', [DeviceSetupController::class, 'storeConnectivity'])->name('connectivity.store');
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');

@@ -1,8 +1,6 @@
-@extends('layouts.master')
+<?php $__env->startSection('title'); ?> Modbus Configuration <?php $__env->stopSection(); ?>
 
-@section('title') Modbus Configuration @endsection
-
-@section('css')
+<?php $__env->startSection('css'); ?>
 <style>
     .modbus-shell {
         background: #fff;
@@ -147,15 +145,15 @@
         border-bottom: 0;
     }
 </style>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('content')
-@component('components.breadcrumb')
-@slot('li_1') Device Setup @endslot
-@slot('title') Modbus Configuration @endslot
-@endcomponent
+<?php $__env->startSection('content'); ?>
+<?php $__env->startComponent('components.breadcrumb'); ?>
+<?php $__env->slot('li_1'); ?> Device Setup <?php $__env->endSlot(); ?>
+<?php $__env->slot('title'); ?> Modbus Configuration <?php $__env->endSlot(); ?>
+<?php echo $__env->renderComponent(); ?>
 
-@php
+<?php
     $sensors = collect($sensors ?? []);
     $sensorTypeLabels = [
         'water_level' => 'Sensor Tinggi Air',
@@ -248,9 +246,9 @@
     $rednodeStatusBaseUrl = '/rednode-status';
     $rednodeStatusUrl = $rednodeStatusBaseUrl . '?logger_code=' . urlencode($rednodeLoggerCode);
     $rednodeControlUrl = route('rednode-control.store', [], false);
-@endphp
+?>
 
-<div class="card modbus-shell mb-4" id="modbus-monitor" data-api-base="{{ $gatewayBaseUrl }}">
+<div class="card modbus-shell mb-4" id="modbus-monitor" data-api-base="<?php echo e($gatewayBaseUrl); ?>">
     <div class="card-body p-0">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 px-3 py-3 border-bottom">
             <div class="d-flex align-items-center gap-2">
@@ -291,7 +289,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label modbus-label">Gateway URL</label>
-                        <input type="text" class="form-control" id="modbus-api-base" value="{{ $gatewayBaseUrl }}" placeholder="https://mqtt-gateway.example.com">
+                        <input type="text" class="form-control" id="modbus-api-base" value="<?php echo e($gatewayBaseUrl); ?>" placeholder="https://mqtt-gateway.example.com">
                     </div>
                     <div class="mb-3 modbus-fields">
                         <label class="form-label modbus-label">Host / IP Address</label>
@@ -310,20 +308,20 @@
                     <div class="mqtt-fields d-none">
                         <div class="mb-3">
                             <label class="form-label modbus-label">Broker URL</label>
-                            <input type="text" class="form-control" id="mqtt-broker" value="{{ $mqttBrokerUrl }}" placeholder="mqtts://broker.example.com:8883">
+                            <input type="text" class="form-control" id="mqtt-broker" value="<?php echo e($mqttBrokerUrl); ?>" placeholder="mqtts://broker.example.com:8883">
                         </div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Topic</label>
-                            <input type="text" class="form-control" id="mqtt-topic" value="{{ $mqttTopic }}" placeholder="resq/telemetry/#">
+                            <input type="text" class="form-control" id="mqtt-topic" value="<?php echo e($mqttTopic); ?>" placeholder="resq/telemetry/#">
                         </div>
                         <div class="row">
                             <div class="col-6 mb-3">
                                 <label class="form-label modbus-label">Username</label>
-                                <input type="text" class="form-control" id="mqtt-username" value="{{ $mqttUsername }}">
+                                <input type="text" class="form-control" id="mqtt-username" value="<?php echo e($mqttUsername); ?>">
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label modbus-label">Password</label>
-                                <input type="password" class="form-control" id="mqtt-password" value="{{ $mqttPassword }}">
+                                <input type="password" class="form-control" id="mqtt-password" value="<?php echo e($mqttPassword); ?>">
                             </div>
                         </div>
                         <div class="row align-items-end">
@@ -347,11 +345,11 @@
                     <div class="modbus-panel-title mb-3"><i class="bx bx-data me-1"></i> Sensor Configuration</div>
                     <div class="mb-3">
                         <label class="form-label modbus-label">Sensor</label>
-                        <select class="form-select" id="modbus-sensor" @disabled($sensorConfigs->isEmpty())>
+                        <select class="form-select" id="modbus-sensor" <?php if($sensorConfigs->isEmpty()): echo 'disabled'; endif; ?>>
                             <option value="">Pilih sensor</option>
-                            @foreach ($sensorConfigs as $sensor)
-                                <option value="{{ $loop->index }}">{{ $sensor['label'] }}</option>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $sensorConfigs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $sensor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <option value="<?php echo e($loop->index); ?>"><?php echo e($sensor['label']); ?></option>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -393,73 +391,73 @@
                         </div>
                         <div class="tab-pane fade" id="integration-rednode" role="tabpanel">
                     <div class="modbus-panel-title mb-3"><i class="bx bx-chip me-1"></i> Data Logger Gateway</div>
-                    <form method="POST" action="{{ route('rednode-serial-config.store') }}" id="rednode-serial-form">
-                        @csrf
+                    <form method="POST" action="<?php echo e(route('rednode-serial-config.store')); ?>" id="rednode-serial-form">
+                        <?php echo csrf_field(); ?>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Data Logger</label>
-                            <select name="data_logger_id" class="form-select" id="rednode-data-logger" required @disabled($dataLoggers->whereNotNull('db_id')->isEmpty())>
+                            <select name="data_logger_id" class="form-select" id="rednode-data-logger" required <?php if($dataLoggers->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>>
                                 <option value="">Pilih Data Logger</option>
-                                @foreach ($dataLoggers->whereNotNull('db_id') as $logger)
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $dataLoggers->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $logger): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                     <option
-                                        value="{{ $logger['db_id'] }}"
-                                        data-logger-code="{{ $logger['id'] }}"
-                                        data-monitoring-station-id="{{ $logger['monitoring_station_db_id'] ?? '' }}"
-                                        data-remote-host="{{ $logger['remote_host'] ?? '' }}"
-                                        @selected(($logger['id'] ?? null) === $rednodeLoggerCode)
-                                    >{{ $logger['id'] }} - {{ $logger['device_label'] ?? 'Gateway' }}</option>
-                                @endforeach
+                                        value="<?php echo e($logger['db_id']); ?>"
+                                        data-logger-code="<?php echo e($logger['id']); ?>"
+                                        data-monitoring-station-id="<?php echo e($logger['monitoring_station_db_id'] ?? ''); ?>"
+                                        data-remote-host="<?php echo e($logger['remote_host'] ?? ''); ?>"
+                                        <?php if(($logger['id'] ?? null) === $rednodeLoggerCode): echo 'selected'; endif; ?>
+                                    ><?php echo e($logger['id']); ?> - <?php echo e($logger['device_label'] ?? 'Gateway'); ?></option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Logger Code</label>
-                            <input name="logger_code" type="text" class="form-control" id="rednode-logger-code" value="{{ $rednodeLoggerCode }}" required readonly>
+                            <input name="logger_code" type="text" class="form-control" id="rednode-logger-code" value="<?php echo e($rednodeLoggerCode); ?>" required readonly>
                         </div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">IP / Host Remote</label>
-                            <input type="text" class="form-control" id="rednode-remote-host" value="{{ $rednodeLogger['remote_host'] ?? '' }}" readonly placeholder="Isi dari menu Data Loggers">
+                            <input type="text" class="form-control" id="rednode-remote-host" value="<?php echo e($rednodeLogger['remote_host'] ?? ''); ?>" readonly placeholder="Isi dari menu Data Loggers">
                         </div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Port / Pin RS485</label>
                             <select name="serial_port" class="form-select" id="rednode-serial-port" required>
-                                @foreach ($ttyOptions as $option)
-                                    <option value="{{ $option['port'] }}" data-pin-mapping="{{ $option['mapping'] }}" @selected($selectedSerialPort === $option['port'])>
-                                        {{ $option['pins'] }} - {{ $option['port'] }} ({{ $option['mapping'] }})
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $ttyOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <option value="<?php echo e($option['port']); ?>" data-pin-mapping="<?php echo e($option['mapping']); ?>" <?php if($selectedSerialPort === $option['port']): echo 'selected'; endif; ?>>
+                                        <?php echo e($option['pins']); ?> - <?php echo e($option['port']); ?> (<?php echo e($option['mapping']); ?>)
                                     </option>
-                                @endforeach
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             </select>
                         </div>
-                        <input type="hidden" name="pin_mapping" id="rednode-pin-mapping" value="{{ $selectedPinMapping }}">
+                        <input type="hidden" name="pin_mapping" id="rednode-pin-mapping" value="<?php echo e($selectedPinMapping); ?>">
                         <div class="row">
                             <div class="col-6 mb-3">
                                 <label class="form-label modbus-label">Baudrate</label>
-                                <input name="baud_rate" type="number" class="form-control" value="{{ $rednodeSerialConfig['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600) }}" min="300" required>
+                                <input name="baud_rate" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600)); ?>" min="300" required>
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label modbus-label">Timeout</label>
-                                <input name="timeout_ms" type="number" class="form-control" value="{{ $rednodeSerialConfig['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500) }}" min="100" required>
+                                <input name="timeout_ms" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500)); ?>" min="100" required>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-4 mb-3">
                                 <label class="form-label modbus-label">Data Bits</label>
-                                <input name="data_bits" type="number" class="form-control" value="{{ $rednodeSerialConfig['data_bits'] ?? env('REDNODE_DATA_BITS', 8) }}" min="5" max="8" required>
+                                <input name="data_bits" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['data_bits'] ?? env('REDNODE_DATA_BITS', 8)); ?>" min="5" max="8" required>
                             </div>
                             <div class="col-4 mb-3">
                                 <label class="form-label modbus-label">Stop Bits</label>
-                                <input name="stop_bits" type="number" class="form-control" value="{{ $rednodeSerialConfig['stop_bits'] ?? env('REDNODE_STOP_BITS', 1) }}" min="1" max="2" required>
+                                <input name="stop_bits" type="number" class="form-control" value="<?php echo e($rednodeSerialConfig['stop_bits'] ?? env('REDNODE_STOP_BITS', 1)); ?>" min="1" max="2" required>
                             </div>
                             <div class="col-4 mb-3">
                                 <label class="form-label modbus-label">Parity</label>
                                 <select name="parity" class="form-select" required>
-                                    @foreach (['none', 'even', 'odd'] as $parity)
-                                        <option value="{{ $parity }}" @selected(($rednodeSerialConfig['parity'] ?? env('REDNODE_PARITY', 'none')) === $parity)>{{ ucfirst($parity) }}</option>
-                                    @endforeach
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = ['none', 'even', 'odd']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $parity): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <option value="<?php echo e($parity); ?>" <?php if(($rednodeSerialConfig['parity'] ?? env('REDNODE_PARITY', 'none')) === $parity): echo 'selected'; endif; ?>><?php echo e(ucfirst($parity)); ?></option>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 </select>
                             </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Polling Interval Gateway (detik)</label>
-                            <input name="rednode_poll_interval_seconds" type="number" class="form-control" value="{{ $rednodePollIntervalSeconds }}" min="0.25" max="3600" step="0.25" required>
+                            <input name="rednode_poll_interval_seconds" type="number" class="form-control" value="<?php echo e($rednodePollIntervalSeconds); ?>" min="0.25" max="3600" step="0.25" required>
                         </div>
                         <input type="hidden" name="monitored_sensor_ids_present" value="1">
                         <div class="mb-3">
@@ -471,60 +469,62 @@
                                 </div>
                             </div>
                             <div class="rednode-sensor-grid">
-                                @forelse ($sensorConfigs as $sensor)
-                                    @php
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $sensorConfigs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $sensor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <?php
                                         $sensorDbId = (int) ($sensor['db_id'] ?? 0);
-                                    @endphp
+                                    ?>
                                     <label
                                         class="rednode-sensor-option d-flex align-items-start gap-2 mb-0"
-                                        for="rednode-sensor-{{ $sensorDbId }}"
+                                        for="rednode-sensor-<?php echo e($sensorDbId); ?>"
                                         data-rednode-sensor-option
-                                        data-monitoring-station-id="{{ $sensor['monitoring_station_db_id'] ?? '' }}"
+                                        data-monitoring-station-id="<?php echo e($sensor['monitoring_station_db_id'] ?? ''); ?>"
                                     >
                                         <input
                                             class="form-check-input mt-1"
                                             type="checkbox"
-                                            id="rednode-sensor-{{ $sensorDbId }}"
+                                            id="rednode-sensor-<?php echo e($sensorDbId); ?>"
                                             name="monitored_sensor_ids[]"
-                                            value="{{ $sensorDbId }}"
+                                            value="<?php echo e($sensorDbId); ?>"
                                             data-rednode-sensor-check
-                                            @checked($selectedRednodeSensorIds->contains($sensorDbId))
-                                            @disabled(! $sensorDbId)
+                                            <?php if($selectedRednodeSensorIds->contains($sensorDbId)): echo 'checked'; endif; ?>
+                                            <?php if(! $sensorDbId): echo 'disabled'; endif; ?>
                                         >
                                         <span>
-                                            <span class="fw-bold d-block">{{ $sensor['code'] }}</span>
+                                            <span class="fw-bold d-block"><?php echo e($sensor['code']); ?></span>
                                             <span class="badge bg-info-subtle text-info border border-info-subtle mb-1">
-                                                {{ $sensor['sensor_type_label'] }}
+                                                <?php echo e($sensor['sensor_type_label']); ?>
+
                                             </span>
-                                            @if (! empty($sensor['sensor_detail_label']))
-                                                <span class="text-muted small ms-1">{{ $sensor['sensor_detail_label'] }}</span>
-                                            @endif
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! empty($sensor['sensor_detail_label'])): ?>
+                                                <span class="text-muted small ms-1"><?php echo e($sensor['sensor_detail_label']); ?></span>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                             <span class="text-muted small d-block">
-                                                Slave {{ $sensor['slave_id'] }} |
-                                                {{ $sensor['function_code'] }} |
-                                                Addr {{ $sensor['address'] }} |
-                                                Qty {{ $sensor['quantity'] }}
+                                                Slave <?php echo e($sensor['slave_id']); ?> |
+                                                <?php echo e($sensor['function_code']); ?> |
+                                                Addr <?php echo e($sensor['address']); ?> |
+                                                Qty <?php echo e($sensor['quantity']); ?>
+
                                             </span>
                                         </span>
                                     </label>
-                                @empty
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                     <div class="text-muted fw-bold p-3">Belum ada sensor yang punya konfigurasi slave/address.</div>
-                                @endforelse
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </div>
                             <div class="form-text">Sensor yang dicentang akan dikirim saat gateway reload config.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Config URL</label>
-                            <input type="text" class="form-control" id="rednode-config-url" value="{{ $rednodeConfigUrl }}" readonly>
+                            <input type="text" class="form-control" id="rednode-config-url" value="<?php echo e($rednodeConfigUrl); ?>" readonly>
                         </div>
-                        <button type="submit" class="btn btn-primary modbus-btn-run w-100" @disabled($dataLoggers->whereNotNull('db_id')->isEmpty())>Simpan Konfigurasi Gateway</button>
+                        <button type="submit" class="btn btn-primary modbus-btn-run w-100" <?php if($dataLoggers->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>>Simpan Konfigurasi Gateway</button>
                     </form>
                     <div class="border-top mt-3 pt-3">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                             <div class="modbus-panel-title">Live Status</div>
                             <span class="modbus-status offline" id="rednode-live-status">Offline</span>
                         </div>
-                        <div class="small text-muted fw-bold mb-1">Port: <span id="rednode-live-port">{{ $selectedSerialPort }}</span></div>
+                        <div class="small text-muted fw-bold mb-1">Port: <span id="rednode-live-port"><?php echo e($selectedSerialPort); ?></span></div>
                         <div class="small text-muted fw-bold mb-2">Last seen: <span id="rednode-live-seen">-</span></div>
                         <div class="alert alert-warning py-2 px-3 mb-2 d-none" id="rednode-live-error"></div>
                         <div class="table-responsive">
@@ -650,9 +650,9 @@
         </div>
     </div>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('script')
+<?php $__env->startSection('script'); ?>
 <script>
     (function () {
         const root = document.getElementById('modbus-monitor');
@@ -660,7 +660,7 @@
             return;
         }
 
-        const sensorConfigs = @json($sensorConfigs);
+        const sensorConfigs = <?php echo json_encode($sensorConfigs, 15, 512) ?>;
         const sensorsByIndex = {};
         sensorConfigs.forEach((sensor, index) => {
             sensorsByIndex[String(index)] = sensor;
@@ -672,13 +672,13 @@
         const integrationLogRowsEl = el('integration-log-rows');
         const messageEl = el('modbus-message');
         const apiBaseInput = el('modbus-api-base');
-        const csrfToken = @json(csrf_token());
+        const csrfToken = <?php echo json_encode(csrf_token(), 15, 512) ?>;
         const gatewayStatusUrl = window.location.origin + '/api/realtime-sensor-status';
         const realtimeStatusUrl = gatewayStatusUrl;
-        const rednodeStatusBaseUrl = @json($rednodeStatusBaseUrl);
-        const rednodeControlUrl = @json($rednodeControlUrl);
-        const rednodeConfigBaseUrl = @json($rednodePublicBaseUrl . '/api/rednode/config');
-        const gatewayCallbackToken = @json(env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN', ''));
+        const rednodeStatusBaseUrl = <?php echo json_encode($rednodeStatusBaseUrl, 15, 512) ?>;
+        const rednodeControlUrl = <?php echo json_encode($rednodeControlUrl, 15, 512) ?>;
+        const rednodeConfigBaseUrl = <?php echo json_encode($rednodePublicBaseUrl . '/api/rednode/config', 15, 512) ?>;
+        const gatewayCallbackToken = <?php echo json_encode(env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN', ''), 512) ?>;
         const state = {
             connected: false,
             polling: false,
@@ -1806,4 +1806,6 @@
         }, 1000);
     })();
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.master', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Users/brainsoft/kerjaan/resq/resources/views/modules/modbus-configuration/index.blade.php ENDPATH**/ ?>

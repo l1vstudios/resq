@@ -4,9 +4,9 @@ const http = require('http');
 const https = require('https');
 const ModbusRTU = require('modbus-serial');
 
-const loggerCode = process.env.REDNODE_LOGGER_CODE || 'REDNODE-BLIIOT-01';
 const configUrl = process.env.REDNODE_CONFIG_URL
   || `${String(process.env.APP_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')}/api/rednode/config`;
+const loggerCode = resolveLoggerCode();
 const configToken = process.env.REDNODE_CONFIG_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || '';
 const jsonOutput = process.argv.includes('--json');
 
@@ -16,6 +16,34 @@ const ports = [
   { pins: 'PIN 5-6', mapping: 'Pin 5 = B, Pin 6 = A', port: '/dev/ttyAS2' },
   { pins: 'PIN 7-8', mapping: 'Pin 7 = B, Pin 8 = A', port: '/dev/ttyAS3' },
 ];
+
+function argumentValue(name) {
+  const prefix = `${name}=`;
+  const inline = process.argv.find((arg) => arg.startsWith(prefix));
+  if (inline) {
+    return inline.slice(prefix.length);
+  }
+
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : '';
+}
+
+function resolveLoggerCode() {
+  const fromArgs = argumentValue('--logger-code') || argumentValue('--logger');
+  if (fromArgs) {
+    return fromArgs.trim();
+  }
+
+  if (process.env.REDNODE_LOGGER_CODE) {
+    return process.env.REDNODE_LOGGER_CODE.trim();
+  }
+
+  try {
+    return new URL(configUrl).searchParams.get('logger_code')?.trim() || '';
+  } catch (error) {
+    return '';
+  }
+}
 
 function numberEnv(name, fallback) {
   const value = Number(process.env[name]);
@@ -83,7 +111,9 @@ function httpJson(method, urlString, body = null, headers = {}) {
 
 async function fetchConfig() {
   const url = new URL(configUrl);
-  url.searchParams.set('logger_code', loggerCode);
+  if (loggerCode) {
+    url.searchParams.set('logger_code', loggerCode);
+  }
 
   const headers = configToken ? { Authorization: `Bearer ${configToken}` } : {};
   const data = await httpJson('GET', url.toString(), null, headers);

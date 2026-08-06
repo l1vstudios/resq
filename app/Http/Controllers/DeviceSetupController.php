@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConnectivityConfig;
+use App\Models\CanonicalObservation;
 use App\Models\DataLogger;
+use App\Models\DataLoggerDiscovery;
 use App\Models\DeviceCredential;
 use App\Models\MstPrefix;
 use App\Models\Project;
+use App\Models\RawDataIngestion;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Services\CanonicalMappingService;
@@ -18,6 +21,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 use phpseclib3\Net\SSH2;
 
 class DeviceSetupController extends Controller
@@ -42,7 +46,7 @@ class DeviceSetupController extends Controller
 
     public function storeDataLogger(Request $request): RedirectResponse
     {
-        $data = $request->validate([
+        $rules = [
             'monitoring_station_id' => ['nullable', 'exists:monitoring_stations,id'],
             'logger_code' => ['required', 'string', 'max:255'],
             'serial_number' => ['nullable', 'string', 'max:255'],
@@ -56,7 +60,13 @@ class DeviceSetupController extends Controller
             'remote_ssh_password' => ['nullable', 'string', 'max:255'],
             'remote_gateway_path' => ['nullable', 'string', 'max:255'],
             'logger_status' => ['required', 'string', 'max:50'],
-        ]);
+        ];
+
+        if (Schema::hasTable('data_logger_discoveries')) {
+            $rules['discovery_id'] = ['nullable', 'exists:data_logger_discoveries,id'];
+        }
+
+        $data = $request->validate($rules);
 
         $logger = DataLogger::where('logger_code', $data['logger_code'])->first();
 
@@ -64,7 +74,17 @@ class DeviceSetupController extends Controller
             unset($data['remote_ssh_password']);
         }
 
-        DataLogger::updateOrCreate(['logger_code' => $data['logger_code']], $data);
+        $discoveryId = $data['discovery_id'] ?? null;
+        unset($data['discovery_id']);
+
+        $logger = DataLogger::updateOrCreate(['logger_code' => $data['logger_code']], $data);
+
+        if ($discoveryId) {
+            DataLoggerDiscovery::whereKey($discoveryId)->update([
+                'matched_data_logger_id' => $logger->id,
+                'status' => 'Claimed',
+            ]);
+        }
 
         return back()->with('message', 'Data logger berhasil disimpan.');
     }
@@ -111,6 +131,137 @@ class DeviceSetupController extends Controller
         ], $ok ? 200 : 422);
     }
 
+    public function applyDataLoggerGatewayMode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'data_logger_id' => ['required', 'exists:data_loggers,id'],
+            'mode' => ['required', Rule::in(['development', 'production'])],
+        ]);
+
+        $logger = DataLogger::findOrFail($data['data_logger_id']);
+        $connectivity = $this->rednodeConnectivity($logger->logger_code)
+            ?: $this->ensureRednodeConnectivity($logger);
+        $appUrl = $this->rednodeModeAppUrl($data['mode'], $request);
+        $runtimeEnv = $this->rednodeExplicitRuntimeEnvArray($logger->logger_code, $appUrl, $data['mode']);
+        $terminalLog = [
+            '$ ssh ' . $this->rednodeSshLabel($connectivity),
+            '[web] Set gateway mode: ' . $data['mode'],
+            '[web] APP_URL=' . $appUrl,
+        ];
+
+        try {
+            $command = $this->rednodeApplyEnvCommand($logger, $runtimeEnv)
+                . ' && '
+                . $this->rednodeStopCommand($connectivity)
+                . ' && '
+                . $this->rednodeStartCommand($connectivity, $logger->logger_code, $appUrl, $runtimeEnv);
+            $output = trim($this->runRednodeSshCommand($connectivity, $command, 90));
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first() ?: 'Gagal mengubah mode gateway.';
+            $logger->update([
+                'remote_last_tested_at' => now(),
+                'remote_last_status' => 'Failed',
+                'remote_last_message' => $message,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $message,
+                'mode' => $data['mode'],
+                'app_url' => $appUrl,
+                'terminal_log' => array_merge($terminalLog, [$message]),
+            ], 422);
+        }
+
+        $terminalLog = array_merge($terminalLog, $this->rednodeTerminalOutputLines($output));
+        $this->updateRednodeRuntimeState($connectivity, 'start', true);
+        $logger->update([
+            'remote_last_tested_at' => now(),
+            'remote_last_status' => 'Success',
+            'remote_last_message' => 'Gateway mode ' . $data['mode'] . ' aktif: ' . $appUrl,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Gateway berhasil start mode ' . $data['mode'] . '.',
+            'mode' => $data['mode'],
+            'app_url' => $appUrl,
+            'output' => $output,
+            'terminal_log' => $terminalLog,
+        ]);
+    }
+
+    public function miniServer(): View
+    {
+        return view('modules.mini-server.index', [
+            'interfaces' => $this->localIpv4Interfaces(),
+            'dataLoggers' => DataLogger::query()
+                ->orderBy('logger_code')
+                ->get()
+                ->map(fn (DataLogger $logger) => [
+                    'id' => $logger->id,
+                    'logger_code' => $logger->logger_code,
+                    'device_label' => $logger->device_label,
+                    'remote_host' => $logger->remote_host,
+                ]),
+        ]);
+    }
+
+    public function miniServerScan(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'interface' => ['nullable', 'string', 'max:80'],
+            'cidr' => ['nullable', 'string', 'max:32'],
+            'timeout_ms' => ['nullable', 'integer', 'min:200', 'max:3000'],
+        ]);
+
+        $interfaces = collect($this->localIpv4Interfaces());
+        $selected = $interfaces->firstWhere('name', $data['interface'] ?? '')
+            ?? $interfaces->first();
+        $cidr = trim((string) ($data['cidr'] ?? ''));
+
+        if ($cidr === '' && $selected) {
+            $cidr = $selected['cidr'];
+        }
+
+        $range = $this->scanRangeFromCidr($cidr);
+        if (! $range) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Subnet LAN tidak valid atau interface IPv4 tidak ditemukan.',
+            ], 422);
+        }
+
+        $timeoutMs = (int) ($data['timeout_ms'] ?? 800);
+        $startedAt = microtime(true);
+        $aliveIps = $this->pingSweep($range['hosts'], $timeoutMs);
+        $arp = $this->arpTable();
+        $matches = $this->dataLoggerMatchesForIps($aliveIps);
+
+        $hosts = collect($aliveIps)
+            ->map(function (string $ip) use ($arp, $matches) {
+                $host = @gethostbyaddr($ip);
+
+                return [
+                    'ip' => $ip,
+                    'mac' => $arp[$ip] ?? null,
+                    'hostname' => $host && $host !== $ip ? $host : null,
+                    'logger_matches' => $matches[$ip] ?? [],
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'ok' => true,
+            'interface' => $selected,
+            'cidr' => $range['cidr'],
+            'host_count' => count($range['hosts']),
+            'active_count' => $hosts->count(),
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'hosts' => $hosts,
+        ]);
+    }
+
     public function storeConnectivity(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -142,13 +293,9 @@ class DeviceSetupController extends Controller
 
     public function storeRednodeSerialConfig(Request $request): RedirectResponse|JsonResponse
     {
-        $request->merge([
-            'rednode_ssh_port' => $request->input('rednode_ssh_port') === '' ? null : $request->input('rednode_ssh_port'),
-        ]);
-
         $data = $request->validate([
-            'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
-            'logger_code' => ['required', 'string', 'max:255'],
+            'data_logger_id' => ['required', 'exists:data_loggers,id'],
+            'logger_code' => ['nullable', 'string', 'max:255'],
             'serial_port' => ['required', 'string', 'max:255'],
             'baud_rate' => ['required', 'integer', 'min:300', 'max:1000000'],
             'data_bits' => ['required', 'integer', 'min:5', 'max:8'],
@@ -158,11 +305,6 @@ class DeviceSetupController extends Controller
             'pin_mapping' => ['nullable', 'string', 'max:255'],
             'monitored_sensor_ids' => ['nullable', 'array'],
             'monitored_sensor_ids.*' => ['integer', 'exists:sensors,id'],
-            'rednode_host' => ['nullable', 'string', 'max:255'],
-            'rednode_ssh_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'rednode_ssh_user' => ['nullable', 'string', 'max:255'],
-            'rednode_ssh_password' => ['nullable', 'string', 'max:255'],
-            'rednode_gateway_path' => ['nullable', 'string', 'max:255'],
             'rednode_poll_interval_seconds' => ['required', 'numeric', 'min:0.25', 'max:3600'],
         ]);
         $monitoredSensorIds = collect($data['monitored_sensor_ids'] ?? [])
@@ -174,25 +316,11 @@ class DeviceSetupController extends Controller
 
         if ($request->has('monitored_sensor_ids_present') && empty($monitoredSensorIds)) {
             throw ValidationException::withMessages([
-                'monitored_sensor_ids' => 'Pilih minimal satu sensor untuk dimonitor RedNode.',
+                'monitored_sensor_ids' => 'Pilih minimal satu sensor untuk dimonitor gateway.',
             ]);
         }
 
-        $logger = ! empty($data['data_logger_id'])
-            ? DataLogger::findOrFail($data['data_logger_id'])
-            : DataLogger::updateOrCreate(
-                ['logger_code' => $data['logger_code']],
-                [
-                    'logger_model' => 'RedNode Bliiot',
-                    'vendor' => 'Bliiot',
-                    'device_label' => $data['logger_code'],
-                    'logger_status' => 'Active',
-                ]
-            );
-
-        if ($logger->logger_code !== $data['logger_code']) {
-            $logger->update(['logger_code' => $data['logger_code']]);
-        }
+        $logger = DataLogger::findOrFail($data['data_logger_id']);
 
         $connectivityCode = 'SERIAL-' . $logger->logger_code;
         $existingConnectivity = ConnectivityConfig::where('connectivity_code', $connectivityCode)->first();
@@ -212,17 +340,9 @@ class DeviceSetupController extends Controller
                 'timeout_ms' => $data['timeout_ms'],
                 'pin_mapping' => $data['pin_mapping'] ?? null,
                 'monitored_sensor_ids' => $request->has('monitored_sensor_ids_present') ? $monitoredSensorIds : null,
-                'rednode_host' => ($data['rednode_host'] ?? null) ?: $logger->remote_host ?: env('REDNODE_SSH_HOST'),
-                'rednode_ssh_port' => ($data['rednode_ssh_port'] ?? null) ?: $logger->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22),
-                'rednode_ssh_user' => ($data['rednode_ssh_user'] ?? null) ?: $logger->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root'),
-                'rednode_gateway_path' => ($data['rednode_gateway_path'] ?? null) ?: $logger->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway'),
                 'rednode_poll_interval_ms' => (int) round(((float) $data['rednode_poll_interval_seconds']) * 1000),
                 'connectivity_status' => $existingConnectivity?->connectivity_status ?? 'Offline',
         ];
-
-        if (! empty($data['rednode_ssh_password'] ?? null) || $logger->remote_ssh_password) {
-            $connectivityValues['rednode_ssh_password'] = ($data['rednode_ssh_password'] ?? null) ?: $logger->remote_ssh_password;
-        }
 
         $connectivity = ConnectivityConfig::updateOrCreate(
             ['connectivity_code' => $connectivityCode],
@@ -232,7 +352,7 @@ class DeviceSetupController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Konfigurasi serial RedNode berhasil disimpan.',
+                'message' => 'Konfigurasi serial gateway berhasil disimpan.',
                 'rednode' => [
                     'logger_code' => $logger->logger_code,
                     'serial_port' => $connectivity->serial_port,
@@ -243,14 +363,14 @@ class DeviceSetupController extends Controller
                     'parity' => $connectivity->parity,
                     'timeout_ms' => $connectivity->timeout_ms,
                     'monitored_sensor_ids' => $connectivity->monitored_sensor_ids ?? [],
-                    'rednode_host' => $connectivity->rednode_host,
-                    'rednode_gateway_path' => $connectivity->rednode_gateway_path,
+                    'remote_host' => $logger->remote_host,
+                    'remote_gateway_path' => $logger->remote_gateway_path,
                     'rednode_poll_interval_ms' => $connectivity->rednode_poll_interval_ms,
                 ],
             ]);
         }
 
-        return back()->with('message', 'Konfigurasi serial RedNode berhasil disimpan.');
+        return back()->with('message', 'Konfigurasi serial gateway berhasil disimpan.');
     }
 
     public function storeCredential(Request $request): RedirectResponse
@@ -403,10 +523,29 @@ class DeviceSetupController extends Controller
             ], 403);
         }
 
-        $requestedLoggerCode = $request->query('logger_code', env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01'));
+        $device = $this->deviceMetadataFromRequest($request);
+        $requestedLoggerCode = trim((string) $request->query('logger_code', env('REDNODE_LOGGER_CODE', '')));
         $dataLogger = Schema::hasTable('data_loggers')
-            ? $this->resolveRednodeLogger($requestedLoggerCode)
+            ? $this->resolveRednodeLoggerForRequest($request, $requestedLoggerCode, $device)
             : null;
+
+        if (! $dataLogger && $requestedLoggerCode === '') {
+            $discovery = $this->recordDataLoggerDiscovery($request, $device);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Logger gateway belum dikenal. Cek Detected Gateway Devices di Data Loggers, lalu claim/simpan device ini.',
+                'request_ip' => $request->ip(),
+                'discovery_id' => $discovery?->id,
+                'device' => $device,
+            ], 422);
+        }
+
+        if ($dataLogger) {
+            $this->syncDataLoggerDeviceMetadata($dataLogger, $device, $request);
+            $this->recordDataLoggerDiscovery($request, $device, $dataLogger);
+        }
+
         $loggerCode = $dataLogger?->logger_code ?? $requestedLoggerCode;
         $serialConfig = $dataLogger && Schema::hasTable('connectivity_configs')
             ? ConnectivityConfig::where('data_logger_id', $dataLogger->id)
@@ -477,6 +616,9 @@ class DeviceSetupController extends Controller
                 'logger_code' => $dataLogger?->logger_code ?: $loggerCode,
                 'requested_logger_code' => $requestedLoggerCode,
                 'device_label' => $dataLogger?->device_label ?: 'RedNode Bliiot',
+                'serial_number' => $dataLogger?->serial_number,
+                'firmware_version' => $dataLogger?->firmware_version,
+                'logger_model' => $dataLogger?->logger_model,
             ],
             'serial' => [
                 'port' => $serialConfig?->serial_port ?: ($serialSettings['serial_port'] ?? ($serialConfig?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'))),
@@ -542,6 +684,214 @@ class DeviceSetupController extends Controller
             ->first();
     }
 
+    private function resolveRednodeLoggerForRequest(Request $request, string $loggerCode = '', array $device = []): ?DataLogger
+    {
+        if ($loggerCode !== '') {
+            return $this->resolveRednodeLogger($loggerCode);
+        }
+
+        $deviceLogger = $this->resolveRednodeLoggerByDevice($device);
+        if ($deviceLogger) {
+            return $deviceLogger;
+        }
+
+        $requestIp = trim((string) $request->ip());
+        $candidates = DataLogger::query()
+            ->where('logger_status', '!=', 'Inactive')
+            ->where('remote_host', $requestIp)
+            ->orderBy('logger_code')
+            ->latest()
+            ->get()
+            ->unique('id')
+            ->values();
+
+        if ($candidates->count() === 1) {
+            return $candidates->first();
+        }
+
+        if ($candidates->count() > 1) {
+            throw ValidationException::withMessages([
+                'logger_code' => 'Lebih dari satu Data Logger memakai IP / Host Remote ' . $requestIp . '. Kirim logger_code atau bedakan IP / Host Remote di Data Loggers.',
+            ]);
+        }
+
+        if (! Schema::hasTable('connectivity_configs')) {
+            return null;
+        }
+
+        $serialLoggers = ConnectivityConfig::with('dataLogger')
+            ->where(function ($query) {
+                $query->where('protocol', 'Modbus RTU')
+                    ->orWhereNotNull('serial_port');
+            })
+            ->whereHas('dataLogger', fn ($query) => $query->where('logger_status', '!=', 'Inactive'))
+            ->latest()
+            ->get()
+            ->pluck('dataLogger')
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        return $serialLoggers->count() === 1 ? $serialLoggers->first() : null;
+    }
+
+    private function resolveRednodeLoggerByDevice(array $device): ?DataLogger
+    {
+        $serialNumber = trim((string) ($device['serial_number'] ?? ''));
+        if ($serialNumber !== '') {
+            $matches = DataLogger::query()
+                ->where('logger_status', '!=', 'Inactive')
+                ->where('serial_number', $serialNumber)
+                ->orderBy('logger_code')
+                ->get();
+
+            if ($matches->count() === 1) {
+                return $matches->first();
+            }
+        }
+
+        $deviceUid = trim((string) ($device['device_uid'] ?? ''));
+        if ($deviceUid !== '' && Schema::hasTable('data_logger_discoveries')) {
+            $discovery = DataLoggerDiscovery::with('matchedDataLogger')
+                ->where('device_uid', $deviceUid)
+                ->whereNotNull('matched_data_logger_id')
+                ->latest('last_seen_at')
+                ->latest()
+                ->first();
+
+            if ($discovery?->matchedDataLogger && $discovery->matchedDataLogger->logger_status !== 'Inactive') {
+                return $discovery->matchedDataLogger;
+            }
+        }
+
+        return null;
+    }
+
+    private function deviceMetadataFromRequest(Request $request, array $payload = []): array
+    {
+        $source = array_merge($request->query(), $payload);
+        $header = fn (string $name) => trim((string) $request->header($name, ''));
+        $value = fn (string $key, string $headerName = '') => trim((string) ($source[$key] ?? ($headerName ? $header($headerName) : '')));
+        $macs = $source['mac_addresses'] ?? $header('X-Rednode-Mac-Addresses');
+
+        if (is_string($macs)) {
+            $macs = preg_split('/\s*,\s*/', $macs) ?: [];
+        }
+
+        return collect([
+            'device_uid' => $value('device_uid', 'X-Rednode-Device-Uid'),
+            'logger_code' => $value('logger_code', 'X-Rednode-Logger-Code'),
+            'serial_number' => $value('serial_number', 'X-Rednode-Serial-Number'),
+            'logger_model' => $value('logger_model', 'X-Rednode-Model'),
+            'vendor' => $value('vendor', 'X-Rednode-Vendor'),
+            'firmware_version' => $value('firmware_version', 'X-Rednode-Firmware-Version'),
+            'device_label' => $value('device_label', 'X-Rednode-Device-Label'),
+            'hostname' => $value('hostname', 'X-Rednode-Hostname'),
+            'gateway_version' => $value('gateway_version', 'X-Rednode-Gateway-Version'),
+            'platform' => $value('platform', 'X-Rednode-Platform'),
+            'mac_addresses' => collect($macs ?: [])->map(fn ($mac) => trim((string) $mac))->filter()->values()->all(),
+        ])->reject(fn ($item) => $item === '' || $item === [])
+            ->all();
+    }
+
+    private function recordDataLoggerDiscovery(Request $request, array $device, ?DataLogger $logger = null): ?DataLoggerDiscovery
+    {
+        if (! Schema::hasTable('data_logger_discoveries')) {
+            return null;
+        }
+
+        $requestIp = trim((string) $request->ip());
+        $reportedDeviceUid = trim((string) ($device['device_uid'] ?? ''));
+        $serialNumber = trim((string) ($device['serial_number'] ?? ''));
+
+        if ($reportedDeviceUid === '' && $serialNumber === '' && $requestIp === '') {
+            return null;
+        }
+
+        $query = DataLoggerDiscovery::query();
+        if ($reportedDeviceUid !== '') {
+            $query->where('device_uid', $reportedDeviceUid);
+        } elseif ($serialNumber !== '') {
+            $query->where('serial_number', $serialNumber);
+        } else {
+            $query->where('request_ip', $requestIp);
+        }
+
+        $discovery = $query->latest('last_seen_at')->latest()->first() ?: new DataLoggerDiscovery();
+        $deviceUid = $reportedDeviceUid ?: $this->fallbackRednodeDeviceUid($device, $logger, $requestIp);
+        $discovery->fill([
+            'matched_data_logger_id' => $logger?->id ?: $discovery->matched_data_logger_id,
+            'device_uid' => $deviceUid ?: $discovery->device_uid,
+            'logger_code' => ($device['logger_code'] ?? null) ?: $logger?->logger_code ?: $discovery->logger_code,
+            'serial_number' => $serialNumber ?: $discovery->serial_number,
+            'logger_model' => ($device['logger_model'] ?? null) ?: $discovery->logger_model,
+            'vendor' => ($device['vendor'] ?? null) ?: $discovery->vendor,
+            'firmware_version' => ($device['firmware_version'] ?? null) ?: $discovery->firmware_version,
+            'device_label' => ($device['device_label'] ?? null) ?: $discovery->device_label,
+            'hostname' => ($device['hostname'] ?? null) ?: $discovery->hostname,
+            'request_ip' => $requestIp ?: $discovery->request_ip,
+            'mac_addresses' => $device['mac_addresses'] ?? $discovery->mac_addresses,
+            'last_payload' => $device,
+            'last_seen_at' => now(),
+            'status' => $logger ? 'Matched' : ($discovery->status ?: 'Detected'),
+        ]);
+        $discovery->save();
+
+        return $discovery;
+    }
+
+    private function fallbackRednodeDeviceUid(array $device, ?DataLogger $logger, string $requestIp): string
+    {
+        $macs = collect($device['mac_addresses'] ?? [])
+            ->map(fn ($mac) => trim((string) $mac))
+            ->filter()
+            ->values()
+            ->all();
+
+        $parts = collect([
+            $device['serial_number'] ?? $logger?->serial_number,
+            $device['logger_code'] ?? $logger?->logger_code,
+            $device['hostname'] ?? null,
+            ...$macs,
+        ])->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->values();
+
+        if ($parts->isEmpty() && $requestIp !== '') {
+            $parts = collect(['ip', $requestIp]);
+        }
+
+        return $parts->isEmpty()
+            ? ''
+            : 'rn-web-' . substr(hash('sha1', $parts->implode('|')), 0, 16);
+    }
+
+    private function syncDataLoggerDeviceMetadata(DataLogger $logger, array $device, Request $request): void
+    {
+        $updates = [];
+
+        foreach ([
+            'serial_number',
+            'logger_model',
+            'vendor',
+            'device_label',
+        ] as $field) {
+            if (empty($logger->{$field}) && ! empty($device[$field])) {
+                $updates[$field] = $device[$field];
+            }
+        }
+
+        if (! empty($device['firmware_version']) && $logger->firmware_version !== $device['firmware_version']) {
+            $updates['firmware_version'] = $device['firmware_version'];
+        }
+
+        $updates['remote_last_tested_at'] = now();
+        $updates['remote_last_status'] = 'Success';
+        $updates['remote_last_message'] = 'Gateway heartbeat/config dari ' . $request->ip();
+
+        $logger->update($updates);
+    }
+
     public function rednodeHeartbeat(Request $request): JsonResponse
     {
         $callbackToken = env('REDNODE_CALLBACK_TOKEN') ?: env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN');
@@ -554,23 +904,45 @@ class DeviceSetupController extends Controller
         }
 
         $data = $request->validate([
-            'logger_code' => ['required', 'string', 'max:255'],
+            'data_logger_id' => ['nullable', 'integer', 'exists:data_loggers,id'],
+            'logger_code' => ['nullable', 'string', 'max:255'],
             'serial_port' => ['nullable', 'string', 'max:255'],
             'pin_mapping' => ['nullable', 'string', 'max:255'],
             'connected' => ['required', 'boolean'],
             'last_error' => ['nullable', 'string'],
             'sensors' => ['nullable', 'array'],
+            'device' => ['nullable', 'array'],
         ]);
+        $device = $this->deviceMetadataFromRequest($request, $data['device'] ?? []);
 
-        $logger = DataLogger::firstOrCreate(
-            ['logger_code' => $data['logger_code']],
-            [
-                'logger_model' => 'RedNode Bliiot',
-                'vendor' => 'Bliiot',
-                'device_label' => $data['logger_code'],
-                'logger_status' => 'Active',
-            ]
-        );
+        $logger = ! empty($data['data_logger_id'])
+            ? DataLogger::find($data['data_logger_id'])
+            : null;
+
+        if (! $logger && ! empty($data['logger_code'])) {
+            $logger = DataLogger::where('logger_code', $data['logger_code'])->first();
+        }
+
+        if (! $logger) {
+            $logger = $this->resolveRednodeLoggerForRequest($request, '', $device);
+        }
+
+        if (! $logger) {
+            $discovery = $this->recordDataLoggerDiscovery($request, $device);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Data Logger tidak ditemukan. Cek Detected Gateway Devices di Data Loggers, lalu claim/simpan device ini.',
+                'logger_code' => $data['logger_code'] ?? null,
+                'data_logger_id' => $data['data_logger_id'] ?? null,
+                'request_ip' => $request->ip(),
+                'discovery_id' => $discovery?->id,
+                'device' => $device,
+            ], 404);
+        }
+
+        $this->syncDataLoggerDeviceMetadata($logger, $device, $request);
+        $this->recordDataLoggerDiscovery($request, $device, $logger);
 
         $connectivity = ConnectivityConfig::firstOrCreate(
             ['connectivity_code' => 'SERIAL-' . $logger->logger_code],
@@ -592,6 +964,7 @@ class DeviceSetupController extends Controller
             'last_error' => $data['last_error'] ?? null,
             'last_payload' => [
                 'sensors' => $data['sensors'] ?? [],
+                'device' => $device,
                 'reported_at' => now()->toISOString(),
             ],
         ]);
@@ -606,8 +979,17 @@ class DeviceSetupController extends Controller
 
     public function rednodeStatus(Request $request): JsonResponse
     {
-        $loggerCode = $request->query('logger_code', env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01'));
-        $logger = DataLogger::where('logger_code', $loggerCode)->first();
+        $requestedLoggerCode = trim((string) $request->query('logger_code', env('REDNODE_LOGGER_CODE', '')));
+        $logger = $this->resolveRednodeLoggerForRequest($request, $requestedLoggerCode);
+        if (! $logger && $requestedLoggerCode === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Logger gateway belum dikenal. Cek Detected Gateway Devices di Data Loggers, lalu claim/simpan device ini.',
+                'request_ip' => $request->ip(),
+            ], 422);
+        }
+
+        $loggerCode = $logger?->logger_code ?? $requestedLoggerCode;
         $connectivity = $logger
             ? ConnectivityConfig::where('data_logger_id', $logger->id)
                 ->where(function ($query) {
@@ -657,6 +1039,8 @@ class DeviceSetupController extends Controller
             'ok' => true,
             'online' => (bool) $online,
             'logger_code' => $loggerCode,
+            'remote_host' => $logger?->remote_host,
+            'remote_gateway_path' => $logger?->remote_gateway_path,
             'serial_port' => $connectivity?->serial_port ?: $connectivity?->host_or_endpoint,
             'pin_mapping' => $connectivity?->pin_mapping,
             'connectivity_status' => $connectivity?->connectivity_status ?? 'Offline',
@@ -664,8 +1048,8 @@ class DeviceSetupController extends Controller
             'last_error' => $connectivity?->last_error,
             'last_payload' => $connectivity?->last_payload,
             'monitored_sensor_ids' => $selectedSensorIds,
-            'rednode_host' => $connectivity?->rednode_host,
-            'rednode_gateway_path' => $connectivity?->rednode_gateway_path,
+            'rednode_host' => $logger?->remote_host,
+            'rednode_gateway_path' => $logger?->remote_gateway_path,
             'rednode_poll_interval_ms' => $connectivity?->rednode_poll_interval_ms,
             'latest_readings' => $latestReadings,
         ]);
@@ -683,7 +1067,7 @@ class DeviceSetupController extends Controller
         if (! $connectivity) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Konfigurasi RedNode belum ditemukan. Apply konfigurasi dulu.',
+                'message' => 'Konfigurasi gateway belum ditemukan. Simpan konfigurasi serial dulu.',
             ], 422);
         }
 
@@ -693,13 +1077,13 @@ class DeviceSetupController extends Controller
             return response()->json([
                 'ok' => true,
                 'message' => $data['action'] === 'start'
-                    ? 'Perintah start dikirim via config. Gateway RedNode akan mulai saat polling config berikutnya.'
-                    : 'Perintah stop dikirim via config. Gateway RedNode akan berhenti polling sensor saat polling config berikutnya.',
+                    ? 'Perintah start dikirim via config. Gateway akan mulai saat polling config berikutnya.'
+                    : 'Perintah stop dikirim via config. Gateway akan berhenti polling sensor saat polling config berikutnya.',
                 'online' => $data['action'] === 'start',
                 'last_seen_at' => $connectivity->fresh()->last_seen_at?->toISOString(),
                 'output' => '',
                 'terminal_log' => [
-                    '[web] SSH RedNode belum lengkap, pakai mode config polling.',
+                    '[web] SSH gateway belum lengkap, pakai mode config polling.',
                     '[web] Gateway membaca perintah dari /api/rednode/config.',
                 ],
             ]);
@@ -720,8 +1104,8 @@ class DeviceSetupController extends Controller
         $terminalLog = array_merge($terminalLog, $this->rednodeTerminalOutputLines($result));
         $this->updateRednodeRuntimeState($connectivity, $data['action'], true);
         $message = $data['action'] === 'start'
-            ? 'Remote SSH berhasil restart bersih RedNode di logger.'
-            : 'Remote SSH berhasil menghentikan RedNode di logger.';
+            ? 'Remote SSH berhasil restart bersih gateway di logger.'
+            : 'Remote SSH berhasil menghentikan gateway di logger.';
 
         return response()->json([
             'ok' => true,
@@ -756,9 +1140,9 @@ class DeviceSetupController extends Controller
                     'logger_code' => $logger->logger_code,
                     'station' => $logger->monitoringStation?->station_code,
                     'ok' => false,
-                    'message' => 'Konfigurasi serial RedNode belum ditemukan.',
+                    'message' => 'Konfigurasi serial gateway belum ditemukan.',
                     'terminal_log' => [
-                        '[web] Konfigurasi serial RedNode belum ditemukan untuk logger ini.',
+                        '[web] Konfigurasi serial gateway belum ditemukan untuk logger ini.',
                     ],
                 ];
             }
@@ -771,10 +1155,10 @@ class DeviceSetupController extends Controller
                         'logger_code' => $logger->logger_code,
                         'station' => $logger->monitoringStation?->station_code,
                         'ok' => true,
-                        'message' => 'Perintah start dikirim via config. Gateway RedNode akan mulai saat polling config berikutnya.',
+                        'message' => 'Perintah start dikirim via config. Gateway akan mulai saat polling config berikutnya.',
                         'terminal_log' => [
                             '[web] Mulai monitoring logger ' . $logger->logger_code,
-                            '[web] SSH RedNode belum lengkap, pakai mode config polling.',
+                            '[web] SSH gateway belum lengkap, pakai mode config polling.',
                             '[web] Gateway membaca perintah dari /api/rednode/config.',
                         ],
                     ];
@@ -798,7 +1182,7 @@ class DeviceSetupController extends Controller
                     'logger_code' => $logger->logger_code,
                     'station' => $logger->monitoringStation?->station_code,
                     'ok' => true,
-                    'message' => 'Remote SSH berhasil. Gateway RedNode restart bersih dan mulai jalan.',
+                    'message' => 'Remote SSH berhasil. Gateway restart bersih dan mulai jalan.',
                     'terminal_log' => $terminalLog,
                 ];
             } catch (ValidationException $exception) {
@@ -863,9 +1247,9 @@ class DeviceSetupController extends Controller
                     'logger_code' => $logger->logger_code,
                     'station' => $logger->monitoringStation?->station_code,
                     'ok' => false,
-                    'message' => 'Konfigurasi serial RedNode belum ditemukan.',
+                    'message' => 'Konfigurasi serial gateway belum ditemukan.',
                     'terminal_log' => [
-                        '[web] Konfigurasi serial RedNode belum ditemukan untuk logger ini.',
+                        '[web] Konfigurasi serial gateway belum ditemukan untuk logger ini.',
                     ],
                 ];
             }
@@ -878,10 +1262,10 @@ class DeviceSetupController extends Controller
                         'logger_code' => $logger->logger_code,
                         'station' => $logger->monitoringStation?->station_code,
                         'ok' => true,
-                        'message' => 'Perintah stop dikirim via config. Gateway RedNode akan berhenti polling sensor saat polling config berikutnya.',
+                        'message' => 'Perintah stop dikirim via config. Gateway akan berhenti polling sensor saat polling config berikutnya.',
                         'terminal_log' => [
                             '[web] Stop monitoring logger ' . $logger->logger_code,
-                            '[web] SSH RedNode belum lengkap, pakai mode config polling.',
+                            '[web] SSH gateway belum lengkap, pakai mode config polling.',
                             '[web] Gateway membaca perintah dari /api/rednode/config.',
                         ],
                     ];
@@ -905,7 +1289,7 @@ class DeviceSetupController extends Controller
                     'logger_code' => $logger->logger_code,
                     'station' => $logger->monitoringStation?->station_code,
                     'ok' => true,
-                    'message' => 'Remote SSH berhasil menghentikan gateway RedNode.',
+                    'message' => 'Remote SSH berhasil menghentikan gateway.',
                     'terminal_log' => $terminalLog,
                 ];
             } catch (ValidationException $exception) {
@@ -1058,14 +1442,14 @@ class DeviceSetupController extends Controller
         if (! $connectivity) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Konfigurasi RedNode belum ditemukan. Apply konfigurasi dulu.',
+                'message' => 'Konfigurasi gateway belum ditemukan. Simpan konfigurasi serial dulu.',
             ], 422);
         }
 
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
+        $gatewayPath = $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
         $script = implode("\n", [
             'exec 2>&1',
             'echo "[preflight] user=$(whoami) host=$(hostname) pwd=$(pwd)"',
@@ -1088,7 +1472,7 @@ class DeviceSetupController extends Controller
                 'ok' => false,
                 'message' => $output === ''
                     ? 'SSH berhasil, tapi command test port tidak mengeluarkan output. Cek shell logger, path gateway, dan permission script.'
-                    : 'Output test port RedNode tidak valid.',
+                    : 'Output test port gateway tidak valid.',
                 'output' => $output,
             ], 422);
         }
@@ -1096,14 +1480,14 @@ class DeviceSetupController extends Controller
         if (($result['ok'] ?? false) !== true) {
             return response()->json([
                 'ok' => false,
-                'message' => $result['message'] ?? 'Test port RedNode gagal.',
+                'message' => $result['message'] ?? 'Test port gateway gagal.',
                 'output' => $output,
             ], 422);
         }
 
         return response()->json([
             'ok' => true,
-            'message' => 'Test port RedNode selesai.',
+            'message' => 'Test port gateway selesai.',
             'result' => $result,
         ]);
     }
@@ -1127,7 +1511,7 @@ class DeviceSetupController extends Controller
         if (! $connectivity) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Konfigurasi RedNode belum ditemukan. Apply konfigurasi dulu.',
+                'message' => 'Konfigurasi gateway belum ditemukan. Simpan konfigurasi serial dulu.',
             ], 422);
         }
 
@@ -1142,7 +1526,7 @@ class DeviceSetupController extends Controller
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
+        $gatewayPath = $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
         $nodeArgs = [
             '--json',
             '--start-slave=' . (int) $data['start_slave_id'],
@@ -1203,7 +1587,7 @@ class DeviceSetupController extends Controller
             $output = trim($this->runRednodeSshCommand($connectivity, $command, $timeoutSeconds));
         } catch (ValidationException $exception) {
             $rawMessage = collect($exception->errors())->flatten()->first()
-                ?: 'Command SSH RedNode gagal.';
+                ?: 'Command SSH gateway gagal.';
             $errorLines = $this->rednodeTerminalOutputLines($rawMessage);
             $message = collect($errorLines)->first(fn ($line) => str_contains($line, '[error]'))
                 ?: ($errorLines[0] ?? $rawMessage);
@@ -1234,7 +1618,7 @@ class DeviceSetupController extends Controller
                 'ok' => false,
                 'message' => $output === ''
                     ? 'SSH berhasil, tapi command scan tidak mengeluarkan output. Cek shell logger, path gateway, node, dan file test-pin-led.js.'
-                    : 'Output scan pin RedNode tidak valid.',
+                    : 'Output scan pin gateway tidak valid.',
                 'output' => $output,
                 'terminal_log' => array_merge($terminalLog, $output === '' ? ['[error] Command tidak mengeluarkan output.'] : []),
             ], 422);
@@ -1243,7 +1627,7 @@ class DeviceSetupController extends Controller
         if (($result['ok'] ?? false) !== true) {
             return response()->json([
                 'ok' => false,
-                'message' => $result['message'] ?? 'Scan pin RedNode gagal.',
+                'message' => $result['message'] ?? 'Scan pin gateway gagal.',
                 'result' => $result,
                 'output' => $output,
                 'terminal_log' => $terminalLog,
@@ -1258,7 +1642,7 @@ class DeviceSetupController extends Controller
 
         return response()->json([
             'ok' => true,
-            'message' => 'Scan pin RedNode selesai.',
+            'message' => 'Scan pin gateway selesai.',
             'result' => $result,
             'terminal_log' => $terminalLog,
             'gateway_restarted' => $request->boolean('stop_gateway'),
@@ -1398,14 +1782,35 @@ class DeviceSetupController extends Controller
             : null;
     }
 
+    private function ensureRednodeConnectivity(DataLogger $logger): ConnectivityConfig
+    {
+        $connectivity = ConnectivityConfig::firstOrCreate(
+            ['connectivity_code' => 'SERIAL-' . $logger->logger_code],
+            [
+                'data_logger_id' => $logger->id,
+                'communication_type' => 'RS485',
+                'protocol' => 'Modbus RTU',
+                'gateway_id' => $logger->logger_code,
+                'connectivity_status' => 'Offline',
+            ]
+        );
+
+        $connectivity->update([
+            'data_logger_id' => $logger->id,
+            'gateway_id' => $logger->logger_code,
+        ]);
+
+        return $connectivity->fresh('dataLogger');
+    }
+
     private function rednodeHasSshCredentials(ConnectivityConfig $connectivity): bool
     {
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $host = trim((string) ($connectivity->rednode_host ?: $logger?->remote_host ?: env('REDNODE_SSH_HOST')));
-        $user = trim((string) ($connectivity->rednode_ssh_user ?: $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root')));
-        $password = (string) ($connectivity->rednode_ssh_password ?: $logger?->remote_ssh_password ?: env('REDNODE_SSH_PASSWORD'));
+        $host = trim((string) ($logger?->remote_host ?: env('REDNODE_SSH_HOST')));
+        $user = trim((string) ($logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root')));
+        $password = (string) ($logger?->remote_ssh_password ?: env('REDNODE_SSH_PASSWORD'));
 
         return $host !== '' && $user !== '' && $password !== '';
     }
@@ -1437,14 +1842,14 @@ class DeviceSetupController extends Controller
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $host = $connectivity->rednode_host ?: $logger?->remote_host ?: env('REDNODE_SSH_HOST');
-        $port = (int) ($connectivity->rednode_ssh_port ?: $logger?->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22));
-        $user = $connectivity->rednode_ssh_user ?: $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root');
-        $password = $connectivity->rednode_ssh_password ?: $logger?->remote_ssh_password ?: env('REDNODE_SSH_PASSWORD');
+        $host = $logger?->remote_host ?: env('REDNODE_SSH_HOST');
+        $port = (int) ($logger?->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22));
+        $user = $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root');
+        $password = $logger?->remote_ssh_password ?: env('REDNODE_SSH_PASSWORD');
 
         if (! $host || ! $user || ! $password) {
             throw ValidationException::withMessages([
-                'rednode_ssh' => 'Isi RedNode Host, SSH User, dan SSH Password dulu.',
+                'rednode_ssh' => 'Isi IP / Host Remote, SSH User, dan SSH Password di Data Loggers dulu.',
             ]);
         }
 
@@ -1453,7 +1858,7 @@ class DeviceSetupController extends Controller
 
         if (! $ssh->login($user, $password)) {
             throw ValidationException::withMessages([
-                'rednode_ssh' => 'Login SSH ke RedNode gagal. Cek host, user, atau password.',
+                'rednode_ssh' => 'Login SSH ke gateway gagal. Cek host, user, atau password.',
             ]);
         }
 
@@ -1470,7 +1875,7 @@ class DeviceSetupController extends Controller
             $message = trim($output ?: '');
             $message .= ($message === '' ? '' : "\n")
                 . sprintf(
-                    'Command SSH RedNode belum selesai atau timeout. SSH berhasil login ke %s@%s:%s, tapi proses remote berhenti sebelum exit status diterima.',
+                    'Command SSH gateway belum selesai atau timeout. SSH berhasil login ke %s@%s:%s, tapi proses remote berhenti sebelum exit status diterima.',
                     $user,
                     $host,
                     $port
@@ -1487,7 +1892,7 @@ class DeviceSetupController extends Controller
             }
 
             $message = trim($output) ?: sprintf(
-                'Command SSH RedNode gagal. Exit code: %s. SSH berhasil login ke %s@%s:%s, tapi command di logger gagal tanpa output.',
+                'Command SSH gateway gagal. Exit code: %s. SSH berhasil login ke %s@%s:%s, tapi command di logger gagal tanpa output.',
                 $exitStatus,
                 $user,
                 $host,
@@ -1534,9 +1939,9 @@ class DeviceSetupController extends Controller
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $host = $connectivity->rednode_host ?: $logger?->remote_host ?: env('REDNODE_SSH_HOST') ?: '(host-belum-diisi)';
-        $port = (int) ($connectivity->rednode_ssh_port ?: $logger?->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22));
-        $user = $connectivity->rednode_ssh_user ?: $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root');
+        $host = $logger?->remote_host ?: env('REDNODE_SSH_HOST') ?: '(host-belum-diisi)';
+        $port = (int) ($logger?->remote_ssh_port ?: env('REDNODE_SSH_PORT', 22));
+        $user = $logger?->remote_ssh_user ?: env('REDNODE_SSH_USER', 'root');
 
         return $user . '@' . $host . ':' . $port;
     }
@@ -1613,13 +2018,13 @@ class DeviceSetupController extends Controller
         return $default;
     }
 
-    private function rednodeStartCommand(ConnectivityConfig $connectivity, string $loggerCode, ?string $appUrl = null): string
+    private function rednodeStartCommand(ConnectivityConfig $connectivity, string $loggerCode, ?string $appUrl = null, ?array $runtimeEnvOverride = null): string
     {
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
-        $runtimeEnv = $this->rednodeRuntimeEnvArray($loggerCode, $appUrl);
+        $gatewayPath = $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
+        $runtimeEnv = $runtimeEnvOverride ?: $this->rednodeRuntimeEnvArray($loggerCode, $appUrl);
         $exportCommands = collect($runtimeEnv)
             ->map(fn ($value, $key) => 'export ' . $key . '=' . escapeshellarg((string) $value))
             ->values()
@@ -1647,20 +2052,23 @@ class DeviceSetupController extends Controller
             'echo ' . escapeshellarg('$ export REDNODE_LOGGER_CODE=' . $runtimeEnv['REDNODE_LOGGER_CODE']),
             'echo ' . escapeshellarg('$ export APP_URL=' . $runtimeEnv['APP_URL']),
             ...$exportCommands,
-            ': > gateway.log',
+            'SAFE_LOGGER="$(printf "%s" "$REDNODE_LOGGER_CODE" | tr -c "A-Za-z0-9_.-" "_")"',
+            'GATEWAY_LOG="gateway-$SAFE_LOGGER.log"',
+            'GATEWAY_PID="gateway-$SAFE_LOGGER.pid"',
+            ': > "$GATEWAY_LOG"',
             'if [ -f package.json ] && [ -n "$NPM_BIN" ] && grep -q \'"gateway"\' package.json; then',
-            '  echo ' . escapeshellarg('$ npm run gateway'),
-            '  nohup "$NPM_BIN" run gateway >> gateway.log 2>&1 < /dev/null &',
+            '  echo ' . escapeshellarg('$ npm run gateway -- --logger-code "$REDNODE_LOGGER_CODE"'),
+            '  nohup "$NPM_BIN" run gateway -- --logger-code "$REDNODE_LOGGER_CODE" >> "$GATEWAY_LOG" 2>&1 < /dev/null &',
             'else',
-            '  echo ' . escapeshellarg('$ node gateway.js'),
-            '  nohup "$NODE_BIN" gateway.js >> gateway.log 2>&1 < /dev/null &',
+            '  echo ' . escapeshellarg('$ node gateway.js --logger-code "$REDNODE_LOGGER_CODE"'),
+            '  nohup "$NODE_BIN" gateway.js --logger-code "$REDNODE_LOGGER_CODE" >> "$GATEWAY_LOG" 2>&1 < /dev/null &',
             'fi',
-            'echo $! > gateway.pid',
+            'echo $! > "$GATEWAY_PID"',
             'echo "[web] menunggu output awal gateway..."',
             'sleep 4',
-            'if kill -0 "$(cat gateway.pid)" 2>/dev/null; then echo "started pid=$(cat gateway.pid) node=$NODE_BIN npm=${NPM_BIN:-not-found}"; echo "$ tail -n 40 gateway.log"; tail -n 40 gateway.log; exit 0; fi',
+            'if kill -0 "$(cat "$GATEWAY_PID")" 2>/dev/null; then echo "started pid=$(cat "$GATEWAY_PID") logger=$REDNODE_LOGGER_CODE node=$NODE_BIN npm=${NPM_BIN:-not-found}"; echo "$ tail -n 40 $GATEWAY_LOG"; tail -n 40 "$GATEWAY_LOG"; exit 0; fi',
             'echo "failed to start"',
-            'tail -n 40 gateway.log',
+            'tail -n 40 "$GATEWAY_LOG"',
             'exit 1',
         ]);
 
@@ -1689,17 +2097,80 @@ class DeviceSetupController extends Controller
         ];
     }
 
+    private function rednodeModeAppUrl(string $mode, Request $request): string
+    {
+        $configured = $mode === 'development'
+            ? ($this->rednodeSetting('REDNODE_DEVELOPMENT_APP_URL') ?: $request->getSchemeAndHttpHost())
+            : ($this->rednodeSetting('REDNODE_PRODUCTION_APP_URL')
+                ?: $this->rednodeSetting('REDNODE_PUBLIC_APP_URL')
+                ?: 'http://139.59.100.220');
+
+        return rtrim((string) $configured, '/');
+    }
+
+    private function rednodeExplicitRuntimeEnvArray(string $loggerCode, string $appUrl, string $mode): array
+    {
+        $appUrl = rtrim($appUrl, '/');
+
+        return [
+            'APP_URL' => $appUrl,
+            'REDNODE_ENV_MODE' => $mode,
+            'REDNODE_CONFIG_URL' => $appUrl . '/api/rednode/config',
+            'REDNODE_CALLBACK_URL' => $appUrl . '/api/realtime-sensor-status',
+            'REDNODE_HEARTBEAT_URL' => $appUrl . '/api/rednode/heartbeat',
+            'REDNODE_LOGGER_CODE' => $loggerCode,
+            'REDNODE_CONFIG_REFRESH_MS' => (string) env('REDNODE_CONFIG_REFRESH_MS', 5000),
+            'REDNODE_HTTP_TIMEOUT_MS' => (string) env('REDNODE_HTTP_TIMEOUT_MS', 10000),
+        ];
+    }
+
+    private function rednodeApplyEnvCommand(DataLogger $logger, array $runtimeEnv): string
+    {
+        $gatewayPath = $logger->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
+        $exportCommands = collect($runtimeEnv)
+            ->map(fn ($value, $key) => 'export ' . $key . '=' . escapeshellarg((string) $value))
+            ->values()
+            ->all();
+        $setCommands = collect(array_keys($runtimeEnv))
+            ->map(fn ($key) => 'set_env ' . escapeshellarg($key) . ' "$' . $key . '"')
+            ->values()
+            ->all();
+        $script = implode("\n", [
+            'echo "[web] update .env gateway"',
+            'echo ' . escapeshellarg('$ cd "$GATEWAY_DIR"'),
+            'cd "$GATEWAY_DIR" || { echo "[error] Gateway path tidak ditemukan: $GATEWAY_DIR"; exit 1; }',
+            'touch .env',
+            'cp .env ".env.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true',
+            'set_env() {',
+            '  KEY="$1"',
+            '  VALUE="$2"',
+            '  TMP=".env.tmp.$$"',
+            '  grep -v "^${KEY}=" .env > "$TMP" 2>/dev/null || true',
+            '  printf "%s=%s\n" "$KEY" "$VALUE" >> "$TMP"',
+            '  mv "$TMP" .env',
+            '}',
+            ...$exportCommands,
+            ...$setCommands,
+            'echo "[web] .env mode=$REDNODE_ENV_MODE app=$APP_URL logger=$REDNODE_LOGGER_CODE"',
+        ]);
+
+        return 'GATEWAY_DIR=' . escapeshellarg($gatewayPath) . ' sh -c ' . escapeshellarg($script);
+    }
+
     private function rednodeStopCommand(ConnectivityConfig $connectivity): string
     {
         $logger = $connectivity->relationLoaded('dataLogger')
             ? $connectivity->dataLogger
             : $connectivity->dataLogger()->first();
-        $gatewayPath = $connectivity->rednode_gateway_path ?: $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
+        $loggerCode = $logger?->logger_code ?: $connectivity->gateway_id ?: '';
+        $gatewayPath = $logger?->remote_gateway_path ?: env('REDNODE_GATEWAY_PATH', '/root/rednode-gateway');
         $script = implode("\n", [
-            'echo "[web] stop semua proses gateway lama jika ada"',
+            'echo "[web] stop proses gateway logger $REDNODE_LOGGER_CODE jika ada"',
             'echo ' . escapeshellarg('$ cd "$GATEWAY_DIR"'),
             'cd "$GATEWAY_DIR" || { echo "[error] Gateway path tidak ditemukan: $GATEWAY_DIR"; exit 1; }',
             'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"',
+            'SAFE_LOGGER="$(printf "%s" "$REDNODE_LOGGER_CODE" | tr -c "A-Za-z0-9_.-" "_")"',
+            'GATEWAY_PID="gateway-$SAFE_LOGGER.pid"',
             'STOPPED=0',
             'STOP_FILE="/tmp/resq-gateway-stopped.$$"',
             'rm -f "$STOP_FILE"',
@@ -1713,7 +2184,7 @@ class DeviceSetupController extends Controller
             '  CMD="$(ps -p "$PID" -o args= 2>/dev/null || true)"',
             '  [ -z "$CMD" ] && return',
             '  case "$CMD" in',
-            '    *"node gateway.js"*|*"node "*"gateway.js"*|*"npm run gateway"*|*"/npm "*"run gateway"*) ;;',
+            '    *"gateway.js"*"--logger-code $REDNODE_LOGGER_CODE"*|*"gateway.js"*"--logger-code=$REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code $REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code=$REDNODE_LOGGER_CODE"*) ;;',
             '    *) echo "skip pid=$PID cmd=$CMD"; return ;;',
             '  esac',
             '  kill "$PID" 2>/dev/null || true',
@@ -1723,25 +2194,27 @@ class DeviceSetupController extends Controller
             '  touch "$STOP_FILE"',
             '  echo "stopped pid=$PID"',
             '}',
-            'if [ -f gateway.pid ]; then',
-            '  echo ' . escapeshellarg('$ stop gateway.pid'),
-            '  PID="$(cat gateway.pid 2>/dev/null || true)"',
+            'if [ -f "$GATEWAY_PID" ]; then',
+            '  echo ' . escapeshellarg('$ stop "$GATEWAY_PID"'),
+            '  PID="$(cat "$GATEWAY_PID" 2>/dev/null || true)"',
             '  if kill -0 "$PID" 2>/dev/null; then stop_pid "$PID"; fi',
-            '  rm -f gateway.pid',
+            '  rm -f "$GATEWAY_PID"',
             'fi',
-            'echo ' . escapeshellarg('$ cari proses gateway lama'),
+            'echo ' . escapeshellarg('$ cari proses gateway logger ini'),
             'ps -eo pid=,args= 2>/dev/null | while IFS= read -r LINE; do',
             '  PID="$(echo "$LINE" | awk \'{print $1}\')"',
             '  CMD="${LINE#*$PID }"',
             '  case "$CMD" in',
-            '    *"node gateway.js"*|*"node "*"gateway.js"*|*"npm run gateway"*|*"/npm "*"run gateway"*) stop_pid "$PID" ;;',
+            '    *"gateway.js"*"--logger-code $REDNODE_LOGGER_CODE"*|*"gateway.js"*"--logger-code=$REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code $REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code=$REDNODE_LOGGER_CODE"*) stop_pid "$PID" ;;',
             '  esac',
             'done',
-            'if [ "$STOPPED" = "1" ] || [ -f "$STOP_FILE" ]; then echo "semua pid gateway lama sudah dihentikan"; else echo "not running"; fi',
+            'if [ "$STOPPED" = "1" ] || [ -f "$STOP_FILE" ]; then echo "pid gateway logger $REDNODE_LOGGER_CODE sudah dihentikan"; else echo "not running"; fi',
             'rm -f "$STOP_FILE"',
         ]);
 
-        return 'GATEWAY_DIR=' . escapeshellarg($gatewayPath) . ' sh -c ' . escapeshellarg($script);
+        return 'GATEWAY_DIR=' . escapeshellarg($gatewayPath)
+            . ' REDNODE_LOGGER_CODE=' . escapeshellarg($loggerCode)
+            . ' sh -c ' . escapeshellarg($script);
     }
 
     private function upsertTelemetryReading(array $data, ?int $telemetryId = null): TelemetryReading
@@ -1819,11 +2292,281 @@ class DeviceSetupController extends Controller
         return back()->with('message', 'Data berhasil dihapus.');
     }
 
+    private function localIpv4Interfaces(): array
+    {
+        $interfaces = PHP_OS_FAMILY === 'Darwin'
+            ? $this->darwinIpv4Interfaces()
+            : $this->linuxIpv4Interfaces();
+
+        if (! empty($interfaces)) {
+            return collect($interfaces)
+                ->unique(fn ($item) => $item['name'] . '-' . $item['ip'])
+                ->values()
+                ->all();
+        }
+
+        return collect(gethostbynamel(gethostname()) ?: [])
+            ->filter(fn ($ip) => filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && ! Str::startsWith($ip, '127.'))
+            ->map(fn ($ip) => $this->interfaceRow('host', $ip, 24))
+            ->values()
+            ->all();
+    }
+
+    private function linuxIpv4Interfaces(): array
+    {
+        $output = [];
+        @exec('ip -4 -o addr show scope global 2>/dev/null', $output);
+
+        return collect($output)
+            ->map(function (string $line) {
+                if (! preg_match('/^\d+:\s+([^ ]+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)\/(\d+)/', $line, $matches)) {
+                    return null;
+                }
+
+                return $this->interfaceRow($matches[1], $matches[2], (int) $matches[3]);
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function darwinIpv4Interfaces(): array
+    {
+        $output = [];
+        @exec('ifconfig 2>/dev/null', $output);
+
+        $interfaces = [];
+        $current = null;
+
+        foreach ($output as $line) {
+            if (preg_match('/^([a-zA-Z0-9_.-]+):\s+flags=/', $line, $matches)) {
+                $current = $matches[1];
+                continue;
+            }
+
+            if (! $current || ! preg_match('/\sinet\s+(\d+\.\d+\.\d+\.\d+)\s+netmask\s+(0x[0-9a-fA-F]+)/', $line, $matches)) {
+                continue;
+            }
+
+            $ip = $matches[1];
+            if (Str::startsWith($ip, '127.')) {
+                continue;
+            }
+
+            $interfaces[] = $this->interfaceRow($current, $ip, $this->prefixFromHexNetmask($matches[2]));
+        }
+
+        return $interfaces;
+    }
+
+    private function interfaceRow(string $name, string $ip, int $prefix): array
+    {
+        $scanPrefix = max($prefix, 24);
+        $cidr = $this->networkAddress($ip, $scanPrefix) . '/' . $scanPrefix;
+
+        return [
+            'name' => $name,
+            'ip' => $ip,
+            'prefix' => $prefix,
+            'cidr' => $cidr,
+            'label' => $name . ' - ' . $ip . '/' . $prefix,
+        ];
+    }
+
+    private function scanRangeFromCidr(string $cidr): ?array
+    {
+        if (! preg_match('/^(\d+\.\d+\.\d+\.\d+)\/(\d{1,2})$/', trim($cidr), $matches)) {
+            return null;
+        }
+
+        $ip = $matches[1];
+        $prefix = (int) $matches[2];
+        if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) || $prefix < 1 || $prefix > 32) {
+            return null;
+        }
+
+        $scanPrefix = max($prefix, 24);
+        $network = $this->networkAddress($ip, $scanPrefix);
+        $networkLong = $this->ipToUnsignedLong($network);
+        if ($networkLong === null) {
+            return null;
+        }
+
+        $size = 2 ** (32 - $scanPrefix);
+        $hosts = [];
+        $start = $size > 2 ? 1 : 0;
+        $end = $size > 2 ? $size - 2 : $size - 1;
+
+        for ($offset = $start; $offset <= $end && count($hosts) < 254; $offset++) {
+            $hosts[] = long2ip($networkLong + $offset);
+        }
+
+        return [
+            'cidr' => $network . '/' . $scanPrefix,
+            'hosts' => $hosts,
+        ];
+    }
+
+    private function pingSweep(array $ips, int $timeoutMs): array
+    {
+        $queue = array_values(array_filter($ips, fn ($ip) => filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)));
+        $running = [];
+        $alive = [];
+        $parallel = 48;
+        $deadlineSeconds = ($timeoutMs / 1000) + 0.7;
+
+        while ($queue || $running) {
+            while ($queue && count($running) < $parallel) {
+                $ip = array_shift($queue);
+                $process = @proc_open(
+                    $this->pingCommand($ip, $timeoutMs) . ' >/dev/null 2>&1',
+                    [
+                        0 => ['file', '/dev/null', 'r'],
+                        1 => ['file', '/dev/null', 'w'],
+                        2 => ['file', '/dev/null', 'w'],
+                    ],
+                    $pipes
+                );
+
+                if (is_resource($process)) {
+                    $running[$ip] = [
+                        'process' => $process,
+                        'started_at' => microtime(true),
+                    ];
+                }
+            }
+
+            foreach ($running as $ip => $item) {
+                $status = proc_get_status($item['process']);
+                if (! $status['running']) {
+                    $exitCode = $status['exitcode'];
+                    proc_close($item['process']);
+                    if ($exitCode === 0) {
+                        $alive[] = $ip;
+                    }
+                    unset($running[$ip]);
+                    continue;
+                }
+
+                if (microtime(true) - $item['started_at'] > $deadlineSeconds) {
+                    proc_terminate($item['process']);
+                    proc_close($item['process']);
+                    unset($running[$ip]);
+                }
+            }
+
+            usleep(20000);
+        }
+
+        return collect($alive)
+            ->sortBy(fn ($ip) => $this->ipToUnsignedLong($ip) ?? 0)
+            ->values()
+            ->all();
+    }
+
+    private function pingCommand(string $ip, int $timeoutMs): string
+    {
+        if (PHP_OS_FAMILY === 'Darwin') {
+            return 'ping -n -c 1 -W ' . (int) $timeoutMs . ' ' . escapeshellarg($ip);
+        }
+
+        return 'ping -n -c 1 -W ' . max(1, (int) ceil($timeoutMs / 1000)) . ' ' . escapeshellarg($ip);
+    }
+
+    private function arpTable(): array
+    {
+        $output = [];
+        @exec(PHP_OS_FAMILY === 'Darwin' ? 'arp -a 2>/dev/null' : 'ip neigh show 2>/dev/null', $output);
+        if (empty($output)) {
+            @exec('arp -n 2>/dev/null', $output);
+        }
+
+        $items = [];
+        foreach ($output as $line) {
+            if (! preg_match('/(\d+\.\d+\.\d+\.\d+)/', $line, $ipMatch)) {
+                continue;
+            }
+
+            preg_match('/([0-9a-fA-F]{1,2}(?::[0-9a-fA-F]{1,2}){5})/', $line, $macMatch);
+            if (! empty($macMatch[1])) {
+                $items[$ipMatch[1]] = strtolower($macMatch[1]);
+            }
+        }
+
+        return $items;
+    }
+
+    private function dataLoggerMatchesForIps(array $ips): array
+    {
+        if (empty($ips)) {
+            return [];
+        }
+
+        return DataLogger::query()
+            ->get()
+            ->flatMap(function (DataLogger $logger) {
+                $rows = [];
+                if (filter_var($logger->remote_host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $rows[] = [
+                        'ip' => $logger->remote_host,
+                        'source' => 'Data Logger',
+                        'logger_code' => $logger->logger_code,
+                        'device_label' => $logger->device_label,
+                    ];
+                }
+
+                return $rows;
+            })
+            ->filter(fn ($row) => in_array($row['ip'], $ips, true))
+            ->groupBy('ip')
+            ->map(fn ($rows) => $rows->values()->all())
+            ->all();
+    }
+
+    private function networkAddress(string $ip, int $prefix): string
+    {
+        $long = $this->ipToUnsignedLong($ip) ?? 0;
+        $mask = $prefix === 0 ? 0 : ((0xFFFFFFFF << (32 - $prefix)) & 0xFFFFFFFF);
+
+        return long2ip($long & $mask);
+    }
+
+    private function prefixFromHexNetmask(string $hex): int
+    {
+        $mask = hexdec(str_replace('0x', '', strtolower($hex)));
+        return substr_count(decbin($mask), '1');
+    }
+
+    private function ipToUnsignedLong(string $ip): ?int
+    {
+        $long = ip2long($ip);
+        return $long === false ? null : (int) sprintf('%u', $long);
+    }
+
     private function cleanupDataLoggerReferences(int $dataLoggerId): void
     {
-        Sensor::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
-        ConnectivityConfig::where('data_logger_id', $dataLoggerId)->delete();
-        DeviceCredential::where('data_logger_id', $dataLoggerId)->delete();
-        TelemetryReading::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
+        if (Schema::hasTable('sensors') && Schema::hasColumn('sensors', 'data_logger_id')) {
+            Sensor::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
+        }
+
+        if (Schema::hasTable('connectivity_configs')) {
+            ConnectivityConfig::where('data_logger_id', $dataLoggerId)->delete();
+        }
+
+        if (Schema::hasTable('device_credentials')) {
+            DeviceCredential::where('data_logger_id', $dataLoggerId)->delete();
+        }
+
+        if (Schema::hasTable('telemetry_readings') && Schema::hasColumn('telemetry_readings', 'data_logger_id')) {
+            TelemetryReading::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
+        }
+
+        if (Schema::hasTable('raw_data_ingestions') && Schema::hasColumn('raw_data_ingestions', 'data_logger_id')) {
+            RawDataIngestion::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
+        }
+
+        if (Schema::hasTable('canonical_observations') && Schema::hasColumn('canonical_observations', 'data_logger_id')) {
+            CanonicalObservation::where('data_logger_id', $dataLoggerId)->update(['data_logger_id' => null]);
+        }
     }
 }

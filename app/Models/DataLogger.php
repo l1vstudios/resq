@@ -48,6 +48,11 @@ class DataLogger extends Model
         return $this->hasMany(DeviceCredential::class);
     }
 
+    public function discoveries()
+    {
+        return $this->hasMany(DataLoggerDiscovery::class, 'matched_data_logger_id');
+    }
+
     public function sensors()
     {
         return $this->hasMany(Sensor::class);

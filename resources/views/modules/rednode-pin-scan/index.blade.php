@@ -72,12 +72,14 @@
 @php
     $dataLoggers = collect($dataLoggers ?? []);
     $connectivity = collect($connectivity ?? []);
-    $rednodeLoggerCode = env('REDNODE_LOGGER_CODE', 'REDNODE-BLIIOT-01');
-    $rednodeSerialConfig = $connectivity
-        ->first(fn ($item) => ($item['logger_id'] ?? null) === $rednodeLoggerCode && (($item['protocol'] ?? null) === 'Modbus RTU' || ! empty($item['serial_port'])))
+    $preferredRednodeLoggerCode = env('REDNODE_LOGGER_CODE') ?: '';
+    $rednodeSerialConfig = ($preferredRednodeLoggerCode
+        ? $connectivity->first(fn ($item) => ($item['logger_id'] ?? null) === $preferredRednodeLoggerCode && (($item['protocol'] ?? null) === 'Modbus RTU' || ! empty($item['serial_port'])))
+        : null)
         ?? $connectivity->first(fn ($item) => ($item['protocol'] ?? null) === 'Modbus RTU' || ! empty($item['serial_port']))
         ?? [];
-    $rednodeLoggerCode = $rednodeSerialConfig['logger_id'] ?? $rednodeLoggerCode;
+    $rednodeLoggerCode = ($rednodeSerialConfig['logger_id'] ?? null)
+        ?: ($preferredRednodeLoggerCode ?: ($dataLoggers->first()['id'] ?? ''));
     $ttyOptions = [
         ['pins' => 'PIN 1-2', 'mapping' => 'Pin 1 = B, Pin 2 = A', 'port' => '/dev/ttyAS4'],
         ['pins' => 'PIN 3-4', 'mapping' => 'Pin 3 = B, Pin 4 = A', 'port' => '/dev/ttyAS5'],

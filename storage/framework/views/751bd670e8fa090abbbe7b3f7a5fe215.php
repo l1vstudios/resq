@@ -1,34 +1,32 @@
-@extends('layouts.master')
+<?php $__env->startSection('title'); ?> Data Loggers <?php $__env->stopSection(); ?>
 
-@section('title') Data Loggers @endsection
+<?php $__env->startSection('content'); ?>
+<?php $__env->startComponent('components.breadcrumb'); ?>
+<?php $__env->slot('li_1'); ?> Device Setup <?php $__env->endSlot(); ?>
+<?php $__env->slot('title'); ?> Data Loggers <?php $__env->endSlot(); ?>
+<?php echo $__env->renderComponent(); ?>
 
-@section('content')
-@component('components.breadcrumb')
-@slot('li_1') Device Setup @endslot
-@slot('title') Data Loggers @endslot
-@endcomponent
-
-@php
+<?php
     $dataLoggers = collect($dataLoggers ?? config('resq_dummy.data_loggers'));
     $dataLoggerDiscoveries = collect($dataLoggerDiscoveries ?? []);
     $monitoringStations = collect($monitoringStations ?? []);
-@endphp
+?>
 
 <div class="row">
     <div class="col-xl-4">
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4">Data Logger Setup</h4>
-                <form method="POST" action="{{ route('data-loggers.store') }}" id="data-logger-form">
-                    @csrf
+                <form method="POST" action="<?php echo e(route('data-loggers.store')); ?>" id="data-logger-form">
+                    <?php echo csrf_field(); ?>
                     <input type="hidden" name="discovery_id">
                     <div class="mb-3">
                         <label class="form-label">Monitoring Station</label>
                         <select name="monitoring_station_id" class="form-select">
                             <option value="">-</option>
-                            @foreach ($monitoringStations->whereNotNull('db_id') as $station)
-                                <option value="{{ $station['db_id'] }}">{{ $station['id'] }} - {{ $station['name'] }}</option>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $monitoringStations->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $station): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <option value="<?php echo e($station['db_id']); ?>"><?php echo e($station['id']); ?> - <?php echo e($station['name']); ?></option>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -109,33 +107,33 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse ($dataLoggerDiscoveries as $discovery)
-                                @php
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $dataLoggerDiscoveries; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $discovery): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <?php
                                     $claimCode = $discovery['logger_code']
                                         ?: ($discovery['serial_number'] ?: ($discovery['hostname'] ?: 'DL-' . str_pad((string) $discovery['db_id'], 3, '0', STR_PAD_LEFT)));
-                                @endphp
+                                ?>
                                 <tr>
                                     <td>
-                                        <div class="fw-bold">{{ $discovery['device_label'] ?: $discovery['hostname'] ?: $claimCode }}</div>
-                                        <small class="text-muted d-block">{{ $discovery['serial_number'] ?: $discovery['device_uid'] ?: '-' }}</small>
-                                        @if (! empty($discovery['matched_logger_code']))
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle">{{ $discovery['matched_logger_code'] }}</span>
-                                        @else
-                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ $discovery['status'] ?? 'Detected' }}</span>
-                                        @endif
+                                        <div class="fw-bold"><?php echo e($discovery['device_label'] ?: $discovery['hostname'] ?: $claimCode); ?></div>
+                                        <small class="text-muted d-block"><?php echo e($discovery['serial_number'] ?: $discovery['device_uid'] ?: '-'); ?></small>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! empty($discovery['matched_logger_code'])): ?>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle"><?php echo e($discovery['matched_logger_code']); ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><?php echo e($discovery['status'] ?? 'Detected'); ?></span>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                     </td>
                                     <td>
-                                        <div>{{ $discovery['firmware_version'] ?: '-' }}</div>
-                                        <small class="text-muted">{{ $discovery['logger_model'] ?: '-' }}</small>
+                                        <div><?php echo e($discovery['firmware_version'] ?: '-'); ?></div>
+                                        <small class="text-muted"><?php echo e($discovery['logger_model'] ?: '-'); ?></small>
                                     </td>
                                     <td>
-                                        <div>{{ $discovery['request_ip'] ?: '-' }}</div>
-                                        <small class="text-muted">{{ $discovery['last_seen_at'] ?: '-' }}</small>
+                                        <div><?php echo e($discovery['request_ip'] ?: '-'); ?></div>
+                                        <small class="text-muted"><?php echo e($discovery['last_seen_at'] ?: '-'); ?></small>
                                     </td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-outline-primary btn-sm"
                                             data-edit-form="#data-logger-form"
-                                            data-edit-fields="{{ base64_encode(json_encode([
+                                            data-edit-fields="<?php echo e(base64_encode(json_encode([
                                                 'discovery_id' => $discovery['db_id'] ?? '',
                                                 'logger_code' => $claimCode,
                                                 'serial_number' => $discovery['serial_number'] ?? '',
@@ -148,14 +146,14 @@
                                                 'remote_ssh_user' => 'root',
                                                 'remote_gateway_path' => '/root/rednode-gateway',
                                                 'logger_status' => 'Active',
-                                            ])) }}">Use</button>
+                                            ]))); ?>">Use</button>
                                     </td>
                                 </tr>
-                            @empty
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 <tr>
                                     <td colspan="4" class="text-center text-muted">Belum ada gateway yang terdeteksi.</td>
                                 </tr>
-                            @endforelse
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -167,13 +165,13 @@
                 <h4 class="card-title mb-4">Test Remote Logger</h4>
                 <div class="mb-3">
                     <label class="form-label">Data Logger</label>
-                    <select class="form-select" id="remote-test-logger" @disabled($dataLoggers->whereNotNull('db_id')->isEmpty())>
-                        @foreach ($dataLoggers->whereNotNull('db_id') as $logger)
-                            <option value="{{ $logger['db_id'] }}">{{ $logger['id'] }} - {{ $logger['remote_host'] ?? 'IP belum diisi' }}</option>
-                        @endforeach
+                    <select class="form-select" id="remote-test-logger" <?php if($dataLoggers->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $dataLoggers->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $logger): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                            <option value="<?php echo e($logger['db_id']); ?>"><?php echo e($logger['id']); ?> - <?php echo e($logger['remote_host'] ?? 'IP belum diisi'); ?></option>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                     </select>
                 </div>
-                <button type="button" class="btn btn-outline-primary" id="remote-test-run" @disabled($dataLoggers->whereNotNull('db_id')->isEmpty())>
+                <button type="button" class="btn btn-outline-primary" id="remote-test-run" <?php if($dataLoggers->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>>
                     <i class="bx bx-wifi me-1"></i> Ping IP Logger
                 </button>
                 <div class="form-text">Ping hanya cek IP bisa dijangkau. Scan gateway tetap butuh SSH, Node.js, folder gateway, dan file script di logger.</div>
@@ -203,46 +201,46 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse ($dataLoggers as $logger)
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $dataLoggers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $logger): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                 <tr>
-                                    <td>{{ $logger['id'] ?? '-' }}</td>
-                                    <td>{{ $logger['monitoring_station_id'] ?? '-' }}</td>
-                                    <td>{{ $logger['serial_number'] ?? '-' }}</td>
+                                    <td><?php echo e($logger['id'] ?? '-'); ?></td>
+                                    <td><?php echo e($logger['monitoring_station_id'] ?? '-'); ?></td>
+                                    <td><?php echo e($logger['serial_number'] ?? '-'); ?></td>
                                     <td>
-                                        <div>{{ $logger['remote_host'] ?? '-' }}</div>
+                                        <div><?php echo e($logger['remote_host'] ?? '-'); ?></div>
                                         <small class="text-muted">
-                                            {{ $logger['remote_ssh_user'] ?? '-' }}@{{ $logger['remote_ssh_port'] ?? 22 }}
+                                            <?php echo e($logger['remote_ssh_user'] ?? '-'); ?>{{ $logger['remote_ssh_port'] ?? 22 }}
                                         </small>
                                     </td>
-                                    <td>{{ $logger['logger_model'] ?? '-' }}</td>
-                                    <td>{{ $logger['vendor'] ?? '-' }}</td>
-                                    <td>{{ $logger['firmware_version'] ?? '-' }}</td>
+                                    <td><?php echo e($logger['logger_model'] ?? '-'); ?></td>
+                                    <td><?php echo e($logger['vendor'] ?? '-'); ?></td>
+                                    <td><?php echo e($logger['firmware_version'] ?? '-'); ?></td>
                                     <td>
-                                        <span class="badge {{ ($logger['logger_status'] ?? '') === 'Active' ? 'bg-success' : 'bg-secondary' }}">{{ $logger['logger_status'] ?? '-' }}</span>
-                                        @if (! empty($logger['remote_last_status']))
-                                            <div><small class="{{ $logger['remote_last_status'] === 'Success' ? 'text-success' : 'text-danger' }}">{{ $logger['remote_last_status'] }}</small></div>
-                                        @endif
+                                        <span class="badge <?php echo e(($logger['logger_status'] ?? '') === 'Active' ? 'bg-success' : 'bg-secondary'); ?>"><?php echo e($logger['logger_status'] ?? '-'); ?></span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! empty($logger['remote_last_status'])): ?>
+                                            <div><small class="<?php echo e($logger['remote_last_status'] === 'Success' ? 'text-success' : 'text-danger'); ?>"><?php echo e($logger['remote_last_status']); ?></small></div>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                     </td>
                                     <td class="text-end">
-                                        @isset($logger['db_id'])
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(isset($logger['db_id'])): ?>
                                             <div class="d-inline-flex gap-1">
                                                 <button type="button" class="btn btn-outline-secondary btn-sm"
-                                                    data-logger-metadata="{{ base64_encode(json_encode($logger['metadata'] ?? [])) }}">
+                                                    data-logger-metadata="<?php echo e(base64_encode(json_encode($logger['metadata'] ?? []))); ?>">
                                                     Metadata
                                                 </button>
                                                 <button type="button" class="btn btn-outline-warning btn-sm"
                                                     data-gateway-mode="development"
-                                                    data-logger-id="{{ $logger['db_id'] }}">
+                                                    data-logger-id="<?php echo e($logger['db_id']); ?>">
                                                     Start Development
                                                 </button>
                                                 <button type="button" class="btn btn-outline-success btn-sm"
                                                     data-gateway-mode="production"
-                                                    data-logger-id="{{ $logger['db_id'] }}">
+                                                    data-logger-id="<?php echo e($logger['db_id']); ?>">
                                                     Start Production
                                                 </button>
                                                 <button type="button" class="btn btn-outline-primary btn-sm"
                                                     data-edit-form="#data-logger-form"
-                                                    data-edit-fields="{{ base64_encode(json_encode([
+                                                    data-edit-fields="<?php echo e(base64_encode(json_encode([
                                                         'discovery_id' => '',
                                                         'monitoring_station_id' => $logger['monitoring_station_db_id'] ?? '',
                                                         'logger_code' => $logger['id'] ?? '',
@@ -256,21 +254,21 @@
                                                         'remote_ssh_user' => $logger['remote_ssh_user'] ?? '',
                                                         'remote_gateway_path' => $logger['remote_gateway_path'] ?? '',
                                                         'logger_status' => $logger['logger_status'] ?? 'Active',
-                                                    ])) }}">Edit</button>
-                                                <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'data-logger', 'id' => $logger['db_id']]) }}">
-                                                    @csrf
-                                                    @method('DELETE')
+                                                    ]))); ?>">Edit</button>
+                                                <form method="POST" action="<?php echo e(route('device-setup.destroy', ['type' => 'data-logger', 'id' => $logger['db_id']])); ?>">
+                                                    <?php echo csrf_field(); ?>
+                                                    <?php echo method_field('DELETE'); ?>
                                                     <button class="btn btn-outline-danger btn-sm">Delete</button>
                                                 </form>
                                             </div>
-                                        @endisset
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                     </td>
                                 </tr>
-                            @empty
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 <tr>
                                     <td colspan="9" class="text-center text-muted">Belum ada data logger.</td>
                                 </tr>
-                            @endforelse
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -301,9 +299,9 @@
         </div>
     </div>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('script')
+<?php $__env->startSection('script'); ?>
 <script>
     (function () {
         const modalElement = document.getElementById('logger-metadata-modal');
@@ -423,12 +421,12 @@
                 setMessage('Mengubah .env logger ke mode ' + modeLabel + ' dan restart gateway via SSH...', 'info');
 
                 try {
-                    const response = await fetch(@json(route('data-loggers.gateway-mode')), {
+                    const response = await fetch(<?php echo json_encode(route('data-loggers.gateway-mode'), 15, 512) ?>, {
                         method: 'POST',
                         headers: {
                             'Accept': 'application/json',
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': @json(csrf_token()),
+                            'X-CSRF-TOKEN': <?php echo json_encode(csrf_token(), 15, 512) ?>,
                         },
                         body: JSON.stringify({
                             data_logger_id: loggerId,
@@ -474,12 +472,12 @@
             setMessage('Sedang ping IP logger dari server. Ini belum mengecek login SSH.', 'info');
 
             try {
-                const response = await fetch(@json(route('data-loggers.test-remote')), {
+                const response = await fetch(<?php echo json_encode(route('data-loggers.test-remote'), 15, 512) ?>, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': @json(csrf_token()),
+                        'X-CSRF-TOKEN': <?php echo json_encode(csrf_token(), 15, 512) ?>,
                     },
                     body: JSON.stringify({
                         data_logger_id: select.value,
@@ -501,4 +499,6 @@
         });
     })();
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.master', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Users/brainsoft/kerjaan/resq/resources/views/modules/data-loggers/index.blade.php ENDPATH**/ ?>

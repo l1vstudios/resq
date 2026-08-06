@@ -43,15 +43,15 @@
             <ul class="metismenu list-unstyled" id="side-menu">
                 <li class="menu-title">Project Configuration</li>
 
-                <li class="{{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : '' }}">
-                    <a href="{{ route('dashboard') }}" class="waves-effect {{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('dashboard')); ?>" class="waves-effect <?php echo e(request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'active' : ''); ?>">
                         <i class="bx bx-home-circle"></i>
                         <span>Dashboard</span>
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('monitoring.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('monitoring.index') }}" class="waves-effect {{ request()->routeIs('monitoring.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('monitoring.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('monitoring.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('monitoring.*') ? 'active' : ''); ?>">
                         <i class="bx bx-pulse"></i>
                         <span>Monitoring</span>
                     </a>
@@ -63,13 +63,13 @@
                         <span>Configuration</span>
                     </a>
                     <ul class="sub-menu mm-show" aria-expanded="true">
-                        <li class="{{ request()->routeIs('projects.index') ? 'mm-active' : '' }}">
-                            <a href="{{ route('projects.index') }}" class="{{ request()->routeIs('projects.index') ? 'active' : '' }}">
+                        <li class="<?php echo e(request()->routeIs('projects.index') ? 'mm-active' : ''); ?>">
+                            <a href="<?php echo e(route('projects.index')); ?>" class="<?php echo e(request()->routeIs('projects.index') ? 'active' : ''); ?>">
                                 Project Setup
                             </a>
                         </li>
-                        <li class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'mm-active' : '' }}">
-                            <a href="{{ route('canonical-database.index') }}" class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'active' : '' }}">
+                        <li class="<?php echo e(request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'mm-active' : ''); ?>">
+                            <a href="<?php echo e(route('canonical-database.index')); ?>" class="<?php echo e(request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'active' : ''); ?>">
                                 Canonical Database
                             </a>
                         </li>
@@ -84,17 +84,17 @@
                     </a>
                     <ul class="sub-menu mm-show" aria-expanded="true">
                         <li>
-                            <a href="{{ route('clusters.index') }}" class="{{ request()->routeIs('clusters.*') ? 'active' : '' }}">
+                            <a href="<?php echo e(route('clusters.index')); ?>" class="<?php echo e(request()->routeIs('clusters.*') ? 'active' : ''); ?>">
                                 Geospatial Workspace
                             </a>
                         </li>
                         <li>
-                            <a href="{{ route('monitoring-stations.index') }}" class="{{ request()->routeIs('monitoring-stations.*') ? 'active' : '' }}">
+                            <a href="<?php echo e(route('monitoring-stations.index')); ?>" class="<?php echo e(request()->routeIs('monitoring-stations.*') ? 'active' : ''); ?>">
                                 Monitoring Station
                             </a>
                         </li>
                         <li>
-                            <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
+                            <a href="<?php echo e(route('warning-stations.index')); ?>" class="<?php echo e(request()->routeIs('warning-stations.*') ? 'active' : ''); ?>">
                                 Warning Station
                             </a>
                         </li>
@@ -103,36 +103,36 @@
 
                 <li class="menu-title">Device Setup</li>
 
-                <li class="{{ request()->routeIs('mst-prefixes.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('mst-prefixes.index') }}" class="waves-effect {{ request()->routeIs('mst-prefixes.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('mst-prefixes.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('mst-prefixes.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('mst-prefixes.*') ? 'active' : ''); ?>">
                         <i class="bx bx-purchase-tag-alt"></i>
                         <span>Prefix Sensors</span>
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('modbus-configuration.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('modbus-configuration.index') }}" class="waves-effect {{ request()->routeIs('modbus-configuration.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('modbus-configuration.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('modbus-configuration.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('modbus-configuration.*') ? 'active' : ''); ?>">
                         <i class="bx bx-cog"></i>
                         <span>Modbus Configuration</span>
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('rednode-pin-scan.index') }}" class="waves-effect {{ request()->routeIs('rednode-pin-scan.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('rednode-pin-scan.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('rednode-pin-scan.*') ? 'active' : ''); ?>">
                         <i class="bx bx-search-alt-2"></i>
                         <span>RedNode Pin Scan</span>
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('data-loggers.index') }}" class="waves-effect {{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('data-loggers.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('data-loggers.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('data-loggers.*') ? 'active' : ''); ?>">
                         <i class="bx bx-data"></i>
                         <span>Data Loggers</span>
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('mini-server.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('mini-server.index') }}" class="waves-effect {{ request()->routeIs('mini-server.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('mini-server.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('mini-server.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('mini-server.*') ? 'active' : ''); ?>">
                         <i class="bx bx-server"></i>
                         <span>Mini Server</span>
                     </a>
@@ -140,15 +140,15 @@
 
                 <li class="menu-title">Telemetry</li>
 
-                <li class="{{ request()->routeIs('telemetry.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('telemetry.index') }}" class="waves-effect {{ request()->routeIs('telemetry.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('telemetry.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('telemetry.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('telemetry.*') ? 'active' : ''); ?>">
                         <i class="bx bx-broadcast"></i>
                         <span>Telemetry Configuration</span>
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('command-test.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('command-test.index') }}#command-test" class="waves-effect {{ request()->routeIs('command-test.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('command-test.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('command-test.index')); ?>#command-test" class="waves-effect <?php echo e(request()->routeIs('command-test.*') ? 'active' : ''); ?>">
                         <i class="bx bx-send"></i>
                         <span>Command Test</span>
                     </a>
@@ -156,8 +156,8 @@
 
                 <li class="menu-title">Administration</li>
 
-                <li class="{{ request()->routeIs('admins.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('admins.index') }}" class="waves-effect {{ request()->routeIs('admins.*') ? 'active' : '' }}">
+                <li class="<?php echo e(request()->routeIs('admins.*') ? 'mm-active' : ''); ?>">
+                    <a href="<?php echo e(route('admins.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('admins.*') ? 'active' : ''); ?>">
                         <i class="bx bx-user-circle"></i>
                         <span>Admin Management</span>
                     </a>
@@ -168,3 +168,4 @@
     </div>
 </div>
 <!-- Left Sidebar End -->
+<?php /**PATH /Users/brainsoft/kerjaan/resq/resources/views/layouts/sidebar.blade.php ENDPATH**/ ?>

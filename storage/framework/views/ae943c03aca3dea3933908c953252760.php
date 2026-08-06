@@ -34,7 +34,7 @@
 
     .topbar-logo-toggle .logo-lg img {
         height: 180px;
-        margin-top: 10px !important;
+        margin-top: 20px !important;
         max-width: 300px;
         object-fit: contain;
         width: auto;

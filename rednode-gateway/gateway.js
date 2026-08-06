@@ -1,7 +1,10 @@
 require('dotenv').config({ quiet: true });
 
+const crypto = require('crypto');
+const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const os = require('os');
 const mqtt = require('mqtt');
 const ModbusRTU = require('modbus-serial');
 
@@ -9,7 +12,8 @@ const configUrl = process.env.REDNODE_CONFIG_URL
   || `${String(process.env.APP_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')}/api/rednode/config`;
 const configToken = process.env.REDNODE_CONFIG_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || '';
 const callbackToken = process.env.REDNODE_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || '';
-const loggerCode = process.env.REDNODE_LOGGER_CODE || 'REDNODE-BLIIOT-01';
+const loggerCode = resolveLoggerCode();
+const deviceMetadata = buildDeviceMetadata();
 const configRefreshMs = numberEnv('REDNODE_CONFIG_REFRESH_MS', 5000);
 const loopTickMs = numberEnv('REDNODE_LOOP_TICK_MS', 250);
 const heartbeatMs = numberEnv('REDNODE_HEARTBEAT_MS', 1000);
@@ -24,9 +28,123 @@ let running = false;
 let sensorState = new Map();
 let lastHeartbeatAt = 0;
 
+function argumentValue(name) {
+  const prefix = `${name}=`;
+  const inline = process.argv.find((arg) => arg.startsWith(prefix));
+  if (inline) {
+    return inline.slice(prefix.length);
+  }
+
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : '';
+}
+
+function resolveLoggerCode() {
+  const fromArgs = argumentValue('--logger-code') || argumentValue('--logger');
+  if (fromArgs) {
+    return fromArgs.trim();
+  }
+
+  if (process.env.REDNODE_LOGGER_CODE) {
+    return process.env.REDNODE_LOGGER_CODE.trim();
+  }
+
+  try {
+    return new URL(configUrl).searchParams.get('logger_code')?.trim() || '';
+  } catch (error) {
+    return '';
+  }
+}
+
 function numberEnv(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function readText(path) {
+  try {
+    return fs.readFileSync(path, 'utf8').trim();
+  } catch (error) {
+    return '';
+  }
+}
+
+function packageVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(`${__dirname}/package.json`, 'utf8')).version || '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function osReleaseLabel() {
+  const text = readText('/etc/os-release');
+  const values = {};
+
+  text.split(/\r?\n/).forEach((line) => {
+    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (!match) {
+      return;
+    }
+
+    values[match[1]] = match[2].replace(/^["']|["']$/g, '');
+  });
+
+  return values.PRETTY_NAME || values.VERSION || values.VERSION_ID || `${os.type()} ${os.release()}`;
+}
+
+function macAddresses() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((item) => item && !item.internal && item.mac && item.mac !== '00:00:00:00:00:00')
+    .map((item) => item.mac.toLowerCase())
+    .filter((value, index, items) => items.indexOf(value) === index);
+}
+
+function stableDeviceUid(serialNumber, hostname, macs) {
+  const explicit = process.env.REDNODE_DEVICE_UID
+    || process.env.REDNODE_DEVICE_ID
+    || readText('/etc/rednode-device-id')
+    || '';
+  if (explicit.trim()) {
+    return explicit.trim();
+  }
+
+  const source = [serialNumber, hostname, ...macs].filter(Boolean).join('|');
+  return source
+    ? `rn-${crypto.createHash('sha1').update(source).digest('hex').slice(0, 16)}`
+    : '';
+}
+
+function buildDeviceMetadata() {
+  const hostname = os.hostname();
+  const macs = macAddresses();
+  const serialNumber = process.env.REDNODE_SERIAL_NUMBER
+    || process.env.REDNODE_DEVICE_SERIAL
+    || readText('/proc/device-tree/serial-number')
+    || '';
+
+  return {
+    device_uid: stableDeviceUid(serialNumber, hostname, macs),
+    logger_code: loggerCode,
+    serial_number: serialNumber,
+    logger_model: process.env.REDNODE_DEVICE_MODEL || process.env.REDNODE_LOGGER_MODEL || 'RedNode Bliiot',
+    vendor: process.env.REDNODE_DEVICE_VENDOR || 'Bliiot',
+    firmware_version: process.env.REDNODE_FIRMWARE_VERSION || osReleaseLabel(),
+    device_label: process.env.REDNODE_DEVICE_LABEL || hostname,
+    hostname,
+    gateway_version: packageVersion(),
+    platform: `${os.platform()} ${os.arch()} ${os.release()}`,
+    mac_addresses: macs,
+  };
+}
+
+function compactDeviceMetadata() {
+  return Object.fromEntries(
+    Object.entries(deviceMetadata).filter(([, value]) => (
+      Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== ''
+    ))
+  );
 }
 
 function normalizeFunctionCode(value, fallback = 'FC03') {
@@ -158,7 +276,18 @@ function httpJson(method, urlString, body = null, headers = {}) {
 
 async function fetchConfig() {
   const url = new URL(configUrl);
-  url.searchParams.set('logger_code', loggerCode);
+  const device = compactDeviceMetadata();
+  if (loggerCode) {
+    url.searchParams.set('logger_code', loggerCode);
+  }
+  Object.entries(device).forEach(([key, value]) => {
+    if (key === 'mac_addresses') {
+      url.searchParams.set(key, value.join(','));
+      return;
+    }
+
+    url.searchParams.set(key, String(value));
+  });
 
   const headers = configToken ? { Authorization: `Bearer ${configToken}` } : {};
   const data = await httpJson('GET', url.toString(), null, headers);
@@ -435,7 +564,9 @@ async function postHeartbeat(connected, lastError, sensors = []) {
   const headers = callbackToken ? { Authorization: `Bearer ${callbackToken}` } : {};
 
   await httpJson('POST', heartbeatUrl, {
-    logger_code: loggerCode,
+    data_logger_id: activeConfig?.logger?.id || activeConfig?.data_logger_id || null,
+    logger_code: activeConfig?.logger?.logger_code || activeConfig?.logger_code || loggerCode,
+    device: compactDeviceMetadata(),
     serial_port: serial.port,
     pin_mapping: serial.pin_mapping || '',
     connected,
@@ -566,6 +697,8 @@ async function pollDueSensors() {
 
 async function main() {
   console.log(`[rednode] config ${configUrl}`);
+  console.log(`[rednode] logger ${loggerCode || 'auto dari database'}`);
+  console.log(`[rednode] device ${deviceMetadata.device_uid || '-'} ${deviceMetadata.device_label || '-'} ${deviceMetadata.firmware_version || '-'}`);
   fetchConfig().catch((error) => {
     console.error(`[config] ${error.message}`);
     console.error('[config] menunggu server web bisa diakses, gateway tetap hidup dan akan retry otomatis');
