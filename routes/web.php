@@ -33,6 +33,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/canonical-database', [CanonicalDatabaseController::class, 'index'])->name('canonical-database.index');
     Route::post('/canonical-parameters', [CanonicalDatabaseController::class, 'storeParameter'])->name('canonical-parameters.store');
     Route::delete('/canonical-parameters/{parameter}', [CanonicalDatabaseController::class, 'destroyParameter'])->name('canonical-parameters.destroy');
+    Route::post('/sensor-mapping-presets', [CanonicalDatabaseController::class, 'storePreset'])->name('sensor-mapping-presets.store');
+    Route::delete('/sensor-mapping-presets/{preset}', [CanonicalDatabaseController::class, 'destroyPreset'])->name('sensor-mapping-presets.destroy');
     Route::post('/canonical-mapping', [CanonicalDatabaseController::class, 'storeMapping'])->name('canonical-mapping.store');
     Route::delete('/canonical-mapping/{profile}', [CanonicalDatabaseController::class, 'destroyMapping'])->name('canonical-mapping.destroy');
     Route::post('/project-workspaces', [ProjectSetupController::class, 'storeWorkspace'])->name('project-workspaces.store');

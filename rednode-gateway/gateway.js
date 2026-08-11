@@ -170,7 +170,7 @@ function unitSuffix(sensor) {
   return unit && unit !== '0' ? ` ${unit}` : '';
 }
 
-function weatherParameterLabel(parameter) {
+function parameterLabel(parameter) {
   return {
     temperature: 'Suhu',
     humidity: 'Kelembapan',
@@ -183,7 +183,7 @@ function weatherParameterLabel(parameter) {
   }[parameter] || String(parameter || '').replace(/_/g, ' ');
 }
 
-function weatherParameterUnit(parameter, sensor) {
+function parameterUnit(parameter, sensor) {
   const unit = {
     temperature: '°C',
     humidity: '%',
@@ -196,30 +196,6 @@ function weatherParameterUnit(parameter, sensor) {
   }[parameter] || String(sensor?.unit || '').trim();
 
   return unit && unit !== '0' ? ` ${unit}` : '';
-}
-
-function defaultWeatherParameters(sensor) {
-  const base = [
-    'temperature',
-    'humidity',
-    'pressure',
-    'wind_speed',
-    'wind_direction',
-    'rainfall',
-    'solar_radiation',
-    'battery_voltage',
-  ];
-  const hint = String(sensor?.parameter || sensor?.sensor_label || '').toLowerCase();
-
-  if (hint.includes('angin') || hint.includes('wind')) {
-    return ['wind_speed', 'wind_direction', ...base.filter((parameter) => !['wind_speed', 'wind_direction'].includes(parameter))];
-  }
-
-  if (hint.includes('hujan') || hint.includes('rain')) {
-    return ['rainfall', ...base.filter((parameter) => parameter !== 'rainfall')];
-  }
-
-  return base;
 }
 
 function httpJson(method, urlString, body = null, headers = {}) {
@@ -417,16 +393,14 @@ async function readSensor(sensor) {
 
 function valueFromRegisters(registers, sensor) {
   const dataType = String(sensor.data_type || 'uint16').toLowerCase();
+  const byteOrder = normalizeByteOrder(sensor.byte_order);
 
   if (dataType.includes('bool')) {
     return registers[0] ? 1 : 0;
   }
 
   if (dataType.includes('float') && registers.length >= 2) {
-    const buffer = Buffer.allocUnsafe(4);
-    buffer.writeUInt16BE(Number(registers[0]) & 0xffff, 0);
-    buffer.writeUInt16BE(Number(registers[1]) & 0xffff, 2);
-    const floatValue = buffer.readFloatBE(0);
+    const floatValue = bufferFromRegisters(registers, byteOrder).readFloatBE(0);
 
     if (Number(registers[1]) === 0 && Math.abs(floatValue) < 0.000001 && Number(registers[0]) !== 0) {
       return Number(registers[0]);
@@ -436,25 +410,55 @@ function valueFromRegisters(registers, sensor) {
   }
 
   if (dataType.includes('int32') && registers.length >= 2) {
-    const buffer = Buffer.allocUnsafe(4);
-    buffer.writeUInt16BE(Number(registers[0]) & 0xffff, 0);
-    buffer.writeUInt16BE(Number(registers[1]) & 0xffff, 2);
-    return buffer.readInt32BE(0);
+    return bufferFromRegisters(registers, byteOrder).readInt32BE(0);
   }
 
   if (dataType.includes('uint32') && registers.length >= 2) {
-    const buffer = Buffer.allocUnsafe(4);
-    buffer.writeUInt16BE(Number(registers[0]) & 0xffff, 0);
-    buffer.writeUInt16BE(Number(registers[1]) & 0xffff, 2);
-    return buffer.readUInt32BE(0);
+    return bufferFromRegisters(registers, byteOrder).readUInt32BE(0);
   }
 
   const raw = Number(registers[0] || 0);
   return dataType.includes('int16') && raw > 0x7fff ? raw - 0x10000 : raw;
 }
 
+function normalizeByteOrder(value) {
+  const order = String(value || 'ABCD').toUpperCase().replace(/[^ABCD]/g, '');
+
+  return ['ABCD', 'CDAB', 'BADC', 'DCBA'].includes(order) ? order : 'ABCD';
+}
+
+function bufferFromRegisters(registers, byteOrder = 'ABCD') {
+  const words = [
+    Number(registers[0] || 0) & 0xffff,
+    Number(registers[1] || 0) & 0xffff,
+  ];
+  const buffer = Buffer.allocUnsafe(4);
+
+  if (byteOrder === 'CDAB') {
+    buffer.writeUInt16BE(words[1], 0);
+    buffer.writeUInt16BE(words[0], 2);
+    return buffer;
+  }
+
+  if (byteOrder === 'BADC') {
+    buffer.writeUInt16LE(words[0], 0);
+    buffer.writeUInt16LE(words[1], 2);
+    return buffer;
+  }
+
+  if (byteOrder === 'DCBA') {
+    buffer.writeUInt16LE(words[1], 0);
+    buffer.writeUInt16LE(words[0], 2);
+    return buffer;
+  }
+
+  buffer.writeUInt16BE(words[0], 0);
+  buffer.writeUInt16BE(words[1], 2);
+  return buffer;
+}
+
 function evaluate(sensor, registers) {
-  const parameterValues = weatherValuesFromRegisters(registers, sensor);
+  const parameterValues = mappedValuesFromRegisters(registers, sensor);
   const raw = parameterValues.length ? parameterValues[0].raw : valueFromRegisters(registers, sensor);
   const scale = Number(sensor.scale_factor ?? 1);
   const offset = Number(sensor.offset ?? 0);
@@ -477,40 +481,62 @@ function evaluate(sensor, registers) {
   };
 }
 
-function weatherValuesFromRegisters(registers, sensor) {
+function mappedValuesFromRegisters(registers, sensor) {
+  const configured = Array.isArray(sensor.mapped_parameters) && sensor.mapped_parameters.length
+    ? sensor.mapped_parameters
+    : legacyWeatherParameters(sensor);
+
+  if (!configured.length || !registers.length) {
+    return [];
+  }
+
+  return configured.map((mapping, fallbackIndex) => {
+    const parameter = mapping.parameter || mapping.canonical_field || mapping;
+    const registerIndex = Number.isInteger(Number(mapping.register_index))
+      ? Math.max(Number(mapping.register_index), 0)
+      : fallbackIndex;
+    const dataLength = Math.max(Number(mapping.data_length || 1), 1);
+    const registerSlice = registers.slice(registerIndex, registerIndex + dataLength);
+    const raw = valueFromRegisters(registerSlice.length ? registerSlice : [registers[registerIndex] || 0], {
+      ...sensor,
+      data_type: mapping.data_type || sensor.data_type,
+      byte_order: mapping.byte_order || sensor.byte_order,
+    });
+    const scale = Number(mapping.scale_factor ?? sensor.scale_factor ?? 1);
+    const offset = Number(mapping.offset ?? sensor.offset ?? 0);
+    const safeScale = Number.isFinite(scale) ? scale : 1;
+    const safeOffset = Number.isFinite(offset) ? offset : 0;
+    const value = (raw * safeScale) + safeOffset;
+    const unit = String(mapping.canonical_unit || mapping.source_unit || '').trim();
+
+    return {
+      parameter,
+      label: mapping.label || parameterLabel(parameter),
+      source_parameter: mapping.source_parameter || parameter,
+      register_address: mapping.register_address ?? null,
+      register_index: registerIndex,
+      raw,
+      registers: registerSlice,
+      value,
+      unit,
+      requirements: mapping.requirements || null,
+      datasheet_source_url: mapping.datasheet_source_url || null,
+      datasheet_reference: mapping.datasheet_reference || null,
+      value_text: `${Number(value).toFixed(2)}${unit ? ` ${unit}` : parameterUnit(parameter, sensor)}`,
+    };
+  });
+}
+
+function legacyWeatherParameters(sensor) {
   if (sensor.sensor_type !== 'weather_station' && sensor.type !== 'weather_station') {
     return [];
   }
 
-  const configured = Array.isArray(sensor.weather_parameters)
-    ? sensor.weather_parameters.filter(Boolean)
+  // Kompatibilitas data lama: tetap hanya memakai daftar eksplisit dari database,
+  // tidak membuat default wind_speed / wind_direction sendiri di gateway.
+  return Array.isArray(sensor.weather_parameters)
+    ? sensor.weather_parameters.filter(Boolean).map((parameter, index) => ({ parameter, register_index: index }))
     : [];
-  const parameters = [
-    ...configured,
-    ...defaultWeatherParameters(sensor).filter((parameter) => !configured.includes(parameter)),
-  ].slice(0, Math.max(registers.length, configured.length, 1));
-
-  if (!parameters.length || !registers.length) {
-    return [];
-  }
-
-  const scale = Number(sensor.scale_factor ?? 1);
-  const offset = Number(sensor.offset ?? 0);
-  const safeScale = Number.isFinite(scale) ? scale : 1;
-  const safeOffset = Number.isFinite(offset) ? offset : 0;
-
-  return parameters.map((parameter, index) => {
-    const raw = Number(registers[index] || 0);
-    const value = (raw * safeScale) + safeOffset;
-
-    return {
-      parameter,
-      label: weatherParameterLabel(parameter),
-      raw,
-      value,
-      value_text: `${Number(value).toFixed(2)}${weatherParameterUnit(parameter, sensor)}`,
-    };
-  });
 }
 
 function registerRowsForHeartbeat(sensor, registers) {
@@ -544,7 +570,11 @@ async function postTelemetry(sensor, result) {
     sensor_id: sensor.sensor_id,
     data_logger_id: activeConfig?.logger?.id || null,
     value: result.value_text,
+    raw_value: String(result.raw ?? ''),
+    numeric_value: result.value,
+    registers: result.registers || [],
     parameter_values: result.parameter_values || [],
+    observed_at: new Date().toISOString(),
     ...(result.threshold_exceeded !== null ? { threshold_exceeded: result.threshold_exceeded } : {}),
   };
   const headers = callbackToken ? { Authorization: `Bearer ${callbackToken}` } : {};
@@ -590,6 +620,7 @@ function publishTelemetry(sensor, result) {
     sensor_label: sensor.sensor_label,
     sensor_type: sensor.sensor_type || sensor.type,
     parameter: sensor.parameter,
+    mapped_parameters: sensor.mapped_parameters || [],
     weather_parameters: sensor.weather_parameters || [],
     data_logger_id: activeConfig?.logger?.id || null,
     value: result.value,
@@ -639,6 +670,7 @@ async function pollDueSensors() {
           sensor_label: sensor.sensor_label,
           sensor_type: sensor.sensor_type || sensor.type,
           parameter: sensor.parameter,
+          mapped_parameters: sensor.mapped_parameters || [],
           weather_parameters: sensor.weather_parameters || [],
           address: Number(sensor.address || 0),
           quantity: registers.length,
@@ -666,6 +698,7 @@ async function pollDueSensors() {
           sensor_label: sensor.sensor_label,
           sensor_type: sensor.sensor_type || sensor.type,
           parameter: sensor.parameter,
+          mapped_parameters: sensor.mapped_parameters || [],
           weather_parameters: sensor.weather_parameters || [],
           address: Number(sensor.address || 0),
           quantity: Number(sensor.quantity || 1),

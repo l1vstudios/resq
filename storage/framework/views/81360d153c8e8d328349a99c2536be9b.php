@@ -1,10 +1,9 @@
-@extends('layouts.master')
-@section('title') Canonical Database @endsection
+<?php $__env->startSection('title'); ?> Canonical Database <?php $__env->stopSection(); ?>
 
-@section('css')
-<link href="{{ URL::asset('build/libs/datatables.net-bs4/css/dataTables.bootstrap4.min.css') }}" rel="stylesheet" type="text/css" />
-<link href="{{ URL::asset('build/libs/datatables.net-buttons-bs4/css/buttons.bootstrap4.min.css') }}" rel="stylesheet" type="text/css" />
-<link href="{{ URL::asset('build/libs/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css') }}" rel="stylesheet" type="text/css" />
+<?php $__env->startSection('css'); ?>
+<link href="<?php echo e(URL::asset('build/libs/datatables.net-bs4/css/dataTables.bootstrap4.min.css')); ?>" rel="stylesheet" type="text/css" />
+<link href="<?php echo e(URL::asset('build/libs/datatables.net-buttons-bs4/css/buttons.bootstrap4.min.css')); ?>" rel="stylesheet" type="text/css" />
+<link href="<?php echo e(URL::asset('build/libs/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css')); ?>" rel="stylesheet" type="text/css" />
 <style>
     .nav-tabs-custom .nav-item .nav-link.active {
         color: #556ee6;
@@ -39,13 +38,13 @@
     .badge-rdp { background-color: #34c38f; }
     .badge-ppc { background-color: #f1b44c; }
 </style>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('content')
-@component('components.breadcrumb')
-    @slot('li_1') Configuration @endslot
-    @slot('title') Canonical Database @endslot
-@endcomponent
+<?php $__env->startSection('content'); ?>
+<?php $__env->startComponent('components.breadcrumb'); ?>
+    <?php $__env->slot('li_1'); ?> Configuration <?php $__env->endSlot(); ?>
+    <?php $__env->slot('title'); ?> Canonical Database <?php $__env->endSlot(); ?>
+<?php echo $__env->renderComponent(); ?>
 
 <div class="row">
     <div class="col-12">
@@ -95,33 +94,33 @@
                     <!-- DOMAINS TAB -->
                     <div class="tab-pane active" id="domains" role="tabpanel">
                         <div class="row mt-4">
-                            @foreach($canonicalDomains as $key => $domain)
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalDomains; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $key => $domain): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <div class="col-md-4 mb-4">
-                                <div class="card h-100 canonical-domain-card domain-{{ $key }} shadow-sm">
+                                <div class="card h-100 canonical-domain-card domain-<?php echo e($key); ?> shadow-sm">
                                     <div class="card-body">
                                         <div class="d-flex align-items-center mb-3">
                                             <div class="avatar-sm me-3">
-                                                <span class="avatar-title rounded-circle canonical-domain-icon domain-icon-{{ $key }}">
-                                                    @if($key == 'meteorology') <i class="bx bx-cloud-light-rain"></i>
-                                                    @elseif($key == 'hydrology') <i class="bx bx-water"></i>
-                                                    @else <i class="bx bx-landscape"></i> @endif
+                                                <span class="avatar-title rounded-circle canonical-domain-icon domain-icon-<?php echo e($key); ?>">
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($key == 'meteorology'): ?> <i class="bx bx-cloud-light-rain"></i>
+                                                    <?php elseif($key == 'hydrology'): ?> <i class="bx bx-water"></i>
+                                                    <?php else: ?> <i class="bx bx-landscape"></i> <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                                 </span>
                                             </div>
-                                            <h5 class="font-size-15 mb-0">{{ $domain['title'] }}</h5>
+                                            <h5 class="font-size-15 mb-0"><?php echo e($domain['title']); ?></h5>
                                         </div>
-                                        <p class="text-muted">{{ $domain['description'] }}</p>
+                                        <p class="text-muted"><?php echo e($domain['description']); ?></p>
                                         <div class="mt-4">
                                             <h6 class="font-size-13 mb-3">Parameter Groups:</h6>
                                             <div class="d-flex flex-wrap gap-2">
-                                                @foreach($domain['groups'] as $group)
-                                                <span class="badge bg-light text-dark">{{ $group }}</span>
-                                                @endforeach
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $domain['groups']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                <span class="badge bg-light text-dark"><?php echo e($group); ?></span>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </div>
 
                         <div class="alert alert-info mt-3" role="alert">
@@ -143,8 +142,8 @@
                                             <h5 class="mb-0">Master Parameter</h5>
                                             <button type="button" class="btn btn-sm btn-outline-secondary" data-reset-form="#canonical-parameter-form">Reset</button>
                                         </div>
-                                        <form method="POST" action="{{ route('canonical-parameters.store') }}" id="canonical-parameter-form">
-                                            @csrf
+                                        <form method="POST" action="<?php echo e(route('canonical-parameters.store')); ?>" id="canonical-parameter-form">
+                                            <?php echo csrf_field(); ?>
                                             <input type="hidden" name="canonical_parameter_id">
                                             <div class="mb-3">
                                                 <label class="form-label">Parameter Name</label>
@@ -263,40 +262,40 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($canonicalParameters as $param)
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalParameters; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $param): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                             <tr>
-                                                <td><strong>{{ is_array($param) ? $param['field_identity'] : $param->field_identity }}</strong></td>
-                                                <td><span class="badge bg-info text-uppercase">{{ is_array($param) ? $param['domain'] : $param->domain }}</span></td>
-                                                <td>{{ is_array($param) ? $param['canonical_unit'] : $param->canonical_unit }}</td>
+                                                <td><strong><?php echo e(is_array($param) ? $param['field_identity'] : $param->field_identity); ?></strong></td>
+                                                <td><span class="badge bg-info text-uppercase"><?php echo e(is_array($param) ? $param['domain'] : $param->domain); ?></span></td>
+                                                <td><?php echo e(is_array($param) ? $param['canonical_unit'] : $param->canonical_unit); ?></td>
                                                 <td>
-                                                    @php
+                                                    <?php
                                                         $origin = is_array($param)
                                                             ? $param['origin']
                                                             : ($param->is_platform_processed ? 'PPC' : 'RDM');
                                                         $badgeClass = str_contains($origin, 'RDM') ? 'badge-rdm' : (str_contains($origin, 'RDP') ? 'badge-rdp' : 'badge-ppc');
-                                                    @endphp
-                                                    <span class="badge {{ $badgeClass }}">{{ $origin }}</span>
+                                                    ?>
+                                                    <span class="badge <?php echo e($badgeClass); ?>"><?php echo e($origin); ?></span>
                                                 </td>
-                                                <td><span class="badge bg-{{ (is_array($param) ? ($param['status'] ?? 'active') : $param->status) === 'active' ? 'success' : 'secondary' }}">{{ is_array($param) ? ($param['status'] ?? 'active') : ucfirst($param->status) }}</span></td>
-                                                <td>{{ is_array($param) ? $param['definition'] : $param->definition }}</td>
+                                                <td><span class="badge bg-<?php echo e((is_array($param) ? ($param['status'] ?? 'active') : $param->status) === 'active' ? 'success' : 'secondary'); ?>"><?php echo e(is_array($param) ? ($param['status'] ?? 'active') : ucfirst($param->status)); ?></span></td>
+                                                <td><?php echo e(is_array($param) ? $param['definition'] : $param->definition); ?></td>
                                                 <td>
-                                                    @php
+                                                    <?php
                                                         $requirements = is_array($param) ? ($param['input_requirements'] ?? []) : ($param->input_requirements ?? []);
                                                         $sourceUrl = $requirements['source_url'] ?? null;
                                                         $sourceReference = $requirements['source_reference'] ?? null;
-                                                    @endphp
-                                                    @if($sourceUrl)
-                                                        <a href="{{ $sourceUrl }}" target="_blank" rel="noopener">{{ $sourceReference ?: 'Datasheet' }}</a>
-                                                    @else
+                                                    ?>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($sourceUrl): ?>
+                                                        <a href="<?php echo e($sourceUrl); ?>" target="_blank" rel="noopener"><?php echo e($sourceReference ?: 'Datasheet'); ?></a>
+                                                    <?php else: ?>
                                                         <span class="text-muted">-</span>
-                                                    @endif
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                                 </td>
                                                 <td class="text-end">
-                                                    @if(! is_array($param))
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! is_array($param)): ?>
                                                         <div class="d-inline-flex gap-1">
                                                             <button type="button" class="btn btn-outline-primary btn-sm"
                                                                 data-edit-form="#canonical-parameter-form"
-                                                                data-edit-fields="{{ base64_encode(json_encode([
+                                                                data-edit-fields="<?php echo e(base64_encode(json_encode([
                                                                     'canonical_parameter_id' => $param->id,
                                                                     'field_identity' => $param->field_identity,
                                                                     'definition' => $param->definition,
@@ -314,17 +313,17 @@
                                                                     'source_url' => $param->input_requirements['source_url'] ?? null,
                                                                     'source_reference' => $param->input_requirements['source_reference'] ?? null,
                                                                     'source_note' => $param->input_requirements['source_note'] ?? null,
-                                                                ])) }}">Edit</button>
-                                                            <form method="POST" action="{{ route('canonical-parameters.destroy', $param->id) }}">
-                                                                @csrf
-                                                                @method('DELETE')
+                                                                ]))); ?>">Edit</button>
+                                                            <form method="POST" action="<?php echo e(route('canonical-parameters.destroy', $param->id)); ?>">
+                                                                <?php echo csrf_field(); ?>
+                                                                <?php echo method_field('DELETE'); ?>
                                                                 <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
                                                             </form>
                                                         </div>
-                                                    @endif
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                                 </td>
                                             </tr>
-                                            @endforeach
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                         </tbody>
                                     </table>
                                 </div>
@@ -346,8 +345,8 @@
                                             <button type="button" class="btn btn-sm btn-outline-secondary" id="reset-preset-form">Reset</button>
                                         </div>
 
-                                        <form method="POST" action="{{ route('sensor-mapping-presets.store') }}" id="sensor-preset-form">
-                                            @csrf
+                                        <form method="POST" action="<?php echo e(route('sensor-mapping-presets.store')); ?>" id="sensor-preset-form">
+                                            <?php echo csrf_field(); ?>
                                             <input type="hidden" name="preset_id" id="preset_id">
 
                                             <div class="mb-3">
@@ -423,9 +422,9 @@
                                 <div class="card border">
                                     <div class="card-body">
                                         <h5 class="mb-3">Saved Presets</h5>
-                                        @if(empty($sensorPresets))
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(empty($sensorPresets)): ?>
                                             <div class="alert alert-info mb-0">Belum ada sensor preset. Buat preset pertama dari form di sebelah kiri.</div>
-                                        @else
+                                        <?php else: ?>
                                             <div class="table-responsive">
                                                 <table class="table table-bordered dt-responsive nowrap w-100 datatable">
                                                     <thead class="table-light">
@@ -438,8 +437,8 @@
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        @foreach($sensorPresets as $preset)
-                                                            @php
+                                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $sensorPresets; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $preset): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                            <?php
                                                                 $presetEditFields = [
                                                                     'preset_id' => $preset['id'],
                                                                     'label' => $preset['label'],
@@ -450,46 +449,48 @@
                                                                     'status' => $preset['status'],
                                                                     'items' => $preset['parameters'],
                                                                 ];
-                                                            @endphp
+                                                            ?>
                                                             <tr>
                                                                 <td>
-                                                                    <strong>{{ $preset['label'] }}</strong>
-                                                                    <div class="small text-muted">{{ $preset['manufacturer'] ?: '-' }}</div>
+                                                                    <strong><?php echo e($preset['label']); ?></strong>
+                                                                    <div class="small text-muted"><?php echo e($preset['manufacturer'] ?: '-'); ?></div>
                                                                 </td>
-                                                                <td>{{ $preset['device_model'] ?: '-' }}</td>
+                                                                <td><?php echo e($preset['device_model'] ?: '-'); ?></td>
                                                                 <td>
                                                                     <div class="d-flex flex-wrap gap-1">
-                                                                        @foreach($preset['parameters'] as $item)
+                                                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $preset['parameters']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                                                             <span class="badge bg-light text-dark">
-                                                                                {{ $item['field_identity'] }} +{{ $item['register_offset'] }} {{ $item['value_type'] ? '(' . $item['value_type'] . ')' : '' }}
+                                                                                <?php echo e($item['field_identity']); ?> +<?php echo e($item['register_offset']); ?> <?php echo e($item['value_type'] ? '(' . $item['value_type'] . ')' : ''); ?>
+
                                                                             </span>
-                                                                        @endforeach
+                                                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                                                     </div>
                                                                 </td>
                                                                 <td>
-                                                                    <span class="badge bg-{{ $preset['status'] === 'active' ? 'success' : 'secondary' }}">
-                                                                        {{ ucfirst($preset['status']) }}
+                                                                    <span class="badge bg-<?php echo e($preset['status'] === 'active' ? 'success' : 'secondary'); ?>">
+                                                                        <?php echo e(ucfirst($preset['status'])); ?>
+
                                                                     </span>
                                                                 </td>
                                                                 <td class="text-end">
-                                                                    @if($preset['id'])
+                                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($preset['id']): ?>
                                                                         <div class="d-inline-flex gap-1">
                                                                             <button type="button" class="btn btn-outline-primary btn-sm"
-                                                                                data-edit-preset="{{ base64_encode(json_encode($presetEditFields)) }}">Edit</button>
-                                                                            <form method="POST" action="{{ route('sensor-mapping-presets.destroy', $preset['id']) }}">
-                                                                                @csrf
-                                                                                @method('DELETE')
+                                                                                data-edit-preset="<?php echo e(base64_encode(json_encode($presetEditFields))); ?>">Edit</button>
+                                                                            <form method="POST" action="<?php echo e(route('sensor-mapping-presets.destroy', $preset['id'])); ?>">
+                                                                                <?php echo csrf_field(); ?>
+                                                                                <?php echo method_field('DELETE'); ?>
                                                                                 <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
                                                                             </form>
                                                                         </div>
-                                                                    @endif
+                                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                                                 </td>
                                                             </tr>
-                                                        @endforeach
+                                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                                     </tbody>
                                                 </table>
                                             </div>
-                                        @endif
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -597,11 +598,11 @@
                             </div>
                         </div>
 
-                        @if($sensorMappingProfiles->isEmpty())
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($sensorMappingProfiles->isEmpty()): ?>
                         <div class="alert alert-warning">
                             No mapping profiles available yet. The mapping connects Raw Data parameters to Canonical Parameters.
                         </div>
-                        @else
+                        <?php else: ?>
                         <div class="table-responsive">
                             <table class="table table-bordered dt-responsive nowrap w-100 datatable">
                                 <thead class="table-light">
@@ -616,52 +617,56 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($sensorMappingProfiles as $profile)
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $sensorMappingProfiles; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $profile): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                     <tr>
-                                        <td>{{ $profile->sensor ? $profile->sensor->sensor_code : 'N/A' }}</td>
-                                        <td><span class="text-danger">{{ $profile->source_parameter }}</span></td>
-                                        <td>{{ $profile->source_unit }}</td>
-                                        <td>x{{ $profile->scale_factor }} +{{ $profile->offset }}</td>
+                                        <td><?php echo e($profile->sensor ? $profile->sensor->sensor_code : 'N/A'); ?></td>
+                                        <td><span class="text-danger"><?php echo e($profile->source_parameter); ?></span></td>
+                                        <td><?php echo e($profile->source_unit); ?></td>
+                                        <td>x<?php echo e($profile->scale_factor); ?> +<?php echo e($profile->offset); ?></td>
                                          <td>
-                                            <span class="text-success fw-bold">{{ $profile->canonicalParameter ? $profile->canonicalParameter->field_identity : 'N/A' }}</span>
-                                                    @if($profile->canonicalParameter && $profile->canonicalParameter->input_requirements)
-                                                @php
+                                            <span class="text-success fw-bold"><?php echo e($profile->canonicalParameter ? $profile->canonicalParameter->field_identity : 'N/A'); ?></span>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($profile->canonicalParameter && $profile->canonicalParameter->input_requirements): ?>
+                                                <?php
                                                     $req = $profile->canonicalParameter->input_requirements;
-                                                @endphp
+                                                ?>
                                                 <div class="small text-muted mt-1">
-                                                    @if(($req['min_value'] ?? null) !== null || ($req['max_value'] ?? null) !== null)
-                                                        Range: {{ $req['min_value'] ?? '?' }} - {{ $req['max_value'] ?? '?' }} {{ $profile->canonicalParameter->canonical_unit }}
-                                                    @endif
-                                                    @if(($req['resolution'] ?? null) !== null)
-                                                        <br/>Res: {{ $req['resolution'] }}
-                                                    @endif
-                                                    @if(($req['accuracy'] ?? null) !== null)
-                                                        <br/>Acc: {{ $req['accuracy'] }}
-                                                    @endif
-                                                    @if(! empty($req['source_url']))
-                                                        <br/><a href="{{ $req['source_url'] }}" target="_blank" rel="noopener">{{ $req['source_reference'] ?? 'Datasheet' }}</a>
-                                                    @endif
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(($req['min_value'] ?? null) !== null || ($req['max_value'] ?? null) !== null): ?>
+                                                        Range: <?php echo e($req['min_value'] ?? '?'); ?> - <?php echo e($req['max_value'] ?? '?'); ?> <?php echo e($profile->canonicalParameter->canonical_unit); ?>
+
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(($req['resolution'] ?? null) !== null): ?>
+                                                        <br/>Res: <?php echo e($req['resolution']); ?>
+
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(($req['accuracy'] ?? null) !== null): ?>
+                                                        <br/>Acc: <?php echo e($req['accuracy']); ?>
+
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! empty($req['source_url'])): ?>
+                                                        <br/><a href="<?php echo e($req['source_url']); ?>" target="_blank" rel="noopener"><?php echo e($req['source_reference'] ?? 'Datasheet'); ?></a>
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                                 </div>
-                                            @endif
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                          </td>
                                         <td>
-                                            <span class="badge bg-{{ $profile->status == 'active' ? 'success' : 'secondary' }}">
-                                                {{ ucfirst($profile->status) }}
+                                            <span class="badge bg-<?php echo e($profile->status == 'active' ? 'success' : 'secondary'); ?>">
+                                                <?php echo e(ucfirst($profile->status)); ?>
+
                                             </span>
                                         </td>
                                         <td class="text-end">
-                                            <form method="POST" action="{{ route('canonical-mapping.destroy', $profile->id) }}" class="d-inline">
-                                                @csrf
-                                                @method('DELETE')
+                                            <form method="POST" action="<?php echo e(route('canonical-mapping.destroy', $profile->id)); ?>" class="d-inline">
+                                                <?php echo csrf_field(); ?>
+                                                <?php echo method_field('DELETE'); ?>
                                                 <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
                                             </form>
                                         </td>
                                     </tr>
-                                    @endforeach
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
                     <!-- OBSERVATIONS TAB -->
@@ -673,11 +678,11 @@
                             </button>
                         </div>
 
-                        @if($canonicalObservations->isEmpty())
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canonicalObservations->isEmpty()): ?>
                         <div class="alert alert-info">
                             Canonical observations store the harmonized data based on the domain. No data available yet.
                         </div>
-                        @else
+                        <?php else: ?>
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped dt-responsive nowrap w-100 datatable">
                                 <thead class="table-light">
@@ -691,52 +696,53 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($canonicalObservations as $obs)
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalObservations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $obs): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                     <tr>
-                                        <td>{{ $obs->observed_at->format('Y-m-d H:i:s') }}</td>
-                                        <td><span class="badge bg-info text-uppercase">{{ $obs->domain }}</span></td>
+                                        <td><?php echo e($obs->observed_at->format('Y-m-d H:i:s')); ?></td>
+                                        <td><span class="badge bg-info text-uppercase"><?php echo e($obs->domain); ?></span></td>
                                         <td>
-                                            {{ $obs->monitoringStation ? $obs->monitoringStation->station_code : 'N/A' }}<br>
-                                            <small class="text-muted">{{ $obs->sensor ? $obs->sensor->sensor_code : 'N/A' }}</small>
+                                            <?php echo e($obs->monitoringStation ? $obs->monitoringStation->station_code : 'N/A'); ?><br>
+                                            <small class="text-muted"><?php echo e($obs->sensor ? $obs->sensor->sensor_code : 'N/A'); ?></small>
                                         </td>
                                         <td>
-                                            @php
+                                            <?php
                                                 $fields = is_string($obs->field_values) ? json_decode($obs->field_values, true) : $obs->field_values;
                                                 $units = is_string($obs->field_units) ? json_decode($obs->field_units, true) : $obs->field_units;
                                                 $count = 0;
-                                            @endphp
-                                            @if($fields && is_array($fields))
-                                                @foreach($fields as $key => $val)
-                                                    @if($count < 3)
+                                            ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($fields && is_array($fields)): ?>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $fields; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $key => $val): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($count < 3): ?>
                                                         <div class="mb-1">
-                                                            <strong>{{ $key }}:</strong> {{ $val }} {{ $units[$key] ?? '' }}
+                                                            <strong><?php echo e($key); ?>:</strong> <?php echo e($val); ?> <?php echo e($units[$key] ?? ''); ?>
+
                                                         </div>
-                                                    @endif
-                                                    @php $count++; @endphp
-                                                @endforeach
-                                                @if(count($fields) > 3)
-                                                    <span class="badge bg-light text-dark">+ {{ count($fields) - 3 }} more</span>
-                                                @endif
-                                            @endif
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                    <?php $count++; ?>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(count($fields) > 3): ?>
+                                                    <span class="badge bg-light text-dark">+ <?php echo e(count($fields) - 3); ?> more</span>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                         </td>
                                         <td>
-                                            @if($obs->quality_status == 'valid')
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($obs->quality_status == 'valid'): ?>
                                                 <span class="badge bg-success">Valid</span>
-                                            @elseif($obs->quality_status == 'suspect')
+                                            <?php elseif($obs->quality_status == 'suspect'): ?>
                                                 <span class="badge bg-warning">Suspect</span>
-                                            @else
-                                                <span class="badge bg-danger">{{ ucfirst($obs->quality_status) }}</span>
-                                            @endif
+                                            <?php else: ?>
+                                                <span class="badge bg-danger"><?php echo e(ucfirst($obs->quality_status)); ?></span>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                         </td>
                                         <td>
                                             <button class="btn btn-sm btn-primary" title="View Detail"><i class="mdi mdi-eye"></i></button>
                                         </td>
                                     </tr>
-                                    @endforeach
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
 
@@ -753,25 +759,25 @@
                 <h5 class="modal-title" id="addMappingProfileModalLabel">Add Sensor Mapping Profile</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ route('canonical-mapping.store') }}" method="POST">
-                @csrf
+            <form action="<?php echo e(route('canonical-mapping.store')); ?>" method="POST">
+                <?php echo csrf_field(); ?>
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="sensor_id" class="form-label">Sensor (Raw Identity) <span class="text-danger">*</span></label>
                             <select class="form-select" id="sensor_id" name="sensor_id" required>
                                 <option value="">Select Sensor</option>
-                                @foreach($sensors as $sensor)
-                                    <option value="{{ $sensor->id }}"
-                                        data-slave-id="{{ $sensor->slave_id }}"
-                                        data-address="{{ $sensor->address }}"
-                                        data-parameter="{{ $sensor->parameter }}"
-                                        data-unit="{{ $sensor->unit }}"
-                                        data-scale-factor="{{ $sensor->scale_factor }}"
-                                        data-offset="{{ $sensor->offset }}">
-                                        {{ $sensor->sensor_code }} ({{ $sensor->parameter }})
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $sensors; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $sensor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <option value="<?php echo e($sensor->id); ?>"
+                                        data-slave-id="<?php echo e($sensor->slave_id); ?>"
+                                        data-address="<?php echo e($sensor->address); ?>"
+                                        data-parameter="<?php echo e($sensor->parameter); ?>"
+                                        data-unit="<?php echo e($sensor->unit); ?>"
+                                        data-scale-factor="<?php echo e($sensor->scale_factor); ?>"
+                                        data-offset="<?php echo e($sensor->offset); ?>">
+                                        <?php echo e($sensor->sensor_code); ?> (<?php echo e($sensor->parameter); ?>)
                                     </option>
-                                @endforeach
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
@@ -827,12 +833,12 @@
                         <div class="row align-items-end">
                             <div class="col-md-6 mb-3">
                                 <label for="bulk_preset" class="form-label">Sensor Preset</label>
-                                <select class="form-select" id="bulk_preset" name="bulk_preset_key" @if(empty($mappingPresets)) disabled @endif>
-                                    @forelse($mappingPresets as $preset)
-                                        <option value="{{ $preset['key'] }}">{{ $preset['label'] }}</option>
-                                    @empty
+                                <select class="form-select" id="bulk_preset" name="bulk_preset_key" <?php if(empty($mappingPresets)): ?> disabled <?php endif; ?>>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $mappingPresets; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $preset): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <option value="<?php echo e($preset['key']); ?>"><?php echo e($preset['label']); ?></option>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                         <option value="">Belum ada preset dari mapping profile</option>
-                                    @endforelse
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -841,11 +847,11 @@
                             </div>
                         </div>
                         <select class="form-select" id="canonical_parameter_ids" name="canonical_parameter_ids[]" multiple size="8">
-                            @foreach($canonicalParameters as $param)
-                                <option value="{{ $param->id }}" data-field="{{ $param->field_identity }}" hidden>
-                                    {{ $param->field_identity }} ({{ $param->canonical_unit ?: '-' }})
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalParameters; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $param): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <option value="<?php echo e($param->id); ?>" data-field="<?php echo e($param->field_identity); ?>" hidden>
+                                    <?php echo e($param->field_identity); ?> (<?php echo e($param->canonical_unit ?: '-'); ?>)
                                 </option>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </select>
                         <div class="small mt-2" id="bulk-selection-status">Belum ada parameter bulk yang dipilih.</div>
                         <small class="text-muted d-block mt-2">
@@ -874,8 +880,8 @@
                             <label for="canonical_parameter_id" class="form-label">Target Canonical Parameter (Standardized)</label>
                             <select class="form-select" id="canonical_parameter_id" name="canonical_parameter_id">
                                  <option value="">Select Parameter</option>
-                                 @foreach($canonicalParameters as $param)
-                                     @php
+                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalParameters; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $param): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                     <?php
                                          $req = $param->input_requirements ?? [];
                                          $specText = '';
                                          if(isset($req['min_value']) || isset($req['max_value'])) {
@@ -887,9 +893,9 @@
                                          if(isset($req['source_url'])) {
                                              $specText .= ' Source: ' . ($req['source_reference'] ?? $req['source_url']);
                                          }
-                                     @endphp
-                                     <option value="{{ $param->id }}" data-spec="{{ $specText }}">{{ $param->field_identity }} ({{ $param->domain }}){{ $specText }}</option>
-                                 @endforeach
+                                     ?>
+                                     <option value="<?php echo e($param->id); ?>" data-spec="<?php echo e($specText); ?>"><?php echo e($param->field_identity); ?> (<?php echo e($param->domain); ?>)<?php echo e($specText); ?></option>
+                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                              </select>
                              <small class="form-text text-muted mt-2" id="canonical-param-spec" style="display:none;">
                                  <strong>Specification:</strong> <span id="canonical-param-spec-text"></span>
@@ -914,13 +920,13 @@
     </div>
 </div>
 
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('script')
-<script src="{{ URL::asset('build/libs/datatables.net/js/jquery.dataTables.min.js') }}"></script>
-<script src="{{ URL::asset('build/libs/datatables.net-bs4/js/dataTables.bootstrap4.min.js') }}"></script>
-<script src="{{ URL::asset('build/libs/datatables.net-responsive/js/dataTables.responsive.min.js') }}"></script>
-<script src="{{ URL::asset('build/libs/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js') }}"></script>
+<?php $__env->startSection('script'); ?>
+<script src="<?php echo e(URL::asset('build/libs/datatables.net/js/jquery.dataTables.min.js')); ?>"></script>
+<script src="<?php echo e(URL::asset('build/libs/datatables.net-bs4/js/dataTables.bootstrap4.min.js')); ?>"></script>
+<script src="<?php echo e(URL::asset('build/libs/datatables.net-responsive/js/dataTables.responsive.min.js')); ?>"></script>
+<script src="<?php echo e(URL::asset('build/libs/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js')); ?>"></script>
 <script>
     $(document).ready(function() {
         function fillForm(formSelector, fields) {
@@ -972,7 +978,7 @@
             });
         });
 
-        const canonicalParameterChoices = @json($canonicalParameterChoices);
+        const canonicalParameterChoices = <?php echo json_encode($canonicalParameterChoices, 15, 512) ?>;
 
         function escapeHtml(value) {
             return $('<div>').text(value ?? '').html();
@@ -1160,7 +1166,7 @@
             }
         });
 
-        const bulkPresetList = @json($mappingPresets);
+        const bulkPresetList = <?php echo json_encode($mappingPresets, 15, 512) ?>;
         const bulkPresets = Object.fromEntries((bulkPresetList || []).map(function(preset) {
             return [preset.key, preset];
         }));
@@ -1260,7 +1266,7 @@
 
         applyBulkPresetVisibility(false);
 
-        $('form[action="{{ route('canonical-mapping.store') }}"]').on('submit', function(event) {
+        $('form[action="<?php echo e(route('canonical-mapping.store')); ?>"]').on('submit', function(event) {
             const hasBulk = $('#canonical_parameter_ids').val() && $('#canonical_parameter_ids').val().length > 0;
             const hasSingle = Boolean($('#canonical_parameter_id').val());
 
@@ -1296,4 +1302,6 @@
         });
     });
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.master', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Users/brainsoft/kerjaan/resq/resources/views/modules/canonical-database/index.blade.php ENDPATH**/ ?>

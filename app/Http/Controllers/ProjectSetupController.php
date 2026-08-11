@@ -420,16 +420,7 @@ class ProjectSetupController extends Controller
             ])],
             'parameter' => ['nullable', 'string', 'max:255'],
             'weather_parameters' => ['nullable', 'array'],
-            'weather_parameters.*' => ['string', Rule::in([
-                'temperature',
-                'humidity',
-                'pressure',
-                'wind_speed',
-                'wind_direction',
-                'rainfall',
-                'solar_radiation',
-                'battery_voltage',
-            ])],
+            'weather_parameters.*' => ['string', 'max:255'],
             'value' => ['nullable', 'string', 'max:255'],
             'threshold' => ['nullable', 'string', 'max:255'],
             'data_type' => ['required', Rule::in([
@@ -499,42 +490,11 @@ class ProjectSetupController extends Controller
 
     private function weatherParametersForSensor(int $quantity, array $selected = [], ?string $hint = null): array
     {
-        $configured = collect($selected)
+        return collect($selected)
             ->filter()
             ->unique()
-            ->values();
-        $defaults = collect($this->defaultWeatherParameters($hint));
-
-        return $configured
-            ->merge($defaults->reject(fn ($parameter) => $configured->contains($parameter)))
-            ->take(max($quantity, $configured->count(), 1))
             ->values()
             ->all();
-    }
-
-    private function defaultWeatherParameters(?string $hint = null): array
-    {
-        $base = [
-            'temperature',
-            'humidity',
-            'pressure',
-            'wind_speed',
-            'wind_direction',
-            'rainfall',
-            'solar_radiation',
-            'battery_voltage',
-        ];
-        $hint = Str::lower((string) $hint);
-
-        if (Str::contains($hint, ['angin', 'wind'])) {
-            return ['wind_speed', 'wind_direction', ...array_values(array_diff($base, ['wind_speed', 'wind_direction']))];
-        }
-
-        if (Str::contains($hint, ['hujan', 'rain'])) {
-            return ['rainfall', ...array_values(array_diff($base, ['rainfall']))];
-        }
-
-        return $base;
     }
 
     public function destroy(string $type, int $id): RedirectResponse

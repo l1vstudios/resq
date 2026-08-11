@@ -397,7 +397,7 @@ class DeviceSetupController extends Controller
             'telemetry_id' => ['nullable', 'exists:telemetry_readings,id'],
             'sensor_id' => ['required', 'exists:sensors,id'],
             'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
-            'value' => ['nullable', 'string', 'max:255'],
+            'value' => ['nullable', 'string'],
             'parameter_values' => ['nullable', 'array'],
             'alert_level' => ['required', Rule::in(['Normal', 'Waspada', 'Siaga', 'Awas'])],
             'status' => ['required', Rule::in(['Normal', 'Waspada', 'Siaga', 'Awas', 'Danger'])],
@@ -434,10 +434,11 @@ class DeviceSetupController extends Controller
             'sensor_code' => ['nullable', 'required_without:sensor_id', 'string', 'exists:sensors,sensor_code'],
             'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
             'data_logger_code' => ['nullable', 'string', 'exists:data_loggers,logger_code'],
-            'value' => ['nullable', 'string', 'max:255'],
-            'display_value' => ['nullable', 'string', 'max:255'],
-            'raw_value' => ['nullable', 'string', 'max:255'],
+            'value' => ['nullable', 'string'],
+            'display_value' => ['nullable', 'string'],
+            'raw_value' => ['nullable', 'string'],
             'numeric_value' => ['nullable', 'numeric'],
+            'registers' => ['nullable', 'array'],
             'parameter_values' => ['nullable', 'array'],
             'threshold_exceeded' => ['nullable', 'boolean'],
             'observed_at' => ['nullable', 'date'],
@@ -447,6 +448,11 @@ class DeviceSetupController extends Controller
         $sensor = ! empty($data['sensor_id'])
             ? Sensor::findOrFail($data['sensor_id'])
             : Sensor::where('sensor_code', $data['sensor_code'])->firstOrFail();
+        $data['parameter_values'] = $this->parameterValuesFromRegisters(
+            $sensor,
+            $data['registers'] ?? [],
+            $data['parameter_values'] ?? []
+        );
         $dataLoggerId = $data['data_logger_id'] ?? $sensor->data_logger_id;
         if (! $dataLoggerId && ! empty($data['data_logger_code'])) {
             $dataLoggerId = DataLogger::where('logger_code', $data['data_logger_code'])->value('id');
@@ -454,6 +460,7 @@ class DeviceSetupController extends Controller
 
         $mappingValue = array_key_exists('raw_value', $data) ? $data['raw_value'] : ($data['value'] ?? null);
         $displayValue = $data['display_value'] ?? $data['value'] ?? null;
+        $sensorDisplayValue = $this->sensorDisplayValue($displayValue, $data['parameter_values'] ?? []);
         $readingValue = $sensor->type !== 'weather_station'
             && $this->canonicalMapping->activeProfileForSensor($sensor)
             && array_key_exists('raw_value', $data)
@@ -465,7 +472,7 @@ class DeviceSetupController extends Controller
         $level = $thresholdExceeded ? 'Awas' : 'Normal';
 
         $sensor->update([
-            'value' => $displayValue,
+            'value' => $sensorDisplayValue,
             'alert_level' => $level,
             'status' => $level,
             'last_seen_at' => now(),
@@ -484,15 +491,66 @@ class DeviceSetupController extends Controller
             $telemetryPayload['parameter_values'] = $data['parameter_values'] ?? null;
         }
 
+        if (Schema::hasColumn('telemetry_readings', 'raw_value')) {
+            $telemetryPayload['raw_value'] = $data['raw_value'] ?? null;
+        }
+
+        if (Schema::hasColumn('telemetry_readings', 'numeric_value')) {
+            $telemetryPayload['numeric_value'] = $data['numeric_value'] ?? null;
+        }
+
+        if (Schema::hasColumn('telemetry_readings', 'registers')) {
+            $telemetryPayload['registers'] = $data['registers'] ?? null;
+        }
+
         $this->upsertTelemetryReading($telemetryPayload);
 
-        $canonicalObservation = $this->canonicalMapping->storeObservation(
-            $sensor,
-            $mappingValue,
-            $dataLoggerId,
-            ! empty($data['observed_at']) ? Carbon::parse($data['observed_at']) : now(),
-            $data['payload'] ?? $request->all()
-        );
+        $observedAt = ! empty($data['observed_at']) ? Carbon::parse($data['observed_at']) : now();
+        $payload = $data['payload'] ?? $request->all();
+        $canonicalObservation = null;
+        $activeProfiles = $this->canonicalMapping->activeProfilesForSensor($sensor);
+
+        foreach (($data['parameter_values'] ?? []) as $parameterValue) {
+            if (! is_array($parameterValue)) {
+                continue;
+            }
+
+            $parameterName = $parameterValue['parameter'] ?? $parameterValue['canonical_field'] ?? null;
+            $sourceName = $parameterValue['source_parameter'] ?? null;
+            $profile = $activeProfiles->first(function ($profile) use ($parameterName, $sourceName) {
+                $canonicalField = $profile->canonicalParameter?->field_identity;
+
+                return ($parameterName && $canonicalField === $parameterName)
+                    || ($sourceName && $profile->source_parameter === $sourceName);
+            });
+
+            if (! $profile) {
+                continue;
+            }
+
+            $rawParameterValue = array_key_exists('raw', $parameterValue)
+                ? $parameterValue['raw']
+                : ($parameterValue['value'] ?? null);
+            $canonicalObservation = $this->canonicalMapping->storeObservation(
+                $sensor,
+                $rawParameterValue,
+                $dataLoggerId,
+                $observedAt,
+                array_merge($payload, ['mapped_parameter_value' => $parameterValue]),
+                $profile
+            ) ?: $canonicalObservation;
+        }
+
+        if ($canonicalObservation === null) {
+            $canonicalObservation = $this->canonicalMapping->storeObservation(
+                $sensor,
+                $mappingValue,
+                $dataLoggerId,
+                $observedAt,
+                $payload
+            );
+        }
+
         $mappedValue = $this->canonicalMapping->mappedParameterValue($sensor, $mappingValue);
 
         return response()->json([
@@ -500,7 +558,7 @@ class DeviceSetupController extends Controller
             'sensor' => [
                 'id' => $sensor->id,
                 'sensor_code' => $sensor->sensor_code,
-                'value' => $sensor->value,
+                'value' => $sensorDisplayValue,
                 'raw_value' => $mappingValue,
                 'alert_level' => $sensor->alert_level,
                 'status' => $sensor->status,
@@ -585,8 +643,14 @@ class DeviceSetupController extends Controller
 
         $sensors = $sensorQuery->get()
             ->map(function (Sensor $sensor) use ($rednodePollIntervalMs) {
-                return array_merge($this->canonicalMapping->rednodeSensorConfig($sensor), [
+                $rednodeConfig = $this->canonicalMapping->rednodeSensorConfig($sensor);
+
+                return array_merge($rednodeConfig, [
                     'sensor_label' => $this->sensorLabel($sensor),
+                    'mapped_parameter_labels' => collect($rednodeConfig['mapped_parameters'] ?? [])
+                        ->pluck('label')
+                        ->filter()
+                        ->values(),
                     'weather_parameter_labels' => collect($sensor->weather_parameters ?? [])
                         ->map(fn ($parameter) => $this->weatherParameterLabel((string) $parameter))
                         ->values(),
@@ -1654,6 +1718,15 @@ class DeviceSetupController extends Controller
     {
         $type = str_replace('_', ' ', (string) $sensor->type);
         $typeLabel = ucwords($type);
+        $mappedParameters = $this->canonicalMapping->activeProfilesForSensor($sensor)
+            ->map(fn ($profile) => $profile->canonicalParameter?->field_identity)
+            ->filter()
+            ->map(fn ($parameter) => $this->weatherParameterLabel((string) $parameter))
+            ->implode(', ');
+
+        if ($mappedParameters) {
+            return trim($typeLabel . ' - ' . $mappedParameters);
+        }
 
         if ($sensor->type === 'weather_station') {
             $parameters = collect($sensor->weather_parameters ?? [])
@@ -1704,6 +1777,12 @@ class DeviceSetupController extends Controller
                 continue;
             }
 
+            $item['parameter_values'] = $this->parameterValuesFromRegisters(
+                $sensor,
+                $item['registers'] ?? [],
+                $item['parameter_values'] ?? []
+            );
+
             $mappingValue = array_key_exists('raw_value', $item) && $item['raw_value'] !== null
                 ? $item['raw_value']
                 : ($item['value'] ?? null);
@@ -1712,8 +1791,9 @@ class DeviceSetupController extends Controller
                 : (array_key_exists('value', $item) && $item['value'] !== null
                     ? (string) $item['value']
                     : (array_key_exists('numeric_value', $item) && $item['numeric_value'] !== null ? (string) $item['numeric_value'] : null));
+            $sensorDisplayValue = $this->sensorDisplayValue($valueText, $item['parameter_values'] ?? []);
 
-            if ($valueText === null) {
+            if ($valueText === null && empty($item['parameter_values'])) {
                 continue;
             }
 
@@ -1724,7 +1804,7 @@ class DeviceSetupController extends Controller
             $receivedAt = ! empty($item['received_at']) ? $item['received_at'] : now();
 
             $sensor->update([
-                'value' => $valueText,
+                'value' => $sensorDisplayValue,
                 'alert_level' => $level,
                 'status' => $level,
                 'last_seen_at' => $receivedAt,
@@ -1747,14 +1827,69 @@ class DeviceSetupController extends Controller
                 $telemetryPayload['parameter_values'] = $item['parameter_values'] ?? null;
             }
 
+            if (Schema::hasColumn('telemetry_readings', 'raw_value')) {
+                $telemetryPayload['raw_value'] = array_key_exists('raw_value', $item) && $item['raw_value'] !== null
+                    ? (string) $item['raw_value']
+                    : (array_key_exists('raw', $item) && $item['raw'] !== null ? (string) $item['raw'] : null);
+            }
+
+            if (Schema::hasColumn('telemetry_readings', 'numeric_value')) {
+                $telemetryPayload['numeric_value'] = $item['numeric_value'] ?? null;
+            }
+
+            if (Schema::hasColumn('telemetry_readings', 'registers')) {
+                $telemetryPayload['registers'] = $item['registers'] ?? null;
+            }
+
             $this->upsertTelemetryReading($telemetryPayload);
-            $this->canonicalMapping->storeObservation(
-                $sensor,
-                $mappingValue,
-                $dataLoggerId,
-                $receivedAt instanceof \DateTimeInterface ? Carbon::parse($receivedAt) : Carbon::parse((string) $receivedAt),
-                $item
-            );
+            $observedAt = $receivedAt instanceof \DateTimeInterface
+                ? Carbon::parse($receivedAt)
+                : Carbon::parse((string) $receivedAt);
+            $storedMappedObservations = false;
+            $activeProfiles = $this->canonicalMapping->activeProfilesForSensor($sensor);
+
+            foreach (($item['parameter_values'] ?? []) as $parameterValue) {
+                if (! is_array($parameterValue)) {
+                    continue;
+                }
+
+                $parameterName = $parameterValue['parameter'] ?? $parameterValue['canonical_field'] ?? null;
+                $sourceName = $parameterValue['source_parameter'] ?? null;
+                $profile = $activeProfiles->first(function ($profile) use ($parameterName, $sourceName) {
+                    $canonicalField = $profile->canonicalParameter?->field_identity;
+
+                    return ($parameterName && $canonicalField === $parameterName)
+                        || ($sourceName && $profile->source_parameter === $sourceName);
+                });
+
+                if (! $profile) {
+                    continue;
+                }
+
+                $rawParameterValue = array_key_exists('raw', $parameterValue)
+                    ? $parameterValue['raw']
+                    : ($parameterValue['value'] ?? null);
+
+                $this->canonicalMapping->storeObservation(
+                    $sensor,
+                    $rawParameterValue,
+                    $dataLoggerId,
+                    $observedAt,
+                    array_merge($item, ['mapped_parameter_value' => $parameterValue]),
+                    $profile
+                );
+                $storedMappedObservations = true;
+            }
+
+            if (! $storedMappedObservations) {
+                $this->canonicalMapping->storeObservation(
+                    $sensor,
+                    $mappingValue,
+                    $dataLoggerId,
+                    $observedAt,
+                    $item
+                );
+            }
         }
     }
 
@@ -2252,6 +2387,169 @@ class DeviceSetupController extends Controller
         preg_match('/-?\d+(\.\d+)?/', str_replace(',', '.', (string) $value), $matches);
 
         return isset($matches[0]) ? (float) $matches[0] : null;
+    }
+
+    private function sensorDisplayValue(mixed $displayValue, array $parameterValues = []): ?string
+    {
+        $parameters = collect($parameterValues)
+            ->filter(fn ($item) => is_array($item))
+            ->values();
+
+        if ($parameters->isNotEmpty()) {
+            $summary = $parameters
+                ->take(3)
+                ->map(function (array $item) {
+                    $label = $item['label']
+                        ?? $item['parameter']
+                        ?? $item['canonical_field']
+                        ?? $item['source_parameter']
+                        ?? 'Parameter';
+                    $value = $item['value_text']
+                        ?? $item['display_value']
+                        ?? $item['value']
+                        ?? $item['raw']
+                        ?? '-';
+
+                    return trim((string) $label . ' ' . (string) $value);
+                })
+                ->filter()
+                ->implode(', ');
+            $remaining = $parameters->count() - 3;
+
+            return Str::limit($summary . ($remaining > 0 ? ' +' . $remaining . ' parameter' : ''), 240, '...');
+        }
+
+        if ($displayValue === null) {
+            return null;
+        }
+
+        return Str::limit((string) $displayValue, 240, '...');
+    }
+
+    private function parameterValuesFromRegisters(Sensor $sensor, mixed $registers, array $fallback = []): array
+    {
+        if (! is_array($registers)) {
+            return $fallback;
+        }
+
+        $registers = collect($registers)
+            ->filter(fn ($value) => is_numeric($value))
+            ->map(fn ($value) => (int) $value)
+            ->values()
+            ->all();
+
+        if ($registers === []) {
+            return $fallback;
+        }
+
+        $profiles = $this->canonicalMapping->activeProfilesForSensor($sensor);
+        if ($profiles->isEmpty()) {
+            return $fallback;
+        }
+
+        $baseAddress = $this->integerAddressValue($sensor->address);
+        if ($baseAddress === null) {
+            $baseAddress = $profiles
+                ->map(fn ($profile) => $this->integerAddressValue($profile->register_address))
+                ->filter(fn ($address) => $address !== null)
+                ->min();
+        }
+
+        return $profiles
+            ->filter(fn ($profile) => $profile->canonicalParameter !== null)
+            ->map(function ($profile) use ($sensor, $registers, $baseAddress) {
+                $address = $this->integerAddressValue($profile->register_address) ?? 0;
+                $registerIndex = max($address - (int) ($baseAddress ?? 0), 0);
+                $dataLength = max((int) ($profile->data_length ?? 1), 1);
+                $slice = array_slice($registers, $registerIndex, $dataLength);
+
+                if ($slice === []) {
+                    return null;
+                }
+
+                $raw = $this->modbusValueFromRegisters(
+                    $slice,
+                    $profile->value_type ?? $sensor->data_type ?? 'uint16',
+                    $profile->byte_order
+                );
+                $scale = is_numeric($profile->scale_factor) ? (float) $profile->scale_factor : 1.0;
+                $offset = is_numeric($profile->offset) ? (float) $profile->offset : 0.0;
+                $value = ((float) $raw * $scale) + $offset;
+                $parameter = $profile->canonicalParameter;
+                $unit = trim((string) ($parameter->canonical_unit ?: $profile->source_unit));
+
+                return [
+                    'parameter' => $parameter->field_identity,
+                    'label' => ucwords(str_replace('_', ' ', $parameter->field_identity)),
+                    'source_parameter' => $profile->source_parameter,
+                    'register_address' => $profile->register_address,
+                    'register_index' => $registerIndex,
+                    'registers' => $slice,
+                    'raw' => $raw,
+                    'value' => $value,
+                    'unit' => $unit,
+                    'requirements' => $parameter->input_requirements ?? null,
+                    'datasheet_source_url' => $parameter->input_requirements['source_url'] ?? null,
+                    'datasheet_reference' => $parameter->input_requirements['source_reference'] ?? null,
+                    'value_text' => $this->valueWithUnit($this->formatDecodedValue($value), $unit),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function modbusValueFromRegisters(array $registers, ?string $dataType, ?string $byteOrder): float|int
+    {
+        $dataType = Str::lower((string) ($dataType ?: 'uint16'));
+
+        if (Str::contains($dataType, 'float') && count($registers) >= 2) {
+            return unpack('G', $this->modbusFloatBytes($registers, $byteOrder))[1];
+        }
+
+        if (Str::contains($dataType, 'int32') && count($registers) >= 2) {
+            $value = unpack('N', $this->modbusFloatBytes($registers, $byteOrder))[1];
+
+            return $value > 0x7fffffff ? $value - 0x100000000 : $value;
+        }
+
+        if (Str::contains($dataType, 'uint32') && count($registers) >= 2) {
+            return unpack('N', $this->modbusFloatBytes($registers, $byteOrder))[1];
+        }
+
+        $raw = ((int) ($registers[0] ?? 0)) & 0xffff;
+
+        return Str::contains($dataType, 'int16') && $raw > 0x7fff ? $raw - 0x10000 : $raw;
+    }
+
+    private function modbusFloatBytes(array $registers, ?string $byteOrder): string
+    {
+        $words = [
+            ((int) ($registers[0] ?? 0)) & 0xffff,
+            ((int) ($registers[1] ?? 0)) & 0xffff,
+        ];
+        $byteOrder = Str::upper((string) ($byteOrder ?: 'ABCD'));
+
+        return match ($byteOrder) {
+            'CDAB' => pack('n2', $words[1], $words[0]),
+            'BADC' => pack('v2', $words[0], $words[1]),
+            'DCBA' => pack('v2', $words[1], $words[0]),
+            default => pack('n2', $words[0], $words[1]),
+        };
+    }
+
+    private function formatDecodedValue(float|int $value): string
+    {
+        return is_finite((float) $value) ? number_format((float) $value, 2, '.', '') : (string) $value;
+    }
+
+    private function integerAddressValue(mixed $address): ?int
+    {
+        if ($address === null || $address === '') {
+            return null;
+        }
+
+        return is_numeric($address) ? (int) $address : null;
     }
 
     private function valueWithUnit(mixed $value, ?string $unit): string

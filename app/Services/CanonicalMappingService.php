@@ -9,6 +9,7 @@ use App\Models\Sensor;
 use App\Models\SensorMappingProfile;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -16,22 +17,33 @@ class CanonicalMappingService
 {
     public function activeProfileForSensor(Sensor $sensor): ?SensorMappingProfile
     {
+        return $this->activeProfilesForSensor($sensor)->first();
+    }
+
+    public function activeProfilesForSensor(Sensor $sensor): Collection
+    {
         if (! Schema::hasTable('sensor_mapping_profiles') || ! Schema::hasTable('canonical_parameters')) {
-            return null;
+            return collect();
         }
 
         return SensorMappingProfile::with('canonicalParameter')
             ->where('sensor_id', $sensor->id)
             ->where('status', 'active')
-            ->latest()
-            ->first();
+            ->orderBy('id')
+            ->get()
+            ->sortBy(fn (SensorMappingProfile $profile) => $this->integerAddress($profile->register_address) ?? PHP_INT_MAX)
+            ->values();
     }
 
     public function rednodeSensorConfig(Sensor $sensor): array
     {
-        $profile = $this->activeProfileForSensor($sensor);
+        $profiles = $this->activeProfilesForSensor($sensor);
+        $profile = $profiles->first();
         $parameter = $profile?->canonicalParameter;
-        $quantity = (int) ($profile?->data_length ?? $sensor->quantity ?? 1);
+        $baseAddress = $this->baseAddressForSensor($sensor, $profiles);
+        $sensorQuantity = (int) ($sensor->quantity ?? 1);
+        $quantity = max($sensorQuantity, $this->mappedQuantity($baseAddress, $profiles));
+        $mappedParameters = $this->mappedParametersForRednode($baseAddress, $profiles);
 
         return [
             'sensor_id' => $sensor->id,
@@ -39,10 +51,11 @@ class CanonicalMappingService
             'sensor_label' => $sensor->parameter ?: $sensor->type,
             'sensor_type' => $sensor->type,
             'parameter' => $sensor->parameter,
-            'weather_parameters' => $this->weatherParametersForSensor($sensor, $quantity),
+            'mapped_parameters' => $mappedParameters,
+            'weather_parameters' => $this->weatherParametersForSensor($sensor, $mappedParameters),
             'slave_id' => $profile?->slave_id ?? $sensor->slave_id ?? 1,
             'function_code' => $profile?->function_code ?? $sensor->function_code ?? 'FC03',
-            'address' => $profile?->register_address ?? $sensor->address ?? 0,
+            'address' => $baseAddress ?? 0,
             'quantity' => $quantity,
             'poll_interval_ms' => $sensor->poll_interval_ms ?? 1000,
             'data_type' => $profile?->value_type ?? $sensor->data_type ?? 'float32',
@@ -66,48 +79,104 @@ class CanonicalMappingService
         ];
     }
 
-    private function weatherParametersForSensor(Sensor $sensor, int $quantity): array
+    private function weatherParametersForSensor(Sensor $sensor, array $mappedParameters): array
     {
-        if ($sensor->type !== 'weather_station') {
-            return $sensor->weather_parameters ?? [];
+        if ($mappedParameters !== []) {
+            return collect($mappedParameters)
+                ->pluck('parameter')
+                ->filter()
+                ->values()
+                ->all();
         }
 
-        $configured = collect($sensor->weather_parameters ?? [])
+        return collect($sensor->weather_parameters ?? [])
             ->filter()
             ->unique()
-            ->values();
-        $defaults = collect($this->defaultWeatherParameters($sensor->parameter));
-
-        return $configured
-            ->merge($defaults->reject(fn ($parameter) => $configured->contains($parameter)))
-            ->take(max($quantity, $configured->count(), 1))
             ->values()
             ->all();
     }
 
-    private function defaultWeatherParameters(?string $hint = null): array
+    private function mappedQuantity(?int $baseAddress, Collection $profiles): int
     {
-        $base = [
-            'temperature',
-            'humidity',
-            'pressure',
-            'wind_speed',
-            'wind_direction',
-            'rainfall',
-            'solar_radiation',
-            'battery_voltage',
-        ];
-        $hint = Str::lower((string) $hint);
+        $maxQuantity = 1;
 
-        if (Str::contains($hint, ['angin', 'wind'])) {
-            return ['wind_speed', 'wind_direction', ...array_values(array_diff($base, ['wind_speed', 'wind_direction']))];
+        foreach ($profiles as $profile) {
+            $registerIndex = $this->registerIndex($profile, $baseAddress);
+            $dataLength = max((int) ($profile->data_length ?? 1), 1);
+            $maxQuantity = max($maxQuantity, $registerIndex + $dataLength);
         }
 
-        if (Str::contains($hint, ['hujan', 'rain'])) {
-            return ['rainfall', ...array_values(array_diff($base, ['rainfall']))];
+        return $maxQuantity;
+    }
+
+    private function mappedParametersForRednode(?int $baseAddress, Collection $profiles): array
+    {
+        return $profiles
+            ->filter(fn (SensorMappingProfile $profile) => $profile->canonicalParameter !== null)
+            ->map(function (SensorMappingProfile $profile) use ($baseAddress) {
+                $parameter = $profile->canonicalParameter;
+                $requirements = $parameter->input_requirements ?? [];
+
+                return [
+                    'profile_id' => $profile->id,
+                    'profile_code' => $profile->profile_code,
+                    'parameter' => $parameter->field_identity,
+                    'label' => ucwords(str_replace('_', ' ', $parameter->field_identity)),
+                    'canonical_field' => $parameter->field_identity,
+                    'canonical_unit' => $parameter->canonical_unit,
+                    'canonical_domain' => $parameter->domain,
+                    'source_parameter' => $profile->source_parameter,
+                    'source_unit' => $profile->source_unit,
+                    'register_address' => $profile->register_address,
+                    'register_index' => $this->registerIndex($profile, $baseAddress),
+                    'function_code' => $profile->function_code,
+                    'data_type' => $profile->value_type,
+                    'data_length' => max((int) ($profile->data_length ?? 1), 1),
+                    'byte_order' => $profile->byte_order,
+                    'scale_factor' => (float) ($profile->scale_factor ?? 1),
+                    'offset' => (float) ($profile->offset ?? 0),
+                    'value_origin' => $profile->value_origin,
+                    'requirements' => $requirements,
+                    'datasheet_source_url' => $requirements['source_url'] ?? null,
+                    'datasheet_reference' => $requirements['source_reference'] ?? null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function baseAddressForSensor(Sensor $sensor, Collection $profiles): ?int
+    {
+        $sensorAddress = $this->integerAddress($sensor->address);
+
+        if ($sensorAddress !== null) {
+            return $sensorAddress;
         }
 
-        return $base;
+        return $profiles
+            ->map(fn (SensorMappingProfile $profile) => $this->integerAddress($profile->register_address))
+            ->filter(fn (?int $address) => $address !== null)
+            ->min();
+    }
+
+    private function registerIndex(SensorMappingProfile $profile, ?int $baseAddress): int
+    {
+        $address = $this->integerAddress($profile->register_address);
+
+        if ($address === null || $baseAddress === null) {
+            return 0;
+        }
+
+        return max($address - $baseAddress, 0);
+    }
+
+    private function integerAddress(mixed $address): ?int
+    {
+        if ($address === null || $address === '') {
+            return null;
+        }
+
+        return is_numeric($address) ? (int) $address : null;
     }
 
     public function storeObservation(
@@ -115,13 +184,14 @@ class CanonicalMappingService
         mixed $value,
         ?int $dataLoggerId = null,
         ?CarbonInterface $observedAt = null,
-        array $payload = []
+        array $payload = [],
+        ?SensorMappingProfile $profileOverride = null
     ): ?CanonicalObservation {
         if (! $this->canonicalTablesReady()) {
             return null;
         }
 
-        $profile = $this->activeProfileForSensor($sensor);
+        $profile = $profileOverride ?: $this->activeProfileForSensor($sensor);
         $parameter = $profile?->canonicalParameter;
 
         if (! $profile || ! $parameter) {

@@ -13,6 +13,9 @@ class TelemetryReading extends Model
         'sensor_id',
         'data_logger_id',
         'value',
+        'raw_value',
+        'numeric_value',
+        'registers',
         'parameter_values',
         'alert_level',
         'status',
@@ -20,6 +23,8 @@ class TelemetryReading extends Model
     ];
 
     protected $casts = [
+        'numeric_value' => 'decimal:6',
+        'registers' => 'array',
         'parameter_values' => 'array',
         'received_at' => 'datetime',
     ];

@@ -234,6 +234,7 @@ class DashboardController extends Controller
                     'station' => $station?->station_code,
                     'warning_station' => $sensor->warningStation?->station_code,
                     'province' => $workspace?->province,
+                    'city' => $workspace?->city,
                     'status' => $status,
                     'last_seen' => optional($reading?->received_at ?? $sensor->last_seen_at)->diffForHumans(),
                     'received_at' => optional($reading?->received_at ?? $sensor->last_seen_at)->toISOString(),
@@ -285,6 +286,7 @@ class DashboardController extends Controller
                 return [
                     'name' => $station->station_code . ' - ' . $station->name,
                     'province' => $workspace?->province,
+                    'city' => $workspace?->city,
                     'status' => $station->status,
                     'public_warning_enabled' => $station->public_warning_enabled,
                     'ack_response' => $station->ack_response,
@@ -412,6 +414,7 @@ class DashboardController extends Controller
                 'station' => $sensor['monitoring_station_id'] ?? '-',
                 'warning_station' => $sensor['warning_station_id'] ?? '-',
                 'province' => $cluster['province'] ?? '-',
+                'city' => $cluster['city'] ?? '-',
                 'status' => $sensor['status'] ?? 'Normal',
                 'last_seen' => $sensor['last_seen'] ?? '-',
                 'threshold_exceeded' => $this->thresholdExceeded($sensor['value'] ?? null, $sensor['threshold'] ?? null),
@@ -451,6 +454,7 @@ class DashboardController extends Controller
             return [
                 'name' => $station['id'] . ' - ' . $station['name'],
                 'province' => $cluster['province'] ?? '-',
+                'city' => $cluster['city'] ?? '-',
                 'status' => $station['status'] ?? 'Normal',
                 'public_warning_enabled' => $station['public_warning_enabled'] ?? false,
                 'ack_response' => $station['ack_response'] ?? '-',

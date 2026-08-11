@@ -132,7 +132,7 @@
 <div class="tab-content text-muted">
     <div class="tab-pane fade show active" id="project-tab-pane" role="tabpanel" aria-labelledby="project-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Set Up New Project</h4>
@@ -163,7 +163,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Project List</h4>
@@ -222,7 +222,7 @@
 
     <div class="tab-pane fade" id="geospatial-tab-pane" role="tabpanel" aria-labelledby="geospatial-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Add Geospatial Workspace</h4>
@@ -274,7 +274,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Workspace Listing</h4>
@@ -323,7 +323,7 @@
 
     <div class="tab-pane fade" id="monitoring-tab-pane" role="tabpanel" aria-labelledby="monitoring-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Monitoring Station Registry</h4>
@@ -352,7 +352,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Monitoring Station List</h4>
@@ -396,7 +396,7 @@
 
     <div class="tab-pane fade" id="warning-tab-pane" role="tabpanel" aria-labelledby="warning-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Warning Station Registry</h4>
@@ -426,7 +426,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Warning Station List</h4>
@@ -474,7 +474,7 @@
 
     <div class="tab-pane fade" id="data-tab-pane" role="tabpanel" aria-labelledby="data-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card mb-3">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Data Logger Setup</h4>
@@ -623,7 +623,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Sensor Registry</h4>
@@ -739,80 +739,106 @@
 
     <div class="tab-pane fade" id="canonical-tab-pane" role="tabpanel" aria-labelledby="canonical-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
-                <div class="card h-100">
+            <div class="col-xl-12">
+                <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Canonical Data Mapping</h4>
-                        <form method="POST" action="{{ route('canonical-mapping.store') }}" id="canonical-mapping-form">
-                            @csrf
-                            <div class="mb-3">
-                                <label class="form-label">Sensor</label>
-                                <select class="form-select" name="sensor_id" required>
-                                    <option value="" disabled selected>Pilih Sensor...</option>
-                                    @foreach($sensors->whereNotNull('db_id') as $s)
-                                        <option value="{{ $s['db_id'] }}">{{ $s['id'] }} - {{ $sensorTypes[$s['type'] ?? ''] ?? ($s['type'] ?? '-') }}</option>
-                                    @endforeach
-                                </select>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                            <div>
+                                <h4 class="card-title mb-1">Canonical Data Mapping</h4>
+                                <p class="text-muted mb-0">
+                                    Konfigurasi mapping di halaman ini ditarik dari Canonical Database. Project Setup hanya menampilkan status pemetaan per sensor.
+                                </p>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Profile Code</label>
-                                <input type="text" class="form-control" name="profile_code" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Canonical Parameter</label>
-                                <select class="form-select" name="canonical_parameter_id" required>
-                                    <option value="" disabled selected>Pilih Parameter...</option>
-                                    @foreach($canonicalParameters ?? [] as $cp)
-                                        <option value="{{ $cp->id }}">{{ $cp->domain }} / {{ $cp->field_identity }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Source Parameter (Opsional)</label>
-                                <input type="text" class="form-control" name="source_parameter">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Value Origin</label>
-                                <select class="form-select" name="value_origin" required>
-                                    <option value="direct_measurement">Direct Measurement</option>
-                                    <option value="device_processed">Device Processed</option>
-                                    <option value="system_calculated">System Calculated</option>
-                                </select>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Scale Factor</label>
-                                    <input type="number" step="0.0001" class="form-control" name="scale_factor" value="1" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Offset</label>
-                                    <input type="number" step="0.0001" class="form-control" name="offset" value="0" required>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Status</label>
-                                <select class="form-select" name="status" required>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Save Mapping</button>
-                        </form>
+                            <a href="{{ route('canonical-database.index') }}#mapping" class="btn btn-primary">
+                                <i class="bx bx-cog me-1"></i> Open Canonical Mapping
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-xl-8">
-                <div class="card h-100">
+            <div class="col-xl-12">
+                <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Mapping List</h4>
+                        <h4 class="card-title mb-4">Sensor Mapping Coverage</h4>
+                        @php
+                            $profilesBySensor = collect($sensorMappingProfiles ?? [])->groupBy('sensor_id');
+                        @endphp
+                        <div class="table-responsive">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Sensor</th>
+                                        <th>Type</th>
+                                        <th>Monitoring</th>
+                                        <th>Mapped Parameters</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($sensors->whereNotNull('db_id') as $sensor)
+                                        @php
+                                            $sensorProfiles = $profilesBySensor->get($sensor['db_id'], collect());
+                                            $activeCount = $sensorProfiles->where('status', 'active')->count();
+                                            $parameterNames = $sensorProfiles
+                                                ->map(fn ($profile) => $profile->canonicalParameter?->field_identity)
+                                                ->filter()
+                                                ->values();
+                                        @endphp
+                                        <tr>
+                                            <td>{{ $sensor['id'] }}</td>
+                                            <td>{{ $sensorTypes[$sensor['type'] ?? ''] ?? ($sensor['type'] ?? '-') }}</td>
+                                            <td>{{ $sensor['monitoring_station_id'] ?? '-' }}</td>
+                                            <td>
+                                                @if($parameterNames->isNotEmpty())
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        @foreach($parameterNames as $name)
+                                                            <span class="badge bg-light text-dark">{{ $name }}</span>
+                                                        @endforeach
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">Belum ada mapping</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($activeCount > 0)
+                                                    <span class="badge bg-success">{{ $activeCount }} active mapping</span>
+                                                @else
+                                                    <span class="badge bg-danger-subtle text-danger">Belum Mapping Canonical</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="{{ route('canonical-database.index') }}#mapping" class="btn btn-outline-primary btn-sm">
+                                                    Configure
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">Belum ada sensor.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Mapping Profiles from Canonical Database</h4>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Profile Code</th>
                                         <th>Sensor</th>
-                                        <th>Canonical Parameter</th>
+                                        <th>Source</th>
+                                        <th>Register</th>
+                                        <th>Canonical Target</th>
                                         <th>Origin</th>
                                         <th>Scale/Offset</th>
                                         <th>Status</th>
@@ -824,6 +850,18 @@
                                     <tr>
                                         <td>{{ $profile->profile_code }}</td>
                                         <td>{{ $profile->sensor->sensor_code ?? '-' }}</td>
+                                        <td>
+                                            {{ $profile->source_parameter }}
+                                            @if($profile->source_unit)
+                                                <small class="text-muted d-block">{{ $profile->source_unit }}</small>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            {{ $profile->register_address ?? '-' }}
+                                            @if($profile->value_type || $profile->data_length)
+                                                <small class="text-muted d-block">{{ $profile->value_type ?? '-' }} / len {{ $profile->data_length ?? '-' }}</small>
+                                            @endif
+                                        </td>
                                         <td>{{ $profile->canonicalParameter->field_identity ?? '-' }}</td>
                                         <td>{{ str_replace('_', ' ', Str::title($profile->value_origin)) }}</td>
                                         <td>{{ $profile->scale_factor ?? 1 }} / {{ $profile->offset ?? 0 }}</td>
@@ -835,30 +873,12 @@
                                             @endif
                                         </td>
                                         <td class="text-end">
-                                            <div class="d-inline-flex gap-1">
-                                                <button type="button" class="btn btn-outline-primary btn-sm"
-                                                    data-edit-form="#canonical-mapping-form"
-                                                    data-edit-fields="{{ base64_encode(json_encode([
-                                                        'sensor_id' => $profile->sensor_id,
-                                                        'profile_code' => $profile->profile_code,
-                                                        'canonical_parameter_id' => $profile->canonical_parameter_id,
-                                                        'source_parameter' => $profile->source_parameter ?? '',
-                                                        'value_origin' => $profile->value_origin,
-                                                        'scale_factor' => $profile->scale_factor ?? 1,
-                                                        'offset' => $profile->offset ?? 0,
-                                                        'status' => $profile->status,
-                                                    ])) }}">Edit</button>
-                                                <form method="POST" action="{{ route('canonical-mapping.destroy', $profile->id) }}">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
-                                                </form>
-                                            </div>
+                                            <a href="{{ route('canonical-database.index') }}#mapping" class="btn btn-outline-primary btn-sm">Edit in Canonical DB</a>
                                         </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">Belum ada mapping Canonical Data.</td>
+                                        <td colspan="9" class="text-center text-muted">Belum ada mapping Canonical Data.</td>
                                     </tr>
                                     @endforelse
                                 </tbody>
@@ -872,7 +892,7 @@
 
     <div class="tab-pane fade" id="operation-tab-pane" role="tabpanel" aria-labelledby="operation-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Response Plan / Act</h4>
@@ -891,7 +911,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Operational Rules</h4>

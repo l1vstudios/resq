@@ -33,6 +33,109 @@
         display: inline-block;
     }
 
+    .map-filter-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(5, minmax(140px, 1fr)) auto;
+    }
+
+    .map-filter-grid .form-label {
+        color: #495057;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .map-filter-status {
+        color: #74788d;
+        font-size: 12px;
+        margin-top: 8px;
+    }
+
+    .terrain-cue-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 10px;
+    }
+
+    .terrain-cue {
+        background: #ffffff;
+        border: 1px solid #e9e9ef;
+        border-radius: 6px;
+        color: #495057;
+        font-size: 12px;
+        padding: 8px 10px;
+    }
+
+    .terrain-cue strong {
+        color: #343a40;
+        display: block;
+        font-size: 12px;
+        margin-bottom: 2px;
+    }
+
+    .gis-toolbar {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .gis-readout {
+        background: #ffffff;
+        border: 1px solid #d8dde6;
+        border-radius: 6px;
+        color: #495057;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        min-height: 31px;
+        padding: 7px 9px;
+    }
+
+    .gis-opacity-control {
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #d8dde6;
+        border-radius: 6px;
+        display: inline-flex;
+        gap: 8px;
+        min-height: 31px;
+        padding: 5px 9px;
+    }
+
+    .gis-opacity-control label {
+        color: #495057;
+        font-size: 12px;
+        font-weight: 700;
+        margin: 0;
+        white-space: nowrap;
+    }
+
+    .gis-opacity-control input {
+        width: 110px;
+    }
+
+    #sensor-cluster-map.gis-measuring {
+        cursor: crosshair;
+    }
+
+    @media (max-width: 991.98px) {
+        .map-filter-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .terrain-cue-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .map-filter-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .sensor-live-icon {
         background: transparent;
         border: 0;
@@ -273,6 +376,71 @@
                         <span class="map-legend-item"><span class="map-legend-dot bg-danger"></span> Bahaya / Kritis</span>
                     </div>
                 </div>
+                <div class="border rounded bg-light p-3 mb-3">
+                    <div class="map-filter-grid align-items-end">
+                        <div>
+                            <label for="map-province-filter" class="form-label">Daerah / Provinsi</label>
+                            <select id="map-province-filter" class="form-select form-select-sm">
+                                <option value="">Semua Indonesia</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="map-city-filter" class="form-label">Kabupaten / Kota</label>
+                            <select id="map-city-filter" class="form-select form-select-sm" disabled>
+                                <option value="">Semua kab/kota</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="map-radius-filter" class="form-label">Lock Radius</label>
+                            <select id="map-radius-filter" class="form-select form-select-sm">
+                                <option value="auto">Auto bounds</option>
+                                <option value="15000">15 km</option>
+                                <option value="30000" selected>30 km</option>
+                                <option value="50000">50 km</option>
+                                <option value="100000">100 km</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="map-terrain-profile" class="form-label">Visual Terrain</label>
+                            <select id="map-terrain-profile" class="form-select form-select-sm">
+                                <option value="mountain" selected>Mountain / Highland</option>
+                                <option value="operation">Operational</option>
+                                <option value="satellite">Satellite Relief</option>
+                            </select>
+                        </div>
+                        <div class="form-check form-switch pb-1">
+                            <input class="form-check-input" type="checkbox" id="map-lock-filter" checked>
+                            <label class="form-check-label" for="map-lock-filter">Lock area</label>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="map-filter-reset">Reset</button>
+                    </div>
+                    <div class="map-filter-status" id="map-filter-status">Menampilkan semua titik.</div>
+                    <div class="terrain-cue-grid">
+                        <div class="terrain-cue"><strong>Kontur rapat</strong>Lereng lebih curam, rawan aliran cepat atau longsoran.</div>
+                        <div class="terrain-cue"><strong>Kontur tertutup/tinggi</strong>Punggungan, bukit, atau dataran tinggi sekitar sensor.</div>
+                        <div class="terrain-cue"><strong>Bayangan relief</strong>Memperjelas lembah, alur sungai, dan arah kemiringan lahan.</div>
+                    </div>
+                    <div class="gis-toolbar mt-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="map-fit-filtered">
+                            <i class="bx bx-target-lock me-1"></i> Fit Area
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="map-fit-all">
+                            <i class="bx bx-world me-1"></i> Fit All
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-dark" id="map-measure-toggle">
+                            <i class="bx bx-ruler me-1"></i> Measure
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="map-measure-clear">
+                            Clear Measure
+                        </button>
+                        <div class="gis-opacity-control">
+                            <label for="map-hillshade-opacity">Relief</label>
+                            <input type="range" id="map-hillshade-opacity" min="0" max="80" value="52">
+                        </div>
+                        <div class="gis-readout" id="map-coordinate-readout">Lat -, Lng -</div>
+                        <div class="gis-readout" id="map-measure-readout">Measure: 0 m</div>
+                    </div>
+                </div>
                 <div id="sensor-cluster-map"></div>
             </div>
         </div>
@@ -506,6 +674,42 @@
         var sirenAudio = new Audio(@json('/sound/sirene.mp3'));
         var sirenShouldPlay = false;
         var sirenIsPlaying = false;
+        var lastMapFocusKey = null;
+        var hasAppliedInitialFocus = false;
+        var latestMapData = {
+            clusters: clusters,
+            sensors: sensorPoints,
+            warningStations: warningStations,
+            alert_active: initialAlertActive
+        };
+        var provinceFilter = document.getElementById('map-province-filter');
+        var cityFilter = document.getElementById('map-city-filter');
+        var radiusFilter = document.getElementById('map-radius-filter');
+        var terrainProfile = document.getElementById('map-terrain-profile');
+        var lockFilter = document.getElementById('map-lock-filter');
+        var resetFilter = document.getElementById('map-filter-reset');
+        var filterStatus = document.getElementById('map-filter-status');
+        var fitFilteredButton = document.getElementById('map-fit-filtered');
+        var fitAllButton = document.getElementById('map-fit-all');
+        var measureToggleButton = document.getElementById('map-measure-toggle');
+        var measureClearButton = document.getElementById('map-measure-clear');
+        var coordinateReadout = document.getElementById('map-coordinate-readout');
+        var measureReadout = document.getElementById('map-measure-readout');
+        var hillshadeOpacity = document.getElementById('map-hillshade-opacity');
+        var defaultMapCenter = [-2.6, 118.0];
+        var defaultMapZoom = 5;
+        var regionPresets = {
+            'DKI Jakarta': {
+                center: [-6.2088, 106.8456],
+                bounds: [[-6.38, 106.65], [-5.95, 107.05]],
+                zoom: 11
+            },
+            'Jakarta': {
+                center: [-6.2088, 106.8456],
+                bounds: [[-6.38, 106.65], [-5.95, 107.05]],
+                zoom: 11
+            }
+        };
 
         sirenAudio.loop = true;
         sirenAudio.preload = 'auto';
@@ -636,6 +840,216 @@
             return sensor.value || sensor.status || '-';
         }
 
+        function uniqueSorted(values) {
+            return Array.from(new Set(values.filter(Boolean).map(function (value) {
+                return String(value).trim();
+            }).filter(Boolean))).sort(function (a, b) {
+                return a.localeCompare(b);
+            });
+        }
+
+        function allMapItems(data) {
+            return []
+                .concat(data.clusters || [])
+                .concat(data.sensors || [])
+                .concat(data.warningStations || []);
+        }
+
+        function populateProvinceFilter(data) {
+            if (!provinceFilter) {
+                return;
+            }
+
+            var selectedProvince = provinceFilter.value;
+            var provinces = uniqueSorted(allMapItems(data).map(function (item) {
+                return item.province;
+            }));
+            provinceFilter.innerHTML = '<option value="">Semua Indonesia</option>' + provinces.map(function (province) {
+                return '<option value="' + escapeHtml(province) + '">' + escapeHtml(province) + '</option>';
+            }).join('');
+
+            if (provinces.includes(selectedProvince)) {
+                provinceFilter.value = selectedProvince;
+            }
+        }
+
+        function populateCityFilter(data) {
+            if (!cityFilter || !provinceFilter) {
+                return;
+            }
+
+            var province = provinceFilter.value;
+            var selectedCity = cityFilter.value;
+            var cities = province
+                ? uniqueSorted(allMapItems(data)
+                    .filter(function (item) {
+                        return item.province === province;
+                    })
+                    .map(function (item) {
+                        return item.city;
+                    }))
+                : [];
+
+            cityFilter.disabled = !province || !cities.length;
+            cityFilter.innerHTML = '<option value="">Semua kab/kota</option>' + cities.map(function (city) {
+                return '<option value="' + escapeHtml(city) + '">' + escapeHtml(city) + '</option>';
+            }).join('');
+
+            if (cities.includes(selectedCity)) {
+                cityFilter.value = selectedCity;
+            }
+        }
+
+        function itemMatchesFilter(item) {
+            var province = provinceFilter ? provinceFilter.value : '';
+            var city = cityFilter ? cityFilter.value : '';
+
+            if (province && item.province !== province) {
+                return false;
+            }
+
+            if (city && item.city !== city) {
+                return false;
+            }
+
+            return true;
+        }
+
+        function filteredMapData(data) {
+            return {
+                clusters: (data.clusters || []).filter(itemMatchesFilter),
+                sensors: (data.sensors || []).filter(itemMatchesFilter),
+                warningStations: (data.warningStations || []).filter(itemMatchesFilter),
+                alert_active: data.alert_active
+            };
+        }
+
+        function boundsFromItems(items) {
+            var latLngs = items
+                .filter(function (item) {
+                    return item.lat !== null && item.lng !== null;
+                })
+                .map(function (item) {
+                    return [Number(item.lat), Number(item.lng)];
+                });
+
+            return latLngs.length ? L.latLngBounds(latLngs) : null;
+        }
+
+        function radiusBounds(center, radiusMeters) {
+            var lat = Number(center[0]);
+            var lng = Number(center[1]);
+            var latDelta = radiusMeters / 111320;
+            var lngDelta = radiusMeters / (111320 * Math.cos(lat * Math.PI / 180));
+
+            return L.latLngBounds(
+                [lat - latDelta, lng - lngDelta],
+                [lat + latDelta, lng + lngDelta]
+            );
+        }
+
+        function focusCenterForData(data) {
+            var province = provinceFilter ? provinceFilter.value : '';
+            var city = cityFilter ? cityFilter.value : '';
+            var items = allMapItems(data);
+            var bounds = boundsFromItems(items);
+
+            if (bounds) {
+                return [bounds.getCenter().lat, bounds.getCenter().lng];
+            }
+
+            if (province && regionPresets[province]) {
+                return regionPresets[province].center;
+            }
+
+            if (city && regionPresets[city]) {
+                return regionPresets[city].center;
+            }
+
+            return defaultMapCenter;
+        }
+
+        function applyMapFocus(data) {
+            var province = provinceFilter ? provinceFilter.value : '';
+            var city = cityFilter ? cityFilter.value : '';
+            var lockEnabled = !lockFilter || lockFilter.checked;
+            var radiusValue = radiusFilter ? radiusFilter.value : 'auto';
+            var items = allMapItems(data);
+            var bounds = boundsFromItems(items);
+            var preset = regionPresets[city] || regionPresets[province] || null;
+            var focusKey = [province || 'all', city || 'all', radiusValue, lockEnabled ? 'locked' : 'free'].join('|');
+            var shouldMoveMap = !hasAppliedInitialFocus || focusKey !== lastMapFocusKey;
+
+            if (!province && !city) {
+                if (lockEnabled) {
+                    map.setMaxBounds(null);
+                }
+                if (!shouldMoveMap) {
+                    return;
+                }
+                if (bounds && bounds.isValid()) {
+                    map.fitBounds(bounds.pad(0.25), { maxZoom: 9 });
+                } else {
+                    map.setView(defaultMapCenter, defaultMapZoom);
+                }
+                lastMapFocusKey = focusKey;
+                hasAppliedInitialFocus = true;
+                return;
+            }
+
+            if (radiusValue !== 'auto') {
+                bounds = radiusBounds(focusCenterForData(data), Number(radiusValue));
+            } else if ((!bounds || !bounds.isValid()) && preset) {
+                bounds = L.latLngBounds(preset.bounds);
+            }
+
+            if (!bounds || !bounds.isValid()) {
+                return;
+            }
+
+            focusLayer.addLayer(L.rectangle(bounds, {
+                color: '#556ee6',
+                fillOpacity: 0,
+                opacity: 0.5,
+                weight: 2,
+                dashArray: '6 6'
+            }));
+
+            if (shouldMoveMap) {
+                map.fitBounds(bounds.pad(0.08), {
+                    maxZoom: preset ? preset.zoom : 12
+                });
+            }
+
+            if (lockEnabled) {
+                map.setMaxBounds(bounds.pad(0.18));
+                map.options.maxBoundsViscosity = 0.9;
+            } else {
+                map.setMaxBounds(null);
+            }
+
+            lastMapFocusKey = focusKey;
+            hasAppliedInitialFocus = true;
+        }
+
+        function updateFilterStatus(data) {
+            if (!filterStatus) {
+                return;
+            }
+
+            var province = provinceFilter ? provinceFilter.value : '';
+            var city = cityFilter ? cityFilter.value : '';
+            var label = city || province || 'Semua Indonesia';
+            var total = (data.clusters || []).length + (data.sensors || []).length + (data.warningStations || []).length;
+
+            filterStatus.textContent = 'Area: ' + label + ' - ' + total + ' titik tampil'
+                + (lockFilter && lockFilter.checked ? ' - radius/area dikunci.' : '.');
+        }
+
+        function rerenderCurrentMap() {
+            renderMapData(latestMapData);
+        }
+
         function sensorDisplayPoint(sensor, indexByCoordinate) {
             var key = [
                 Number(sensor.lat || 0).toFixed(5),
@@ -661,26 +1075,62 @@
 
         var map = L.map('sensor-cluster-map', {
             scrollWheelZoom: false
-        }).setView([-2.6, 118.0], 5);
+        }).setView(defaultMapCenter, defaultMapZoom);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        L.control.scale({
+            imperial: false,
+            metric: true,
+            position: 'bottomleft'
+        }).addTo(map);
+
+        var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+        });
+        var topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap'
+        });
+        var esriTopoLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18,
+            attribution: 'Tiles &copy; Esri'
+        });
+        var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18,
+            attribution: 'Tiles &copy; Esri'
+        });
+        var hillshadeLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 16,
+            opacity: 0.36,
+            attribution: 'Hillshade &copy; Esri'
+        });
+
+        topoLayer.addTo(map);
+        hillshadeLayer.addTo(map);
 
         var clusterLayer = L.layerGroup().addTo(map);
         var sensorLayer = L.layerGroup().addTo(map);
         var warningLayer = L.layerGroup().addTo(map);
+        var focusLayer = L.layerGroup().addTo(map);
+        var measureLayer = L.layerGroup().addTo(map);
+        var measureMode = false;
+        var measurePoints = [];
 
         function renderMapData(data) {
-            var clusters = data.clusters || [];
-            var sensorPoints = data.sensors || [];
-            var warningStations = data.warningStations || [];
+            latestMapData = data;
+            populateProvinceFilter(data);
+            populateCityFilter(data);
 
-            syncSiren(hasDangerState(data));
+            var visibleData = filteredMapData(data);
+            var clusters = visibleData.clusters || [];
+            var sensorPoints = visibleData.sensors || [];
+            var warningStations = visibleData.warningStations || [];
+
+            syncSiren(hasDangerState(visibleData));
             clusterLayer.clearLayers();
             sensorLayer.clearLayers();
             warningLayer.clearLayers();
+            focusLayer.clearLayers();
 
             clusters.forEach(function (cluster) {
                 var color = isDanger(cluster) ? '#f46a6a' : (statusColors[cluster.status] || '#34c38f');
@@ -740,6 +1190,7 @@
                     '<br>Stasiun: ' + escapeHtml(sensor.station) +
                     '<br>Warning Station: ' + escapeHtml(sensor.warning_station) +
                     '<br>Provinsi: ' + escapeHtml(sensor.province) +
+                    '<br>Kab/Kota: ' + escapeHtml(sensor.city) +
                     '<br>Status: ' + escapeHtml(sensor.status) +
                     sensorReadingHtml(sensor);
 
@@ -775,6 +1226,7 @@
 
                 var stationPopupBody =
                     '<br>Provinsi: ' + escapeHtml(station.province) +
+                    '<br>Kab/Kota: ' + escapeHtml(station.city) +
                     '<br>Status: ' + escapeHtml(station.status) +
                     '<br>Public Warning: ' + (station.public_warning_enabled ? 'Aktif' : 'Standby') +
                     '<br>ACK: ' + escapeHtml(station.ack_response) +
@@ -822,9 +1274,115 @@
                     className: stationDanger ? 'danger-map-radius' : ''
                 }).addTo(warningLayer);
             });
+
+            applyMapFocus(visibleData);
+            updateFilterStatus(visibleData);
         }
 
-        L.control.layers(null, {
+        function setTerrainProfile(profile) {
+            [osmLayer, topoLayer, esriTopoLayer, satelliteLayer].forEach(function (layer) {
+                if (map.hasLayer(layer)) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            if (profile === 'operation') {
+                osmLayer.addTo(map);
+                hillshadeLayer.setOpacity(0.22);
+                if (hillshadeOpacity) {
+                    hillshadeOpacity.value = 22;
+                }
+                if (!map.hasLayer(hillshadeLayer)) {
+                    hillshadeLayer.addTo(map);
+                }
+                return;
+            }
+
+            if (profile === 'satellite') {
+                satelliteLayer.addTo(map);
+                hillshadeLayer.setOpacity(0.42);
+                if (hillshadeOpacity) {
+                    hillshadeOpacity.value = 42;
+                }
+                if (!map.hasLayer(hillshadeLayer)) {
+                    hillshadeLayer.addTo(map);
+                }
+                return;
+            }
+
+            topoLayer.addTo(map);
+            hillshadeLayer.setOpacity(0.52);
+            if (hillshadeOpacity) {
+                hillshadeOpacity.value = 52;
+            }
+            if (!map.hasLayer(hillshadeLayer)) {
+                hillshadeLayer.addTo(map);
+            }
+        }
+
+        function formatDistance(meters) {
+            return meters >= 1000
+                ? (meters / 1000).toFixed(2) + ' km'
+                : Math.round(meters) + ' m';
+        }
+
+        function measureDistance() {
+            var total = 0;
+
+            for (var index = 1; index < measurePoints.length; index++) {
+                total += map.distance(measurePoints[index - 1], measurePoints[index]);
+            }
+
+            return total;
+        }
+
+        function renderMeasure() {
+            measureLayer.clearLayers();
+
+            measurePoints.forEach(function (point, index) {
+                L.circleMarker(point, {
+                    radius: 5,
+                    color: '#343a40',
+                    fillColor: '#ffffff',
+                    fillOpacity: 1,
+                    weight: 2
+                }).bindTooltip(String(index + 1), {
+                    direction: 'top',
+                    permanent: true,
+                    opacity: 0.9
+                }).addTo(measureLayer);
+            });
+
+            if (measurePoints.length > 1) {
+                L.polyline(measurePoints, {
+                    color: '#343a40',
+                    dashArray: '8 6',
+                    weight: 3
+                }).addTo(measureLayer);
+            }
+
+            if (measureReadout) {
+                measureReadout.textContent = 'Measure: ' + formatDistance(measureDistance());
+            }
+        }
+
+        function setMeasureMode(enabled) {
+            measureMode = enabled;
+            mapElement.classList.toggle('gis-measuring', enabled);
+            if (measureToggleButton) {
+                measureToggleButton.classList.toggle('active', enabled);
+                measureToggleButton.classList.toggle('btn-dark', enabled);
+                measureToggleButton.classList.toggle('btn-outline-dark', !enabled);
+            }
+        }
+
+        L.control.layers({
+            'Terrain + Kontur': topoLayer,
+            'Topographic Relief': esriTopoLayer,
+            'OpenStreetMap': osmLayer,
+            'Satellite': satelliteLayer
+        }, {
+            'Efek Terrain 3D / Hillshade': hillshadeLayer,
             'Klaster': clusterLayer,
             'Sensor Pemantauan': sensorLayer,
             'Stasiun Peringatan': warningLayer
@@ -832,12 +1390,125 @@
             collapsed: false
         }).addTo(map);
 
-        renderMapData({
-            clusters: clusters,
-            sensors: sensorPoints,
-            warningStations: warningStations,
-            alert_active: initialAlertActive
+        if (provinceFilter) {
+            provinceFilter.addEventListener('change', function () {
+                if (cityFilter) {
+                    cityFilter.value = '';
+                }
+                rerenderCurrentMap();
+            });
+        }
+
+        if (cityFilter) {
+            cityFilter.addEventListener('change', rerenderCurrentMap);
+        }
+
+        if (radiusFilter) {
+            radiusFilter.addEventListener('change', rerenderCurrentMap);
+        }
+
+        if (terrainProfile) {
+            terrainProfile.addEventListener('change', function () {
+                setTerrainProfile(terrainProfile.value);
+            });
+            setTerrainProfile(terrainProfile.value);
+        }
+
+        if (hillshadeOpacity) {
+            hillshadeOpacity.addEventListener('input', function () {
+                hillshadeLayer.setOpacity(Number(hillshadeOpacity.value || 0) / 100);
+                if (!map.hasLayer(hillshadeLayer) && Number(hillshadeOpacity.value || 0) > 0) {
+                    hillshadeLayer.addTo(map);
+                }
+            });
+        }
+
+        if (fitFilteredButton) {
+            fitFilteredButton.addEventListener('click', function () {
+                lastMapFocusKey = null;
+                hasAppliedInitialFocus = false;
+                rerenderCurrentMap();
+            });
+        }
+
+        if (fitAllButton) {
+            fitAllButton.addEventListener('click', function () {
+                if (provinceFilter) {
+                    provinceFilter.value = '';
+                }
+                if (cityFilter) {
+                    cityFilter.value = '';
+                }
+                if (lockFilter) {
+                    lockFilter.checked = false;
+                }
+                lastMapFocusKey = null;
+                hasAppliedInitialFocus = false;
+                rerenderCurrentMap();
+            });
+        }
+
+        if (measureToggleButton) {
+            measureToggleButton.addEventListener('click', function () {
+                setMeasureMode(!measureMode);
+            });
+        }
+
+        if (measureClearButton) {
+            measureClearButton.addEventListener('click', function () {
+                measurePoints = [];
+                renderMeasure();
+            });
+        }
+
+        map.on('mousemove', function (event) {
+            if (coordinateReadout) {
+                coordinateReadout.textContent = 'Lat ' + event.latlng.lat.toFixed(6) + ', Lng ' + event.latlng.lng.toFixed(6);
+            }
         });
+
+        mapElement.addEventListener('mouseleave', function () {
+            if (coordinateReadout) {
+                coordinateReadout.textContent = 'Lat -, Lng -';
+            }
+        });
+
+        map.on('click', function (event) {
+            if (!measureMode) {
+                return;
+            }
+
+            measurePoints.push(event.latlng);
+            renderMeasure();
+        });
+
+        if (lockFilter) {
+            lockFilter.addEventListener('change', rerenderCurrentMap);
+        }
+
+        if (resetFilter) {
+            resetFilter.addEventListener('click', function () {
+                if (provinceFilter) {
+                    provinceFilter.value = '';
+                }
+                if (cityFilter) {
+                    cityFilter.value = '';
+                }
+                if (radiusFilter) {
+                    radiusFilter.value = '30000';
+                }
+                if (terrainProfile) {
+                    terrainProfile.value = 'mountain';
+                    setTerrainProfile(terrainProfile.value);
+                }
+                if (lockFilter) {
+                    lockFilter.checked = true;
+                }
+                rerenderCurrentMap();
+            });
+        }
+
+        renderMapData(latestMapData);
 
         var mapRefreshInFlight = false;
 
