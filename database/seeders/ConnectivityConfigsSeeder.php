@@ -56,12 +56,8 @@ class ConnectivityConfigsSeeder extends Seeder
             ]
         ];
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         foreach ($data as $row) {
             DB::table('connectivity_configs')->insertOrIgnore($row);
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }

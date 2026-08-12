@@ -37,12 +37,8 @@ class WarningStationTelemetryConfigsSeeder extends Seeder
             ]
         ];
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         foreach ($data as $row) {
             DB::table('warning_station_telemetry_configs')->insertOrIgnore($row);
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }

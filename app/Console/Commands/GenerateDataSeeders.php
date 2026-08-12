@@ -124,15 +124,33 @@ class GenerateDataSeeders extends Command
      */
     protected function getForeignKeys(string $table): array
     {
-        $databaseName = DB::getDatabaseName();
-        $foreignKeys = DB::select("
-            SELECT
-                REFERENCED_TABLE_NAME as referenced_table
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = ?
-                AND TABLE_NAME = ?
-                AND REFERENCED_TABLE_NAME IS NOT NULL
-        ", [$databaseName, $table]);
+        $driver = DB::getDriverName();
+
+        if ($driver === 'pgsql') {
+            // PostgreSQL
+            $foreignKeys = DB::select("
+                SELECT DISTINCT ccu.table_name as referenced_table
+                FROM information_schema.table_constraints AS tc
+                JOIN information_schema.key_column_usage AS kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                  AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage AS ccu
+                  ON ccu.constraint_name = tc.constraint_name
+                  AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                  AND tc.table_name = ?
+            ", [$table]);
+        } else {
+            // MySQL
+            $databaseName = DB::getDatabaseName();
+            $foreignKeys = DB::select("
+                SELECT DISTINCT REFERENCED_TABLE_NAME as referenced_table
+                FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = ?
+                    AND TABLE_NAME = ?
+                    AND REFERENCED_TABLE_NAME IS NOT NULL
+            ", [$databaseName, $table]);
+        }
 
         return array_map(function ($fk) {
             return $fk->referenced_table;
@@ -144,13 +162,30 @@ class GenerateDataSeeders extends Command
      */
     protected function getTables(): array
     {
-        $tables = DB::select('SHOW TABLES');
-        $databaseName = DB::getDatabaseName();
-        $key = "Tables_in_{$databaseName}";
+        $driver = DB::getDriverName();
 
-        return array_map(function ($table) use ($key) {
-            return $table->$key;
-        }, $tables);
+        if ($driver === 'pgsql') {
+            // PostgreSQL
+            $tables = DB::select("
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_type = 'BASE TABLE'
+                ORDER BY table_name
+            ");
+            return array_map(function ($table) {
+                return $table->table_name;
+            }, $tables);
+        } else {
+            // MySQL
+            $tables = DB::select('SHOW TABLES');
+            $databaseName = DB::getDatabaseName();
+            $key = "Tables_in_{$databaseName}";
+
+            return array_map(function ($table) use ($key) {
+                return $table->$key;
+            }, $tables);
+        }
     }
 
     /**
@@ -158,8 +193,12 @@ class GenerateDataSeeders extends Command
      */
     protected function generateSeeder(string $table): string
     {
-        $columns = $this->getTableColumns($table);
-        $data = DB::table($table)->orderBy('id')->get();
+        // Try to order by 'id', fallback to no ordering for pivot tables
+        try {
+            $data = DB::table($table)->orderBy('id')->get();
+        } catch (\Exception $e) {
+            $data = DB::table($table)->get();
+        }
 
         $seederName = Str::studly($table) . 'Seeder';
         $className = $seederName;
@@ -184,18 +223,26 @@ class GenerateDataSeeders extends Command
      */
     protected function getTableColumns(string $table): array
     {
-        $columns = DB::select("SHOW COLUMNS FROM `{$table}`");
+        $driver = DB::getDriverName();
 
-        $columnInfo = [];
-        foreach ($columns as $column) {
-            $columnInfo[] = [
-                'name' => $column->Field,
-                'type' => $column->Type,
-                'null' => $column->Null === 'YES',
-            ];
+        if ($driver === 'pgsql') {
+            // PostgreSQL - not used in seeder generation but kept for consistency
+            return [];
+        } else {
+            // MySQL
+            $columns = DB::select("SHOW COLUMNS FROM `{$table}`");
+
+            $columnInfo = [];
+            foreach ($columns as $column) {
+                $columnInfo[] = [
+                    'name' => $column->Field,
+                    'type' => $column->Type,
+                    'null' => $column->Null === 'YES',
+                ];
+            }
+
+            return $columnInfo;
         }
-
-        return $columnInfo;
     }
 
     /**
@@ -231,13 +278,9 @@ class {$className} extends Seeder
     {
         \$data = {$rowsPhp};
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         foreach (\$data as \$row) {
             DB::table('{$table}')->insertOrIgnore(\$row);
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }
 PHP;

@@ -36,12 +36,8 @@ class DataLoggerDiscoveriesSeeder extends Seeder
             ]
         ];
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         foreach ($data as $row) {
             DB::table('data_logger_discoveries')->insertOrIgnore($row);
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }

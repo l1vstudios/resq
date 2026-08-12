@@ -44,12 +44,8 @@ class MstPrefixesSeeder extends Seeder
             ]
         ];
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         foreach ($data as $row) {
             DB::table('mst_prefixes')->insertOrIgnore($row);
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }

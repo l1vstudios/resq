@@ -31,12 +31,8 @@ class CorridorMonitoringsSeeder extends Seeder
             ]
         ];
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         foreach ($data as $row) {
             DB::table('corridor_monitorings')->insertOrIgnore($row);
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 }
