@@ -1,0 +1,41 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+class ReferenceRoutesSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     *
+     * @return void
+     */
+    public function run()
+    {
+        $data = [
+            [
+                'id' => 1,
+                'project_id' => 4,
+                'workspace_id' => 4,
+                'route_code' => 'RR-DEMO-RIVER',
+                'name' => 'Semeru Lahar Reference Route',
+                'route_type' => 'lahar_corridor',
+                'path_coordinates' => '[{"lat": -8.108, "lng": 112.922}, {"lat": -8.1378, "lng": 112.9467}, {"lat": -8.1724, "lng": 112.9716}, {"lat": -8.2052, "lng": 112.994}, {"lat": -8.239, "lng": 113.0185}]',
+                'status' => 'Active',
+                'notes' => 'Demo reference route from Semeru summit toward downstream monitoring points for CFPE binding.',
+                'created_at' => '2026-08-11 12:02:27',
+                'updated_at' => '2026-08-11 12:02:27'
+            ]
+        ];
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+        foreach ($data as $row) {
+            DB::table('reference_routes')->insertOrIgnore($row);
+        }
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+    }
+}
