@@ -99,21 +99,21 @@
                 <a href="<?php echo e(route('dashboard')); ?>" class="logo logo-dark">
                     <span class="logo-sm">
                         <span class="topbar-logo-mobile">
-                            <img src="<?php echo e(URL::asset('build/images/logomobile.png')); ?>" alt="RESQ">
+                            <img src="/build/images/logomobile.png" alt="RESQ">
                         </span>
                     </span>
                     <span class="logo-lg">
-                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ">
+                        <img src="/build/images/logos44.png" alt="RESQ">
                     </span>
                 </a>
                 <a href="<?php echo e(route('dashboard')); ?>" class="logo logo-light">
                     <span class="logo-sm">
                         <span class="topbar-logo-mobile">
-                            <img src="<?php echo e(URL::asset('build/images/logomobile.png')); ?>" alt="RESQ">
+                            <img src="/build/images/logomobile.png" alt="RESQ">
                         </span>
                     </span>
                     <span class="logo-lg">
-                        <img src="<?php echo e(URL::asset('build/images/logos44.png')); ?>" alt="RESQ">
+                        <img src="/build/images/logos44.png" alt="RESQ">
                     </span>
                 </a>
             </div>
@@ -151,11 +151,14 @@
 
             <div class="dropdown d-inline-block">
                 <?php ($alertNotifications = collect($alertNotifications ?? [])); ?>
+                <?php ($inboxNotifications = collect($inboxNotifications ?? [])); ?>
+                <?php ($inboxUnreadCount = $inboxUnreadCount ?? 0); ?>
+                <?php ($topbarUser = auth()->user()); ?>
                 <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-bell bx-tada"></i>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($alertNotifications->isNotEmpty()): ?>
-                        <span class="badge bg-danger rounded-pill"><?php echo e($alertNotifications->count()); ?></span>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($topbarUser?->isClientUser() ? $inboxUnreadCount > 0 : $alertNotifications->isNotEmpty()): ?>
+                        <span class="badge bg-danger rounded-pill"><?php echo e($topbarUser?->isClientUser() ? $inboxUnreadCount : $alertNotifications->count()); ?></span>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </button>
                 <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
@@ -163,15 +166,37 @@
                     <div class="p-3 border-bottom">
                         <div class="row align-items-center">
                             <div class="col">
-                                <h6 class="m-0">Awas Sensors</h6>
+                                <h6 class="m-0"><?php echo e($topbarUser?->isClientUser() ? 'Inbox' : 'Awas Sensors'); ?></h6>
                             </div>
                             <div class="col-auto">
-                                <span class="badge bg-danger-subtle text-danger">Realtime DB</span>
+                                <span class="badge bg-danger-subtle text-danger"><?php echo e($topbarUser?->isClientUser() ? $inboxUnreadCount.' unread' : 'Realtime DB'); ?></span>
                             </div>
                         </div>
                     </div>
 
                     <div data-simplebar style="max-height: 260px;">
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($topbarUser?->isClientUser()): ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $inboxNotifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $notification): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <a href="<?php echo e(route('client-operations.inbox.show', $notification)); ?>" class="text-reset notification-item">
+                                    <div class="d-flex">
+                                        <div class="avatar-xs me-3">
+                                            <span class="avatar-title bg-<?php echo e($notification->read_at ? 'secondary' : 'primary'); ?> rounded-circle font-size-16">
+                                                <i class="bx bx-bell"></i>
+                                            </span>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mt-0 mb-1"><?php echo e($notification->title); ?></h6>
+                                            <div class="font-size-12 text-muted">
+                                                <p class="mb-1"><?php echo e($notification->event_type); ?></p>
+                                                <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <?php echo e(optional($notification->occurred_at ?? $notification->created_at)->diffForHumans()); ?></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                <div class="p-3 text-center text-muted">No notifications.</div>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <?php else: ?>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $alertNotifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $alert): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <a href="<?php echo e(route('telemetry.index')); ?>" class="text-reset notification-item">
                                 <div class="d-flex">
@@ -194,11 +219,13 @@
                                 Tidak ada sensor level Awas.
                             </div>
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
                     <div class="p-2 border-top d-grid">
-                        <a class="btn btn-sm btn-link font-size-14 text-center text-danger" href="<?php echo e(route('telemetry.index')); ?>">
-                            <i class="mdi mdi-map-marker-alert-outline me-1"></i> Open telemetry
+                        <a class="btn btn-sm btn-link font-size-14 text-center text-danger" href="<?php echo e($topbarUser?->isClientUser() ? route('client-operations.inbox.index') : route('telemetry.index')); ?>">
+                            <i class="mdi mdi-map-marker-alert-outline me-1"></i> <?php echo e($topbarUser?->isClientUser() ? 'Open inbox' : 'Open telemetry'); ?>
+
                         </a>
                     </div>
                 </div>
@@ -208,7 +235,7 @@
                 <button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <img class="rounded-circle header-profile-user"
-                        src="<?php echo e(isset(Auth::user()->avatar) ? asset(Auth::user()->avatar) : asset('build/images/users/avatar-1.jpg')); ?>"
+                        src="<?php echo e(isset(Auth::user()->avatar) ? '/'.ltrim(Auth::user()->avatar, '/') : '/build/images/users/avatar-1.jpg'); ?>"
                         alt="Header Avatar">
                     <span class="d-none d-xl-inline-block ms-1"><?php echo e(ucfirst(Auth::user()->name)); ?></span>
                     <i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>

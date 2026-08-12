@@ -20,6 +20,14 @@ class GeospatialWorkspace extends Model
         'latitude',
         'longitude',
         'status',
+        'basemap_provider',
+        'basemap_tile_url',
+        'default_zoom',
+        'map_bounds',
+    ];
+
+    protected $casts = [
+        'map_bounds' => 'array',
     ];
 
     public function project()
@@ -40,5 +48,30 @@ class GeospatialWorkspace extends Model
     public function sensors()
     {
         return $this->hasMany(Sensor::class, 'workspace_id');
+    }
+
+    public function informationLayers()
+    {
+        return $this->hasMany(SpatialInformationLayer::class, 'workspace_id');
+    }
+
+    public function corridors()
+    {
+        return $this->hasMany(CorridorMonitoring::class, 'workspace_id');
+    }
+
+    public function referenceRoutes()
+    {
+        return $this->hasMany(ReferenceRoute::class, 'workspace_id');
+    }
+
+    public function referencePoints()
+    {
+        return $this->hasMany(ReferencePoint::class, 'workspace_id');
+    }
+
+    public function stationSpatialReferences()
+    {
+        return $this->hasMany(StationSpatialReference::class, 'workspace_id');
     }
 }

@@ -99,21 +99,21 @@
                 <a href="{{ route('dashboard') }}" class="logo logo-dark">
                     <span class="logo-sm">
                         <span class="topbar-logo-mobile">
-                            <img src="{{ URL::asset('build/images/logomobile.png') }}" alt="RESQ">
+                            <img src="/build/images/logomobile.png" alt="RESQ">
                         </span>
                     </span>
                     <span class="logo-lg">
-                        <img src="{{ URL::asset('build/images/logos44.png') }}" alt="RESQ">
+                        <img src="/build/images/logos44.png" alt="RESQ">
                     </span>
                 </a>
                 <a href="{{ route('dashboard') }}" class="logo logo-light">
                     <span class="logo-sm">
                         <span class="topbar-logo-mobile">
-                            <img src="{{ URL::asset('build/images/logomobile.png') }}" alt="RESQ">
+                            <img src="/build/images/logomobile.png" alt="RESQ">
                         </span>
                     </span>
                     <span class="logo-lg">
-                        <img src="{{ URL::asset('build/images/logos44.png') }}" alt="RESQ">
+                        <img src="/build/images/logos44.png" alt="RESQ">
                     </span>
                 </a>
             </div>
@@ -151,11 +151,14 @@
 
             <div class="dropdown d-inline-block">
                 @php($alertNotifications = collect($alertNotifications ?? []))
+                @php($inboxNotifications = collect($inboxNotifications ?? []))
+                @php($inboxUnreadCount = $inboxUnreadCount ?? 0)
+                @php($topbarUser = auth()->user())
                 <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-bell bx-tada"></i>
-                    @if ($alertNotifications->isNotEmpty())
-                        <span class="badge bg-danger rounded-pill">{{ $alertNotifications->count() }}</span>
+                    @if ($topbarUser?->isClientUser() ? $inboxUnreadCount > 0 : $alertNotifications->isNotEmpty())
+                        <span class="badge bg-danger rounded-pill">{{ $topbarUser?->isClientUser() ? $inboxUnreadCount : $alertNotifications->count() }}</span>
                     @endif
                 </button>
                 <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
@@ -163,15 +166,37 @@
                     <div class="p-3 border-bottom">
                         <div class="row align-items-center">
                             <div class="col">
-                                <h6 class="m-0">Awas Sensors</h6>
+                                <h6 class="m-0">{{ $topbarUser?->isClientUser() ? 'Inbox' : 'Awas Sensors' }}</h6>
                             </div>
                             <div class="col-auto">
-                                <span class="badge bg-danger-subtle text-danger">Realtime DB</span>
+                                <span class="badge bg-danger-subtle text-danger">{{ $topbarUser?->isClientUser() ? $inboxUnreadCount.' unread' : 'Realtime DB' }}</span>
                             </div>
                         </div>
                     </div>
 
                     <div data-simplebar style="max-height: 260px;">
+                        @if($topbarUser?->isClientUser())
+                            @forelse ($inboxNotifications as $notification)
+                                <a href="{{ route('client-operations.inbox.show', $notification) }}" class="text-reset notification-item">
+                                    <div class="d-flex">
+                                        <div class="avatar-xs me-3">
+                                            <span class="avatar-title bg-{{ $notification->read_at ? 'secondary' : 'primary' }} rounded-circle font-size-16">
+                                                <i class="bx bx-bell"></i>
+                                            </span>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mt-0 mb-1">{{ $notification->title }}</h6>
+                                            <div class="font-size-12 text-muted">
+                                                <p class="mb-1">{{ $notification->event_type }}</p>
+                                                <p class="mb-0"><i class="mdi mdi-clock-outline"></i> {{ optional($notification->occurred_at ?? $notification->created_at)->diffForHumans() }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            @empty
+                                <div class="p-3 text-center text-muted">No notifications.</div>
+                            @endforelse
+                        @else
                         @forelse ($alertNotifications as $alert)
                             <a href="{{ route('telemetry.index') }}" class="text-reset notification-item">
                                 <div class="d-flex">
@@ -194,11 +219,12 @@
                                 Tidak ada sensor level Awas.
                             </div>
                         @endforelse
+                        @endif
                     </div>
 
                     <div class="p-2 border-top d-grid">
-                        <a class="btn btn-sm btn-link font-size-14 text-center text-danger" href="{{ route('telemetry.index') }}">
-                            <i class="mdi mdi-map-marker-alert-outline me-1"></i> Open telemetry
+                        <a class="btn btn-sm btn-link font-size-14 text-center text-danger" href="{{ $topbarUser?->isClientUser() ? route('client-operations.inbox.index') : route('telemetry.index') }}">
+                            <i class="mdi mdi-map-marker-alert-outline me-1"></i> {{ $topbarUser?->isClientUser() ? 'Open inbox' : 'Open telemetry' }}
                         </a>
                     </div>
                 </div>
@@ -208,7 +234,7 @@
                 <button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <img class="rounded-circle header-profile-user"
-                        src="{{ isset(Auth::user()->avatar) ? asset(Auth::user()->avatar) : asset('build/images/users/avatar-1.jpg') }}"
+                        src="{{ isset(Auth::user()->avatar) ? '/'.ltrim(Auth::user()->avatar, '/') : '/build/images/users/avatar-1.jpg' }}"
                         alt="Header Avatar">
                     <span class="d-none d-xl-inline-block ms-1">{{ ucfirst(Auth::user()->name) }}</span>
                     <i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>

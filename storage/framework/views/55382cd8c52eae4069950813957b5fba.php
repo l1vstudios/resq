@@ -37,11 +37,16 @@
     }
 </style>
 
+<?php
+    $sidebarUser = auth()->user();
+    $sidebarIsClient = $sidebarUser?->isClientUser();
+?>
+
 <div class="vertical-menu">
     <div data-simplebar class="h-100">
         <div id="sidebar-menu">
             <ul class="metismenu list-unstyled" id="side-menu">
-                <li class="menu-title">Project Configuration</li>
+                <li class="menu-title"><?php echo e($sidebarIsClient ? 'Client Operations' : 'Project Configuration'); ?></li>
 
                 <li class="<?php echo e(request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : ''); ?>">
                     <a href="<?php echo e(route('dashboard')); ?>" class="waves-effect <?php echo e(request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'active' : ''); ?>">
@@ -50,11 +55,80 @@
                     </a>
                 </li>
 
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($sidebarIsClient): ?>
+                    <li class="<?php echo e(request()->routeIs('client-operations.*') ? 'mm-active' : ''); ?>">
+                        <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="<?php echo e(request()->routeIs('client-operations.*') ? 'true' : 'false'); ?>">
+                            <i class="bx bx-radar"></i>
+                            <span>Client Operations</span>
+                        </a>
+                        <ul class="sub-menu <?php echo e(request()->routeIs('client-operations.*') ? 'mm-show' : ''); ?>" aria-expanded="<?php echo e(request()->routeIs('client-operations.*') ? 'true' : 'false'); ?>">
+                            <li>
+                                <a href="<?php echo e(route('client-operations.index')); ?>" class="<?php echo e((request()->routeIs('client-operations.index') && ! request()->query('tab')) || request()->routeIs('client-operations.projects.show') || request()->routeIs('client-operations.corridors.*') || (request()->routeIs('client-operations.stations.show') && in_array(request()->query('tab'), [null, 'state'], true)) ? 'active' : ''); ?>">
+                                    Operational State
+                                </a>
+                            </li>
+                            <li>
+                                <a href="<?php echo e(route('client-operations.index', ['tab' => 'integrity'])); ?>" class="<?php echo e(request()->query('tab') === 'integrity' ? 'active' : ''); ?>">
+                                    Operational Integrity
+                                </a>
+                            </li>
+                            <li>
+                                <a href="<?php echo e(route('client-operations.index', ['tab' => 'administrative'])); ?>" class="<?php echo e(request()->query('tab') === 'administrative' ? 'active' : ''); ?>">
+                                    Administrative Monitoring
+                                </a>
+                            </li>
+                            <li>
+                                <a href="<?php echo e(route('client-operations.function-configuration.index')); ?>" class="<?php echo e(request()->routeIs('client-operations.function-configuration.*') ? 'active' : ''); ?>">
+                                    Function Configuration
+                                </a>
+                            </li>
+                            <li>
+                                <a href="<?php echo e(route('client-operations.reporting.index')); ?>" class="<?php echo e(request()->routeIs('client-operations.reporting.*') ? 'active' : ''); ?>">
+                                    Reporting &amp; Export
+                                </a>
+                            </li>
+                            <li>
+                                <a href="<?php echo e(route('client-operations.inbox.index')); ?>" class="<?php echo e(request()->routeIs('client-operations.inbox.*') ? 'active' : ''); ?>">
+                                    Inbox
+                                </a>
+                            </li>
+                            <li>
+                                <a href="<?php echo e(route('client-operations.users.index')); ?>" class="<?php echo e(request()->routeIs('client-operations.users.*') ? 'active' : ''); ?>">
+                                    Client Users
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                <?php else: ?>
                 <li class="<?php echo e(request()->routeIs('monitoring.*') ? 'mm-active' : ''); ?>">
                     <a href="<?php echo e(route('monitoring.index')); ?>" class="waves-effect <?php echo e(request()->routeIs('monitoring.*') ? 'active' : ''); ?>">
                         <i class="bx bx-pulse"></i>
                         <span>Monitoring</span>
                     </a>
+                </li>
+
+                <li class="<?php echo e(request()->routeIs('platform-operations.*') ? 'mm-active' : ''); ?>">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="<?php echo e(request()->routeIs('platform-operations.*') ? 'true' : 'false'); ?>">
+                        <i class="bx bx-radar"></i>
+                        <span>Platform Operations</span>
+                    </a>
+                    <ul class="sub-menu <?php echo e(request()->routeIs('platform-operations.*') ? 'mm-show' : ''); ?>" aria-expanded="<?php echo e(request()->routeIs('platform-operations.*') ? 'true' : 'false'); ?>">
+                        <li>
+                            <a href="<?php echo e(route('platform-operations.index')); ?>" class="<?php echo e(request()->routeIs('platform-operations.index') || request()->routeIs('platform-operations.projects.*') || request()->routeIs('platform-operations.corridors.*') || (request()->routeIs('platform-operations.stations.show') && in_array(request()->query('tab'), [null, 'state'], true)) ? 'active' : ''); ?>">
+                                Operational State
+                            </a>
+                        </li>
+                        <li>
+                            <a href="<?php echo e(route('platform-operations.integrity.index')); ?>" class="<?php echo e(request()->routeIs('platform-operations.integrity.*') || (request()->routeIs('platform-operations.stations.show') && request()->query('tab') === 'integrity') ? 'active' : ''); ?>">
+                                Operational Integrity
+                            </a>
+                        </li>
+                        <li>
+                            <a href="<?php echo e(route('platform-operations.administrative.index')); ?>" class="<?php echo e(request()->routeIs('platform-operations.administrative.*') || (request()->routeIs('platform-operations.stations.show') && request()->query('tab') === 'administrative') ? 'active' : ''); ?>">
+                                Administrative Monitoring
+                            </a>
+                        </li>
+                    </ul>
                 </li>
 
                 <li class="mm-active">
@@ -162,6 +236,7 @@
                         <span>Admin Management</span>
                     </a>
                 </li>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
             </ul>
         </div>

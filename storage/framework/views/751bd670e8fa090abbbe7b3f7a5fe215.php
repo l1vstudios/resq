@@ -421,7 +421,7 @@
                 setMessage('Mengubah .env logger ke mode ' + modeLabel + ' dan restart gateway via SSH...', 'info');
 
                 try {
-                    const response = await fetch(<?php echo json_encode(route('data-loggers.gateway-mode'), 15, 512) ?>, {
+                    const response = await fetch(<?php echo json_encode(route('data-loggers.gateway-mode', [], false)) ?>, {
                         method: 'POST',
                         headers: {
                             'Accept': 'application/json',
@@ -472,7 +472,7 @@
             setMessage('Sedang ping IP logger dari server. Ini belum mengecek login SSH.', 'info');
 
             try {
-                const response = await fetch(<?php echo json_encode(route('data-loggers.test-remote'), 15, 512) ?>, {
+                const response = await fetch(<?php echo json_encode(route('data-loggers.test-remote', [], false)) ?>, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',

@@ -176,7 +176,21 @@ class CanonicalMappingService
             return null;
         }
 
-        return is_numeric($address) ? (int) $address : null;
+        if (! is_numeric($address)) {
+            return null;
+        }
+
+        $value = (int) $address;
+
+        if ($value >= 40001 && $value <= 49999) {
+            return $value - 40001;
+        }
+
+        if ($value >= 30001 && $value <= 39999) {
+            return $value - 30001;
+        }
+
+        return $value;
     }
 
     public function storeObservation(
@@ -237,17 +251,30 @@ class CanonicalMappingService
             $rawData = RawDataIngestion::create($rawDataPayload);
         }
 
+        $field = $parameter->field_identity;
         $fieldValue = $numericValue ?? $this->stringValue($value);
-        $observation = CanonicalObservation::where('sensor_id', $sensor->id)
+        $observation = CanonicalObservation::where('monitoring_station_id', $sensor->monitoring_station_id)
+            ->where('sensor_id', $sensor->id)
             ->where('domain', $parameter->domain)
-            ->where('sensor_mapping_profile_id', $profile->id)
-            ->latest('received_at')
-            ->latest()
+            ->where('observed_at', $observedAt->toDateTimeString())
             ->first() ?: new CanonicalObservation();
 
         if (! $observation->exists) {
             $observation->canonical_observation_uid = (string) Str::uuid();
         }
+
+        $fieldValues = $this->mergeJsonMap($observation->field_values, [$field => $fieldValue]);
+        $fieldUnits = $this->mergeJsonMap($observation->field_units, [$field => $parameter->canonical_unit]);
+        $fieldOrigins = $this->mergeJsonMap($observation->field_origins, [$field => $valueOrigin]);
+        $fieldQuality = $this->mergeJsonMap($observation->field_quality, [$field => 'valid']);
+        $processingStatuses = $this->mergeJsonMap($observation->processing_statuses, [$field => 'mapped']);
+        $traceability = $this->mergeTraceability($observation->traceability, $field, [
+            'source_parameter' => $profile->source_parameter,
+            'source_unit' => $profile->source_unit,
+            'canonical_field' => $field,
+            'scale_factor' => (float) ($profile->scale_factor ?? 1),
+            'offset' => (float) ($profile->offset ?? 0),
+        ]);
 
         $observation->fill([
             'monitoring_station_id' => $sensor->monitoring_station_id,
@@ -256,31 +283,19 @@ class CanonicalMappingService
             'domain' => $parameter->domain,
             'observed_at' => $observedAt,
             'received_at' => $receivedAt,
-            'field_values' => [$parameter->field_identity => $fieldValue],
-            'field_units' => [$parameter->field_identity => $parameter->canonical_unit],
-            'field_origins' => [$parameter->field_identity => $valueOrigin],
-            'field_quality' => [$parameter->field_identity => 'valid'],
-            'processing_statuses' => [$parameter->field_identity => 'mapped'],
+            'field_values' => $fieldValues,
+            'field_units' => $fieldUnits,
+            'field_origins' => $fieldOrigins,
+            'field_quality' => $fieldQuality,
+            'processing_statuses' => $processingStatuses,
             'quality_status' => 'valid',
             'completeness_status' => 'complete',
             'processing_status' => 'mapped',
             'raw_data_ingestion_id' => $rawData->id,
             'sensor_mapping_profile_id' => $profile->id,
-            'traceability' => [
-                'source_parameter' => $profile->source_parameter,
-                'source_unit' => $profile->source_unit,
-                'canonical_field' => $parameter->field_identity,
-                'scale_factor' => (float) ($profile->scale_factor ?? 1),
-                'offset' => (float) ($profile->offset ?? 0),
-            ],
+            'traceability' => $traceability,
         ]);
         $observation->save();
-
-        CanonicalObservation::where('sensor_id', $sensor->id)
-            ->where('domain', $parameter->domain)
-            ->where('sensor_mapping_profile_id', $profile->id)
-            ->whereKeyNot($observation->id)
-            ->delete();
 
         RawDataIngestion::where('sensor_id', $sensor->id)
             ->where('source_parameter', $profile->source_parameter)
@@ -309,6 +324,26 @@ class CanonicalMappingService
         );
 
         return $observation;
+    }
+
+    private function mergeJsonMap(mixed $existing, array $next): array
+    {
+        return array_replace(is_array($existing) ? $existing : [], $next);
+    }
+
+    private function mergeTraceability(mixed $existing, string $field, array $next): array
+    {
+        $traceability = is_array($existing) ? $existing : [];
+
+        if (isset($traceability['canonical_field'])) {
+            $traceability = [
+                (string) $traceability['canonical_field'] => $traceability,
+            ];
+        }
+
+        $traceability[$field] = $next;
+
+        return $traceability;
     }
 
     public function mappedParameterValue(Sensor $sensor, mixed $value): ?array

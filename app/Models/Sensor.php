@@ -77,4 +77,14 @@ class Sensor extends Model
     {
         return $this->hasOne(SensorMappingProfile::class);
     }
+
+    public function mappingProfiles()
+    {
+        return $this->hasMany(SensorMappingProfile::class);
+    }
+
+    public function hydrometHazardClassifications()
+    {
+        return $this->hasMany(HydrometHazardClassification::class);
+    }
 }

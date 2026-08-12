@@ -1,5 +1,76 @@
 <?php $__env->startSection('title'); ?> Project Setup <?php $__env->stopSection(); ?>
 
+<?php $__env->startSection('css'); ?>
+<link href="<?php echo e(URL::asset('build/libs/leaflet/leaflet.css')); ?>" rel="stylesheet" type="text/css" />
+<style>
+    .sentinel-config-map {
+        min-height: 420px;
+        border: 1px solid #eff2f7;
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .spatial-coordinate-input {
+        min-height: 96px;
+        font-family: monospace;
+    }
+
+    .sentinel-static-map,
+    .sentinel-static-map svg {
+        min-height: 420px;
+        width: 100%;
+    }
+
+    .sentinel-map-legend {
+        align-items: center;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #d8e3f0;
+        border-radius: 6px;
+        bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        left: 14px;
+        padding: 8px 10px;
+        position: absolute;
+        z-index: 400;
+    }
+
+    .sentinel-map-legend span {
+        align-items: center;
+        color: #526273;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 700;
+        gap: 6px;
+    }
+
+    .sentinel-map-legend i {
+        border-radius: 999px;
+        display: inline-block;
+        height: 9px;
+        width: 9px;
+    }
+
+    .sentinel-map-empty {
+        align-items: center;
+        background: linear-gradient(135deg, #f6fbfd, #ffffff);
+        color: #65758b;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        justify-content: center;
+        min-height: 420px;
+        text-align: center;
+    }
+
+    .sentinel-map-empty strong {
+        color: #071f49;
+    }
+</style>
+<?php $__env->stopSection(); ?>
+
 <?php $__env->startSection('content'); ?>
 <?php $__env->startComponent('components.breadcrumb'); ?>
 <?php $__env->slot('li_1'); ?> Project Configuration <?php $__env->endSlot(); ?>
@@ -15,6 +86,18 @@
     $sensors = collect($sensors ?? config('resq_dummy.sensors'));
     $mstPrefixes = collect($mstPrefixes ?? []);
     $responsePlans = collect($responsePlans ?? []);
+    $informationLayers = collect($informationLayers ?? []);
+    $referenceRoutes = collect($referenceRoutes ?? []);
+    $corridors = collect($corridors ?? []);
+    $referencePoints = collect($referencePoints ?? []);
+    $stationSpatialReferences = collect($stationSpatialReferences ?? []);
+    $spatialResources = $spatialResources ?? [];
+    $permissions = $permissions ?? [];
+    $canCreateSpatial = (bool) ($permissions['canCreateSpatial'] ?? false);
+    $canEditSpatial = (bool) ($permissions['canEditSpatial'] ?? false);
+    $canDeleteSpatial = (bool) ($permissions['canDeleteSpatial'] ?? false);
+    $canMutateAssetRegistry = (bool) ($permissions['canMutateAssetRegistry'] ?? false);
+    $canWriteSpatial = $canCreateSpatial || $canEditSpatial;
     $provinces = $provinces ?? config('indonesia.provinces') ?? [];
     $databaseReady = $databaseReady ?? false;
     $sensorTypes = [
@@ -116,11 +199,15 @@
                 <ul class="nav nav-tabs nav-tabs-custom flex-wrap" role="tablist">
                     <li class="nav-item" role="presentation"><button class="nav-link active" id="project-tab" data-bs-toggle="tab" data-bs-target="#project-tab-pane" type="button" role="tab">Project</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="geospatial-tab" data-bs-toggle="tab" data-bs-target="#geospatial-tab-pane" type="button" role="tab">Geospatial</button></li>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canMutateAssetRegistry): ?>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring-tab-pane" type="button" role="tab">Monitoring Station</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="warning-tab" data-bs-toggle="tab" data-bs-target="#warning-tab-pane" type="button" role="tab">Warning Station</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-tab-pane" type="button" role="tab">Sensor & Data</button></li>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="canonical-tab" data-bs-toggle="tab" data-bs-target="#canonical-tab-pane" type="button" role="tab">Canonical Data</button></li>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canMutateAssetRegistry): ?>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="operation-tab" data-bs-toggle="tab" data-bs-target="#operation-tab-pane" type="button" role="tab">Operational & Response</button></li>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="user-setup-tab" data-bs-toggle="tab" data-bs-target="#user-setup-tab-pane" type="button" role="tab">User Setup</button></li>
                 </ul>
             </div>
@@ -131,7 +218,7 @@
 <div class="tab-content text-muted">
     <div class="tab-pane fade show active" id="project-tab-pane" role="tabpanel" aria-labelledby="project-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Set Up New Project</h4>
@@ -162,7 +249,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Project List</h4>
@@ -221,7 +308,7 @@
 
     <div class="tab-pane fade" id="geospatial-tab-pane" role="tabpanel" aria-labelledby="geospatial-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Add Geospatial Workspace</h4>
@@ -266,14 +353,32 @@
                                 <div class="col-md-4 mb-3"><label class="form-label">Latitude</label><input type="number" step="0.0000001" name="latitude" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                                 <div class="col-md-4 mb-3"><label class="form-label">Longitude</label><input type="number" step="0.0000001" name="longitude" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                             </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Basemap Provider</label>
+                                    <input name="basemap_provider" class="form-control" value="OpenStreetMap" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                                </div>
+                                <div class="col-md-5 mb-3">
+                                    <label class="form-label">Basemap Tile URL</label>
+                                    <input name="basemap_tile_url" class="form-control" placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">Default Zoom</label>
+                                    <input type="number" name="default_zoom" class="form-control" value="5" min="1" max="18" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Map Bounds</label>
+                                <input name="map_bounds" class="form-control" placeholder="[[south, west], [north, east]]" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                            </div>
                             <input type="hidden" name="status" value="Normal">
-                            <button type="submit" class="btn btn-primary" <?php if(! $databaseReady || $projects->isEmpty()): echo 'disabled'; endif; ?>>Save / Update Workspace</button>
+                            <button type="submit" class="btn btn-primary" <?php if(! $databaseReady || $projects->isEmpty() || ! $canWriteSpatial): echo 'disabled'; endif; ?>>Save / Update Workspace</button>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Workspace Listing</h4>
@@ -304,6 +409,10 @@
                                                                 'latitude' => $cluster['latitude'] ?? '',
                                                                 'longitude' => $cluster['longitude'] ?? '',
                                                                 'status' => $cluster['status'] ?? 'Normal',
+                                                                'basemap_provider' => $cluster['basemap_provider'] ?? 'OpenStreetMap',
+                                                                'basemap_tile_url' => $cluster['basemap_tile_url'] ?? '',
+                                                                'default_zoom' => $cluster['default_zoom'] ?? 5,
+                                                                'map_bounds' => json_encode($cluster['map_bounds'] ?? []),
                                                             ]))); ?>">Edit</button>
                                                         <form method="POST" action="<?php echo e(route('project-setup.destroy', ['type' => 'workspace', 'id' => $cluster['db_id']])); ?>"><?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?><button class="btn btn-outline-danger btn-sm">Delete</button></form>
                                                     </div>
@@ -317,12 +426,202 @@
                     </div>
                 </div>
             </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                            <h4 class="card-title mb-0">Geospatial Workspace Map</h4>
+                            <span class="badge bg-primary-subtle text-primary">Configuration Map</span>
+                        </div>
+                        <div id="project-spatial-config-map" class="sentinel-config-map"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Information Layer Module</h4>
+                        <form method="POST" action="<?php echo e(route('project-information-layers.store')); ?>" id="information-layer-form">
+                            <?php echo csrf_field(); ?>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required <?php if(! $databaseReady || $projects->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $projects; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($item['db_id']); ?>"><?php echo e($item['id']); ?> - <?php echo e($item['name']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">Shared Project Layer</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $clusters->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cluster): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($cluster['db_id']); ?>"><?php echo e($cluster['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Layer ID</label><input name="layer_code" class="form-control" placeholder="LYR-FLOOD-PDG" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                <div class="col-md-3 mb-3"><label class="form-label">Type</label><input name="layer_type" class="form-control" value="overlay" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                <div class="col-md-2 mb-3"><label class="form-label">Color</label><input name="style_color" class="form-control" value="#556ee6" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                <div class="col-md-3 mb-3"><label class="form-label">Status</label><select name="status" class="form-select" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option>Active</option><option>Inactive</option></select></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label">Source URL</label><input name="source_url" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                            <div class="mb-3"><label class="form-label">Layer Payload</label><textarea name="layer_payload" class="form-control spatial-coordinate-input" placeholder='{"points":[[-0.9,100.3]]}' <?php if(! $databaseReady): echo 'disabled'; endif; ?>></textarea></div>
+                            <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="visible_by_default" value="1" checked <?php if(! $databaseReady): echo 'disabled'; endif; ?>><label class="form-check-label">Visible by default</label></div>
+                            <input type="hidden" name="sort_order" value="0">
+                            <button class="btn btn-primary" <?php if(! $databaseReady || ! $canWriteSpatial): echo 'disabled'; endif; ?>>Save / Update Layer</button>
+                        </form>
+                        <div class="table-responsive mt-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Project</th><th>Workspace</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $informationLayers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $layer): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <tr>
+                                            <td><?php echo e($layer['id']); ?></td><td><?php echo e($layer['name']); ?></td><td><?php echo e($layer['project_id']); ?></td><td><?php echo e($layer['workspace_id'] ?? 'Shared'); ?></td><td><span class="badge bg-success"><?php echo e($layer['status']); ?></span></td>
+                                            <td class="text-end">
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(isset($layer['db_id'])): ?>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        data-edit-form="#information-layer-form"
+                                                        data-edit-fields="<?php echo e(base64_encode(json_encode([
+                                                            'project_id' => $layer['project_db_id'] ?? '',
+                                                            'workspace_id' => $layer['workspace_db_id'] ?? '',
+                                                            'layer_code' => $layer['id'] ?? '',
+                                                            'name' => $layer['name'] ?? '',
+                                                            'layer_type' => $layer['layer_type'] ?? 'overlay',
+                                                            'source_url' => $layer['source_url'] ?? '',
+                                                            'style_color' => $layer['style_color'] ?? '',
+                                                            'layer_payload' => json_encode($layer['layer_payload'] ?? []),
+                                                            'visible_by_default' => $layer['visible_by_default'] ?? true,
+                                                            'sort_order' => $layer['sort_order'] ?? 0,
+                                                            'status' => $layer['status'] ?? 'Active',
+                                                        ]))); ?>">Edit</button>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                        <tr><td colspan="6" class="text-center text-muted">Belum ada information layer.</td></tr>
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Route Registry & Corridor Monitoring</h4>
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <form method="POST" action="<?php echo e(route('project-reference-routes.store')); ?>" id="reference-route-form">
+                                    <?php echo csrf_field(); ?>
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required <?php if(! $databaseReady || $projects->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $projects; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($item['db_id']); ?>"><?php echo e($item['id']); ?> - <?php echo e($item['name']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">Shared Reference Route</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $clusters->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cluster): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($cluster['db_id']); ?>"><?php echo e($cluster['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Route ID</label><input name="route_code" class="form-control" placeholder="RTE-PDG-001" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Route Type</label><input name="route_type" class="form-control" value="reference" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Path Coordinates</label><textarea name="path_coordinates" class="form-control spatial-coordinate-input" placeholder="[[-0.92,100.36],[-0.91,100.38]]" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></textarea></div>
+                                    <input type="hidden" name="status" value="Active">
+                                    <button class="btn btn-primary" <?php if(! $databaseReady || ! $canWriteSpatial): echo 'disabled'; endif; ?>>Save / Update Route</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-6">
+                                <form method="POST" action="<?php echo e(route('project-corridors.store')); ?>" id="corridor-form">
+                                    <?php echo csrf_field(); ?>
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required <?php if(! $databaseReady || $projects->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $projects; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($item['db_id']); ?>"><?php echo e($item['id']); ?> - <?php echo e($item['name']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required <?php if(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $clusters->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cluster): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($cluster['db_id']); ?>"><?php echo e($cluster['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $referenceRoutes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $route): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($route['db_id']); ?>"><?php echo e($route['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Corridor ID</label><input name="corridor_code" class="form-control" placeholder="COR-PDG-001" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Path Coordinates</label><textarea name="path_coordinates" class="form-control spatial-coordinate-input" placeholder="[[-0.92,100.36],[-0.91,100.38]]" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></textarea></div>
+                                    <input type="hidden" name="status" value="Planned">
+                                    <button class="btn btn-primary" <?php if(! $databaseReady || ! $canWriteSpatial): echo 'disabled'; endif; ?>>Save / Update Corridor</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="table-responsive mt-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>Corridor</th><th>Workspace</th><th>Route</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $corridors; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $corridor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <tr>
+                                            <td><?php echo e($corridor['id']); ?> - <?php echo e($corridor['name']); ?></td><td><?php echo e($corridor['workspace_id']); ?></td><td><?php echo e($corridor['reference_route_id'] ?? '-'); ?></td><td><span class="badge bg-info"><?php echo e($corridor['status']); ?></span></td>
+                                            <td class="text-end">
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(isset($corridor['db_id'])): ?>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        data-edit-form="#corridor-form"
+                                                        data-edit-fields="<?php echo e(base64_encode(json_encode([
+                                                            'project_id' => $corridor['project_db_id'] ?? '',
+                                                            'workspace_id' => $corridor['workspace_db_id'] ?? '',
+                                                            'reference_route_id' => $corridor['reference_route_db_id'] ?? '',
+                                                            'corridor_code' => $corridor['id'] ?? '',
+                                                            'name' => $corridor['name'] ?? '',
+                                                            'path_coordinates' => json_encode($corridor['path_coordinates'] ?? []),
+                                                            'status' => $corridor['status'] ?? 'Planned',
+                                                        ]))); ?>">Edit</button>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                        <tr><td colspan="5" class="text-center text-muted">Belum ada corridor monitoring.</td></tr>
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Reference Points & Station Spatial Placement</h4>
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <form method="POST" action="<?php echo e(route('project-reference-points.store')); ?>" id="reference-point-form">
+                                    <?php echo csrf_field(); ?>
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required <?php if(! $databaseReady || $projects->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $projects; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($item['db_id']); ?>"><?php echo e($item['id']); ?> - <?php echo e($item['name']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">Project Reference Point</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $clusters->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cluster): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($cluster['db_id']); ?>"><?php echo e($cluster['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $corridors; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $corridor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($corridor['db_id']); ?>"><?php echo e($corridor['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Point ID</label><input name="point_code" class="form-control" placeholder="REF-PDG-001" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Point Type</label><input name="point_type" class="form-control" value="reference" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <input type="hidden" name="status" value="Active">
+                                    <button class="btn btn-primary" <?php if(! $databaseReady || ! $canWriteSpatial): echo 'disabled'; endif; ?>>Save / Update Point</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-6">
+                                <form method="POST" action="<?php echo e(route('project-station-spatial-references.store')); ?>" id="station-spatial-reference-form">
+                                    <?php echo csrf_field(); ?>
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required <?php if(! $databaseReady || $projects->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $projects; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($item['db_id']); ?>"><?php echo e($item['id']); ?> - <?php echo e($item['name']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required <?php if(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $clusters->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cluster): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($cluster['db_id']); ?>"><?php echo e($cluster['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $corridors; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $corridor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($corridor['db_id']); ?>"><?php echo e($corridor['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $referenceRoutes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $route): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($route['db_id']); ?>"><?php echo e($route['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Reference Point</label><select name="reference_point_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $referencePoints; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $point): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($point['db_id']); ?>"><?php echo e($point['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Monitoring Station</label><select name="monitoring_station_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $monitoringStations->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $station): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($station['db_id']); ?>"><?php echo e($station['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Warning Station</label><select name="warning_station_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option value="">-</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $warningStations->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $station): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($station['db_id']); ?>"><?php echo e($station['id']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
+                                    <div class="mb-3"><label class="form-label">Placement Role</label><input name="placement_role" class="form-control" value="corridor_reference" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <div class="mb-3"><label class="form-label">Station Offset</label><input name="station_offset" class="form-control" placeholder="KM 12+400 / upstream" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                    <input type="hidden" name="status" value="Active">
+                                    <button class="btn btn-primary" <?php if(! $databaseReady || ! $canWriteSpatial): echo 'disabled'; endif; ?>>Save / Update Placement</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="table-responsive mt-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>Station</th><th>Workspace</th><th>Corridor</th><th>Reference</th><th>Role</th></tr></thead>
+                                <tbody>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $stationSpatialReferences; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $reference): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <tr><td><?php echo e($reference['monitoring_station_id'] ?? $reference['warning_station_id'] ?? '-'); ?></td><td><?php echo e($reference['workspace_id']); ?></td><td><?php echo e($reference['corridor_id'] ?? '-'); ?></td><td><?php echo e($reference['reference_point_id'] ?? $reference['reference_route_id'] ?? '-'); ?></td><td><?php echo e($reference['placement_role']); ?></td></tr>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                        <tr><td colspan="5" class="text-center text-muted">Belum ada station spatial reference.</td></tr>
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canMutateAssetRegistry): ?>
     <div class="tab-pane fade" id="monitoring-tab-pane" role="tabpanel" aria-labelledby="monitoring-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Monitoring Station Registry</h4>
@@ -336,14 +635,25 @@
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 </select>
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Corridor</label>
+                                <select name="corridor_id" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                                    <option value="">-</option>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $corridors; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $corridor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <option value="<?php echo e($corridor['db_id']); ?>"><?php echo e($corridor['id']); ?> - <?php echo e($corridor['name']); ?></option>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                </select>
+                            </div>
                             <div class="mb-3"><label class="form-label">Station ID</label><input name="station_code" class="form-control" placeholder="MS-PDG-001" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                             <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                            <div class="mb-3"><label class="form-label">Station Type</label><input name="station_type" class="form-control" value="environmental_monitoring" required <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                             <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                             <div class="row">
                                 <div class="col-md-6 mb-3"><label class="form-label">Logger ID</label><input name="logger_id" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Connectivity</label><select name="connectivity_status" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>><option>Online</option><option>Offline</option></select></div>
                             </div>
                             <input type="hidden" name="logger_status" value="Active">
+                            <input type="hidden" name="registration_status" value="registered">
                             <input type="hidden" name="status" value="Normal">
                             <button type="submit" class="btn btn-primary" <?php if(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty()): echo 'disabled'; endif; ?>>Save / Update Monitoring</button>
                         </form>
@@ -351,17 +661,17 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Monitoring Station List</h4>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
-                                <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Workspace</th><th>Logger</th><th>Status</th><th></th></tr></thead>
+                                <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Project</th><th>Workspace</th><th>Corridor</th><th>Type</th><th>Logger</th><th>Status</th><th></th></tr></thead>
                                 <tbody>
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $monitoringStations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $station): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                         <tr>
-                                            <td><?php echo e($station['id']); ?></td><td><?php echo e($station['name']); ?></td><td><?php echo e($station['cluster_id']); ?></td><td><?php echo e($station['logger_id']); ?></td>
+                                            <td><?php echo e($station['id']); ?></td><td><?php echo e($station['name']); ?></td><td><?php echo e($station['project_id'] ?? '-'); ?></td><td><?php echo e($station['cluster_id']); ?></td><td><?php echo e($station['corridor_id'] ?? '-'); ?></td><td><?php echo e($station['station_type'] ?? '-'); ?></td><td><?php echo e($station['logger_id']); ?></td>
                                             <td><span class="badge <?php echo e($station['status'] === 'Danger' ? 'bg-danger' : 'bg-success'); ?>"><?php echo e($station['status']); ?></span></td>
                                             <td class="text-end">
                                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(isset($station['db_id'])): ?>
@@ -370,12 +680,17 @@
                                                             data-edit-form="#monitoring-form"
                                                             data-edit-fields="<?php echo e(base64_encode(json_encode([
                                                                 'workspace_id' => $station['workspace_db_id'] ?? '',
+                                                                'project_id' => $station['project_db_id'] ?? '',
+                                                                'corridor_id' => $station['corridor_db_id'] ?? '',
                                                                 'station_code' => $station['id'] ?? '',
                                                                 'name' => $station['name'] ?? '',
+                                                                'station_type' => $station['station_type'] ?? 'environmental_monitoring',
                                                                 'coordinate' => $station['coordinate'] ?? '',
                                                                 'logger_id' => $station['logger_id'] ?? '',
                                                                 'connectivity_status' => $station['connectivity_status'] ?? 'Online',
                                                                 'logger_status' => $station['logger_status'] ?? 'Active',
+                                                                'registration_status' => $station['registration_status'] ?? 'registered',
+                                                                'registered_at' => $station['registered_at'] ?? '',
                                                                 'status' => $station['status'] ?? 'Normal',
                                                             ]))); ?>">Edit</button>
                                                         <form method="POST" action="<?php echo e(route('project-setup.destroy', ['type' => 'monitoring', 'id' => $station['db_id']])); ?>"><?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?><button class="btn btn-outline-danger btn-sm">Delete</button></form>
@@ -395,7 +710,7 @@
 
     <div class="tab-pane fade" id="warning-tab-pane" role="tabpanel" aria-labelledby="warning-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Warning Station Registry</h4>
@@ -425,7 +740,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Warning Station List</h4>
@@ -473,7 +788,7 @@
 
     <div class="tab-pane fade" id="data-tab-pane" role="tabpanel" aria-labelledby="data-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card mb-3">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Data Logger Setup</h4>
@@ -582,6 +897,32 @@
                                 <div class="col-md-6 mb-3"><label class="form-label">Parameter</label><input name="parameter" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Unit</label><input name="unit" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
                             </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Sentinel Parameter Mapping</label>
+                                    <select name="canonical_parameter_id" class="form-select" <?php if(! $databaseReady || collect($canonicalParameters ?? [])->isEmpty()): echo 'disabled'; endif; ?>>
+                                        <option value="">Map later in Canonical Database</option>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalParameters ?? []; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $parameter): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                            <option value="<?php echo e($parameter->id); ?>"><?php echo e($parameter->field_identity); ?> - <?php echo e($parameter->domain); ?><?php echo e($parameter->canonical_unit ? ' / ' . $parameter->canonical_unit : ''); ?></option>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Source Parameter</label>
+                                    <input name="source_parameter" class="form-control" placeholder="device payload/register name" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="form-label">Source Unit</label><input name="source_unit" class="form-control" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Byte Order</label><input name="byte_order" class="form-control" placeholder="ABCD / CDAB" <?php if(! $databaseReady): echo 'disabled'; endif; ?>></div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Value Origin</label>
+                                    <select name="value_origin" class="form-select" <?php if(! $databaseReady): echo 'disabled'; endif; ?>>
+                                        <option value="direct_measurement">Direct Measurement</option>
+                                        <option value="device_processed">Device Processed</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="mb-3 d-none" id="weather-parameters-wrap">
                                 <label class="form-label">Parameter Sensor Cuaca</label>
                                 <div class="row g-2">
@@ -622,7 +963,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Sensor Registry</h4>
@@ -713,6 +1054,11 @@
                                                                 'data_type' => $sensor['data_type'] ?? 'uint16',
                                                                 'parameter' => $sensor['parameter'] ?? '',
                                                                 'weather_parameters' => $sensor['weather_parameters'] ?? [],
+                                                                'canonical_parameter_id' => $sensor['canonical_parameter_db_id'] ?? '',
+                                                                'source_parameter' => $sensor['source_parameter'] ?? '',
+                                                                'source_unit' => $sensor['source_unit'] ?? '',
+                                                                'byte_order' => $sensor['byte_order'] ?? '',
+                                                                'value_origin' => $sensor['value_origin'] ?? 'direct_measurement',
                                                                 'unit' => $sensor['unit'] ?? '',
                                                                 'scale_factor' => $sensor['scale_factor'] ?? 1,
                                                                 'offset' => $sensor['offset'] ?? 0,
@@ -735,83 +1081,110 @@
             </div>
         </div>
     </div>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
     <div class="tab-pane fade" id="canonical-tab-pane" role="tabpanel" aria-labelledby="canonical-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
-                <div class="card h-100">
+            <div class="col-xl-12">
+                <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Canonical Data Mapping</h4>
-                        <form method="POST" action="<?php echo e(route('canonical-mapping.store')); ?>" id="canonical-mapping-form">
-                            <?php echo csrf_field(); ?>
-                            <div class="mb-3">
-                                <label class="form-label">Sensor</label>
-                                <select class="form-select" name="sensor_id" required>
-                                    <option value="" disabled selected>Pilih Sensor...</option>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $sensors->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $s): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                        <option value="<?php echo e($s['db_id']); ?>"><?php echo e($s['id']); ?> - <?php echo e($sensorTypes[$s['type'] ?? ''] ?? ($s['type'] ?? '-')); ?></option>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                                </select>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                            <div>
+                                <h4 class="card-title mb-1">Canonical Data Mapping</h4>
+                                <p class="text-muted mb-0">
+                                    Konfigurasi mapping di halaman ini ditarik dari Canonical Database. Project Setup hanya menampilkan status pemetaan per sensor.
+                                </p>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Profile Code</label>
-                                <input type="text" class="form-control" name="profile_code" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Canonical Parameter</label>
-                                <select class="form-select" name="canonical_parameter_id" required>
-                                    <option value="" disabled selected>Pilih Parameter...</option>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $canonicalParameters ?? []; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                        <option value="<?php echo e($cp->id); ?>"><?php echo e($cp->domain); ?> / <?php echo e($cp->field_identity); ?></option>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Source Parameter (Opsional)</label>
-                                <input type="text" class="form-control" name="source_parameter">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Value Origin</label>
-                                <select class="form-select" name="value_origin" required>
-                                    <option value="direct_measurement">Direct Measurement</option>
-                                    <option value="device_processed">Device Processed</option>
-                                    <option value="system_calculated">System Calculated</option>
-                                </select>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Scale Factor</label>
-                                    <input type="number" step="0.0001" class="form-control" name="scale_factor" value="1" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Offset</label>
-                                    <input type="number" step="0.0001" class="form-control" name="offset" value="0" required>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Status</label>
-                                <select class="form-select" name="status" required>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Save Mapping</button>
-                        </form>
+                            <a href="<?php echo e(route('canonical-database.index')); ?>#mapping" class="btn btn-primary">
+                                <i class="bx bx-cog me-1"></i> Open Canonical Mapping
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-xl-8">
-                <div class="card h-100">
+            <div class="col-xl-12">
+                <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Mapping List</h4>
+                        <h4 class="card-title mb-4">Sensor Mapping Coverage</h4>
+                        <?php
+                            $profilesBySensor = collect($sensorMappingProfiles ?? [])->groupBy('sensor_id');
+                        ?>
+                        <div class="table-responsive">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Sensor</th>
+                                        <th>Type</th>
+                                        <th>Monitoring</th>
+                                        <th>Mapped Parameters</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $sensors->whereNotNull('db_id'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $sensor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <?php
+                                            $sensorProfiles = $profilesBySensor->get($sensor['db_id'], collect());
+                                            $activeCount = $sensorProfiles->where('status', 'active')->count();
+                                            $parameterNames = $sensorProfiles
+                                                ->map(fn ($profile) => $profile->canonicalParameter?->field_identity)
+                                                ->filter()
+                                                ->values();
+                                        ?>
+                                        <tr>
+                                            <td><?php echo e($sensor['id']); ?></td>
+                                            <td><?php echo e($sensorTypes[$sensor['type'] ?? ''] ?? ($sensor['type'] ?? '-')); ?></td>
+                                            <td><?php echo e($sensor['monitoring_station_id'] ?? '-'); ?></td>
+                                            <td>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($parameterNames->isNotEmpty()): ?>
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $parameterNames; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $name): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                            <span class="badge bg-light text-dark"><?php echo e($name); ?></span>
+                                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <span class="text-muted">Belum ada mapping</span>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($activeCount > 0): ?>
+                                                    <span class="badge bg-success"><?php echo e($activeCount); ?> active mapping</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-danger-subtle text-danger">Belum Mapping Canonical</span>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="<?php echo e(route('canonical-database.index')); ?>#mapping" class="btn btn-outline-primary btn-sm">
+                                                    Configure
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">Belum ada sensor.</td>
+                                        </tr>
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Mapping Profiles from Canonical Database</h4>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Profile Code</th>
                                         <th>Sensor</th>
-                                        <th>Canonical Parameter</th>
+                                        <th>Source</th>
+                                        <th>Register</th>
+                                        <th>Canonical Target</th>
                                         <th>Origin</th>
                                         <th>Scale/Offset</th>
                                         <th>Status</th>
@@ -823,6 +1196,20 @@
                                     <tr>
                                         <td><?php echo e($profile->profile_code); ?></td>
                                         <td><?php echo e($profile->sensor->sensor_code ?? '-'); ?></td>
+                                        <td>
+                                            <?php echo e($profile->source_parameter); ?>
+
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($profile->source_unit): ?>
+                                                <small class="text-muted d-block"><?php echo e($profile->source_unit); ?></small>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php echo e($profile->register_address ?? '-'); ?>
+
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($profile->value_type || $profile->data_length): ?>
+                                                <small class="text-muted d-block"><?php echo e($profile->value_type ?? '-'); ?> / len <?php echo e($profile->data_length ?? '-'); ?></small>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        </td>
                                         <td><?php echo e($profile->canonicalParameter->field_identity ?? '-'); ?></td>
                                         <td><?php echo e(str_replace('_', ' ', Str::title($profile->value_origin))); ?></td>
                                         <td><?php echo e($profile->scale_factor ?? 1); ?> / <?php echo e($profile->offset ?? 0); ?></td>
@@ -834,30 +1221,12 @@
                                             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                         </td>
                                         <td class="text-end">
-                                            <div class="d-inline-flex gap-1">
-                                                <button type="button" class="btn btn-outline-primary btn-sm"
-                                                    data-edit-form="#canonical-mapping-form"
-                                                    data-edit-fields="<?php echo e(base64_encode(json_encode([
-                                                        'sensor_id' => $profile->sensor_id,
-                                                        'profile_code' => $profile->profile_code,
-                                                        'canonical_parameter_id' => $profile->canonical_parameter_id,
-                                                        'source_parameter' => $profile->source_parameter ?? '',
-                                                        'value_origin' => $profile->value_origin,
-                                                        'scale_factor' => $profile->scale_factor ?? 1,
-                                                        'offset' => $profile->offset ?? 0,
-                                                        'status' => $profile->status,
-                                                    ]))); ?>">Edit</button>
-                                                <form method="POST" action="<?php echo e(route('canonical-mapping.destroy', $profile->id)); ?>">
-                                                    <?php echo csrf_field(); ?>
-                                                    <?php echo method_field('DELETE'); ?>
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
-                                                </form>
-                                            </div>
+                                            <a href="<?php echo e(route('canonical-database.index')); ?>#mapping" class="btn btn-outline-primary btn-sm">Edit in Canonical DB</a>
                                         </td>
                                     </tr>
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">Belum ada mapping Canonical Data.</td>
+                                        <td colspan="9" class="text-center text-muted">Belum ada mapping Canonical Data.</td>
                                     </tr>
                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </tbody>
@@ -869,9 +1238,10 @@
         </div>
     </div>
 
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canMutateAssetRegistry): ?>
     <div class="tab-pane fade" id="operation-tab-pane" role="tabpanel" aria-labelledby="operation-tab" tabindex="0">
         <div class="row">
-            <div class="col-xl-4">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Response Plan / Act</h4>
@@ -890,7 +1260,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-8">
+            <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
                         <h4 class="card-title mb-4">Operational Rules</h4>
@@ -905,6 +1275,7 @@
             </div>
         </div>
     </div>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
     <div class="tab-pane fade" id="user-setup-tab-pane" role="tabpanel" aria-labelledby="user-setup-tab" tabindex="0">
         <div class="card">
@@ -919,7 +1290,17 @@
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('script'); ?>
+<script src="<?php echo e(URL::asset('build/libs/leaflet/leaflet.js')); ?>"></script>
+<script src="<?php echo e(URL::asset('build/js/pages/sentinel-spatial-map.js')); ?>"></script>
 <script>
+    window.SentinelProjectSpatialResources = <?php echo json_encode($spatialResources, 15, 512) ?>;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.SentinelSpatialMap) {
+            window.SentinelSpatialMap.createConfigurationMap('project-spatial-config-map', window.SentinelProjectSpatialResources || {});
+        }
+    });
+
     (function () {
         const sensorType = document.querySelector('#sensor-form [name="type"]');
         const quantity = document.querySelector('#sensor-form [name="quantity"]');

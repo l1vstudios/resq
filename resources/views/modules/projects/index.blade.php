@@ -2,6 +2,77 @@
 
 @section('title') Project Setup @endsection
 
+@section('css')
+<link href="{{ URL::asset('build/libs/leaflet/leaflet.css') }}" rel="stylesheet" type="text/css" />
+<style>
+    .sentinel-config-map {
+        min-height: 420px;
+        border: 1px solid #eff2f7;
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .spatial-coordinate-input {
+        min-height: 96px;
+        font-family: monospace;
+    }
+
+    .sentinel-static-map,
+    .sentinel-static-map svg {
+        min-height: 420px;
+        width: 100%;
+    }
+
+    .sentinel-map-legend {
+        align-items: center;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #d8e3f0;
+        border-radius: 6px;
+        bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        left: 14px;
+        padding: 8px 10px;
+        position: absolute;
+        z-index: 400;
+    }
+
+    .sentinel-map-legend span {
+        align-items: center;
+        color: #526273;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 700;
+        gap: 6px;
+    }
+
+    .sentinel-map-legend i {
+        border-radius: 999px;
+        display: inline-block;
+        height: 9px;
+        width: 9px;
+    }
+
+    .sentinel-map-empty {
+        align-items: center;
+        background: linear-gradient(135deg, #f6fbfd, #ffffff);
+        color: #65758b;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        justify-content: center;
+        min-height: 420px;
+        text-align: center;
+    }
+
+    .sentinel-map-empty strong {
+        color: #071f49;
+    }
+</style>
+@endsection
+
 @section('content')
 @component('components.breadcrumb')
 @slot('li_1') Project Configuration @endslot
@@ -17,6 +88,18 @@
     $sensors = collect($sensors ?? config('resq_dummy.sensors'));
     $mstPrefixes = collect($mstPrefixes ?? []);
     $responsePlans = collect($responsePlans ?? []);
+    $informationLayers = collect($informationLayers ?? []);
+    $referenceRoutes = collect($referenceRoutes ?? []);
+    $corridors = collect($corridors ?? []);
+    $referencePoints = collect($referencePoints ?? []);
+    $stationSpatialReferences = collect($stationSpatialReferences ?? []);
+    $spatialResources = $spatialResources ?? [];
+    $permissions = $permissions ?? [];
+    $canCreateSpatial = (bool) ($permissions['canCreateSpatial'] ?? false);
+    $canEditSpatial = (bool) ($permissions['canEditSpatial'] ?? false);
+    $canDeleteSpatial = (bool) ($permissions['canDeleteSpatial'] ?? false);
+    $canMutateAssetRegistry = (bool) ($permissions['canMutateAssetRegistry'] ?? false);
+    $canWriteSpatial = $canCreateSpatial || $canEditSpatial;
     $provinces = $provinces ?? config('indonesia.provinces') ?? [];
     $databaseReady = $databaseReady ?? false;
     $sensorTypes = [
@@ -117,11 +200,15 @@
                 <ul class="nav nav-tabs nav-tabs-custom flex-wrap" role="tablist">
                     <li class="nav-item" role="presentation"><button class="nav-link active" id="project-tab" data-bs-toggle="tab" data-bs-target="#project-tab-pane" type="button" role="tab">Project</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="geospatial-tab" data-bs-toggle="tab" data-bs-target="#geospatial-tab-pane" type="button" role="tab">Geospatial</button></li>
+                    @if($canMutateAssetRegistry)
                     <li class="nav-item" role="presentation"><button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring-tab-pane" type="button" role="tab">Monitoring Station</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="warning-tab" data-bs-toggle="tab" data-bs-target="#warning-tab-pane" type="button" role="tab">Warning Station</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-tab-pane" type="button" role="tab">Sensor & Data</button></li>
+                    @endif
                     <li class="nav-item" role="presentation"><button class="nav-link" id="canonical-tab" data-bs-toggle="tab" data-bs-target="#canonical-tab-pane" type="button" role="tab">Canonical Data</button></li>
+                    @if($canMutateAssetRegistry)
                     <li class="nav-item" role="presentation"><button class="nav-link" id="operation-tab" data-bs-toggle="tab" data-bs-target="#operation-tab-pane" type="button" role="tab">Operational & Response</button></li>
+                    @endif
                     <li class="nav-item" role="presentation"><button class="nav-link" id="user-setup-tab" data-bs-toggle="tab" data-bs-target="#user-setup-tab-pane" type="button" role="tab">User Setup</button></li>
                 </ul>
             </div>
@@ -267,8 +354,26 @@
                                 <div class="col-md-4 mb-3"><label class="form-label">Latitude</label><input type="number" step="0.0000001" name="latitude" class="form-control" @disabled(! $databaseReady)></div>
                                 <div class="col-md-4 mb-3"><label class="form-label">Longitude</label><input type="number" step="0.0000001" name="longitude" class="form-control" @disabled(! $databaseReady)></div>
                             </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Basemap Provider</label>
+                                    <input name="basemap_provider" class="form-control" value="OpenStreetMap" @disabled(! $databaseReady)>
+                                </div>
+                                <div class="col-md-5 mb-3">
+                                    <label class="form-label">Basemap Tile URL</label>
+                                    <input name="basemap_tile_url" class="form-control" placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" @disabled(! $databaseReady)>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">Default Zoom</label>
+                                    <input type="number" name="default_zoom" class="form-control" value="5" min="1" max="18" @disabled(! $databaseReady)>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Map Bounds</label>
+                                <input name="map_bounds" class="form-control" placeholder="[[south, west], [north, east]]" @disabled(! $databaseReady)>
+                            </div>
                             <input type="hidden" name="status" value="Normal">
-                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $projects->isEmpty())>Save / Update Workspace</button>
+                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $projects->isEmpty() || ! $canWriteSpatial)>Save / Update Workspace</button>
                         </form>
                     </div>
                 </div>
@@ -305,6 +410,10 @@
                                                                 'latitude' => $cluster['latitude'] ?? '',
                                                                 'longitude' => $cluster['longitude'] ?? '',
                                                                 'status' => $cluster['status'] ?? 'Normal',
+                                                                'basemap_provider' => $cluster['basemap_provider'] ?? 'OpenStreetMap',
+                                                                'basemap_tile_url' => $cluster['basemap_tile_url'] ?? '',
+                                                                'default_zoom' => $cluster['default_zoom'] ?? 5,
+                                                                'map_bounds' => json_encode($cluster['map_bounds'] ?? []),
                                                             ])) }}">Edit</button>
                                                         <form method="POST" action="{{ route('project-setup.destroy', ['type' => 'workspace', 'id' => $cluster['db_id']]) }}">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm">Delete</button></form>
                                                     </div>
@@ -318,9 +427,199 @@
                     </div>
                 </div>
             </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                            <h4 class="card-title mb-0">Geospatial Workspace Map</h4>
+                            <span class="badge bg-primary-subtle text-primary">Configuration Map</span>
+                        </div>
+                        <div id="project-spatial-config-map" class="sentinel-config-map"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Information Layer Module</h4>
+                        <form method="POST" action="{{ route('project-information-layers.store') }}" id="information-layer-form">
+                            @csrf
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Shared Project Layer</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Layer ID</label><input name="layer_code" class="form-control" placeholder="LYR-FLOOD-PDG" required @disabled(! $databaseReady)></div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
+                                <div class="col-md-3 mb-3"><label class="form-label">Type</label><input name="layer_type" class="form-control" value="overlay" required @disabled(! $databaseReady)></div>
+                                <div class="col-md-2 mb-3"><label class="form-label">Color</label><input name="style_color" class="form-control" value="#556ee6" @disabled(! $databaseReady)></div>
+                                <div class="col-md-3 mb-3"><label class="form-label">Status</label><select name="status" class="form-select" required @disabled(! $databaseReady)><option>Active</option><option>Inactive</option></select></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label">Source URL</label><input name="source_url" class="form-control" @disabled(! $databaseReady)></div>
+                            <div class="mb-3"><label class="form-label">Layer Payload</label><textarea name="layer_payload" class="form-control spatial-coordinate-input" placeholder='{"points":[[-0.9,100.3]]}' @disabled(! $databaseReady)></textarea></div>
+                            <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="visible_by_default" value="1" checked @disabled(! $databaseReady)><label class="form-check-label">Visible by default</label></div>
+                            <input type="hidden" name="sort_order" value="0">
+                            <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Layer</button>
+                        </form>
+                        <div class="table-responsive mt-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Project</th><th>Workspace</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                    @forelse ($informationLayers as $layer)
+                                        <tr>
+                                            <td>{{ $layer['id'] }}</td><td>{{ $layer['name'] }}</td><td>{{ $layer['project_id'] }}</td><td>{{ $layer['workspace_id'] ?? 'Shared' }}</td><td><span class="badge bg-success">{{ $layer['status'] }}</span></td>
+                                            <td class="text-end">
+                                                @isset($layer['db_id'])
+                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        data-edit-form="#information-layer-form"
+                                                        data-edit-fields="{{ base64_encode(json_encode([
+                                                            'project_id' => $layer['project_db_id'] ?? '',
+                                                            'workspace_id' => $layer['workspace_db_id'] ?? '',
+                                                            'layer_code' => $layer['id'] ?? '',
+                                                            'name' => $layer['name'] ?? '',
+                                                            'layer_type' => $layer['layer_type'] ?? 'overlay',
+                                                            'source_url' => $layer['source_url'] ?? '',
+                                                            'style_color' => $layer['style_color'] ?? '',
+                                                            'layer_payload' => json_encode($layer['layer_payload'] ?? []),
+                                                            'visible_by_default' => $layer['visible_by_default'] ?? true,
+                                                            'sort_order' => $layer['sort_order'] ?? 0,
+                                                            'status' => $layer['status'] ?? 'Active',
+                                                        ])) }}">Edit</button>
+                                                @endisset
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="6" class="text-center text-muted">Belum ada information layer.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Route Registry & Corridor Monitoring</h4>
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <form method="POST" action="{{ route('project-reference-routes.store') }}" id="reference-route-form">
+                                    @csrf
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Shared Reference Route</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Route ID</label><input name="route_code" class="form-control" placeholder="RTE-PDG-001" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Route Type</label><input name="route_type" class="form-control" value="reference" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Path Coordinates</label><textarea name="path_coordinates" class="form-control spatial-coordinate-input" placeholder="[[-0.92,100.36],[-0.91,100.38]]" @disabled(! $databaseReady)></textarea></div>
+                                    <input type="hidden" name="status" value="Active">
+                                    <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Route</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-6">
+                                <form method="POST" action="{{ route('project-corridors.store') }}" id="corridor-form">
+                                    @csrf
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referenceRoutes as $route)<option value="{{ $route['db_id'] }}">{{ $route['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Corridor ID</label><input name="corridor_code" class="form-control" placeholder="COR-PDG-001" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Path Coordinates</label><textarea name="path_coordinates" class="form-control spatial-coordinate-input" placeholder="[[-0.92,100.36],[-0.91,100.38]]" @disabled(! $databaseReady)></textarea></div>
+                                    <input type="hidden" name="status" value="Planned">
+                                    <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Corridor</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="table-responsive mt-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>Corridor</th><th>Workspace</th><th>Route</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                    @forelse ($corridors as $corridor)
+                                        <tr>
+                                            <td>{{ $corridor['id'] }} - {{ $corridor['name'] }}</td><td>{{ $corridor['workspace_id'] }}</td><td>{{ $corridor['reference_route_id'] ?? '-' }}</td><td><span class="badge bg-info">{{ $corridor['status'] }}</span></td>
+                                            <td class="text-end">
+                                                @isset($corridor['db_id'])
+                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        data-edit-form="#corridor-form"
+                                                        data-edit-fields="{{ base64_encode(json_encode([
+                                                            'project_id' => $corridor['project_db_id'] ?? '',
+                                                            'workspace_id' => $corridor['workspace_db_id'] ?? '',
+                                                            'reference_route_id' => $corridor['reference_route_db_id'] ?? '',
+                                                            'corridor_code' => $corridor['id'] ?? '',
+                                                            'name' => $corridor['name'] ?? '',
+                                                            'path_coordinates' => json_encode($corridor['path_coordinates'] ?? []),
+                                                            'status' => $corridor['status'] ?? 'Planned',
+                                                        ])) }}">Edit</button>
+                                                @endisset
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="5" class="text-center text-muted">Belum ada corridor monitoring.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h4 class="card-title mb-4">Reference Points & Station Spatial Placement</h4>
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <form method="POST" action="{{ route('project-reference-points.store') }}" id="reference-point-form">
+                                    @csrf
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Project Reference Point</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Point ID</label><input name="point_code" class="form-control" placeholder="REF-PDG-001" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Point Type</label><input name="point_type" class="form-control" value="reference" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" @disabled(! $databaseReady)></div>
+                                    <input type="hidden" name="status" value="Active">
+                                    <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Point</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-6">
+                                <form method="POST" action="{{ route('project-station-spatial-references.store') }}" id="station-spatial-reference-form">
+                                    @csrf
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referenceRoutes as $route)<option value="{{ $route['db_id'] }}">{{ $route['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Reference Point</label><select name="reference_point_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referencePoints as $point)<option value="{{ $point['db_id'] }}">{{ $point['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Monitoring Station</label><select name="monitoring_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($monitoringStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Warning Station</label><select name="warning_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($warningStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Placement Role</label><input name="placement_role" class="form-control" value="corridor_reference" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3"><label class="form-label">Station Offset</label><input name="station_offset" class="form-control" placeholder="KM 12+400 / upstream" @disabled(! $databaseReady)></div>
+                                    <input type="hidden" name="status" value="Active">
+                                    <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Placement</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="table-responsive mt-4">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>Station</th><th>Workspace</th><th>Corridor</th><th>Reference</th><th>Role</th></tr></thead>
+                                <tbody>
+                                    @forelse ($stationSpatialReferences as $reference)
+                                        <tr><td>{{ $reference['monitoring_station_id'] ?? $reference['warning_station_id'] ?? '-' }}</td><td>{{ $reference['workspace_id'] }}</td><td>{{ $reference['corridor_id'] ?? '-' }}</td><td>{{ $reference['reference_point_id'] ?? $reference['reference_route_id'] ?? '-' }}</td><td>{{ $reference['placement_role'] }}</td></tr>
+                                    @empty
+                                        <tr><td colspan="5" class="text-center text-muted">Belum ada station spatial reference.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
+    @if($canMutateAssetRegistry)
     <div class="tab-pane fade" id="monitoring-tab-pane" role="tabpanel" aria-labelledby="monitoring-tab" tabindex="0">
         <div class="row">
             <div class="col-xl-12">
@@ -337,14 +636,25 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Corridor</label>
+                                <select name="corridor_id" class="form-select" @disabled(! $databaseReady)>
+                                    <option value="">-</option>
+                                    @foreach ($corridors as $corridor)
+                                        <option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }} - {{ $corridor['name'] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="mb-3"><label class="form-label">Station ID</label><input name="station_code" class="form-control" placeholder="MS-PDG-001" required @disabled(! $databaseReady)></div>
                             <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
+                            <div class="mb-3"><label class="form-label">Station Type</label><input name="station_type" class="form-control" value="environmental_monitoring" required @disabled(! $databaseReady)></div>
                             <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" @disabled(! $databaseReady)></div>
                             <div class="row">
                                 <div class="col-md-6 mb-3"><label class="form-label">Logger ID</label><input name="logger_id" class="form-control" @disabled(! $databaseReady)></div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Connectivity</label><select name="connectivity_status" class="form-select" @disabled(! $databaseReady)><option>Online</option><option>Offline</option></select></div>
                             </div>
                             <input type="hidden" name="logger_status" value="Active">
+                            <input type="hidden" name="registration_status" value="registered">
                             <input type="hidden" name="status" value="Normal">
                             <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>Save / Update Monitoring</button>
                         </form>
@@ -358,11 +668,11 @@
                         <h4 class="card-title mb-4">Monitoring Station List</h4>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
-                                <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Workspace</th><th>Logger</th><th>Status</th><th></th></tr></thead>
+                                <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Project</th><th>Workspace</th><th>Corridor</th><th>Type</th><th>Logger</th><th>Status</th><th></th></tr></thead>
                                 <tbody>
                                     @foreach ($monitoringStations as $station)
                                         <tr>
-                                            <td>{{ $station['id'] }}</td><td>{{ $station['name'] }}</td><td>{{ $station['cluster_id'] }}</td><td>{{ $station['logger_id'] }}</td>
+                                            <td>{{ $station['id'] }}</td><td>{{ $station['name'] }}</td><td>{{ $station['project_id'] ?? '-' }}</td><td>{{ $station['cluster_id'] }}</td><td>{{ $station['corridor_id'] ?? '-' }}</td><td>{{ $station['station_type'] ?? '-' }}</td><td>{{ $station['logger_id'] }}</td>
                                             <td><span class="badge {{ $station['status'] === 'Danger' ? 'bg-danger' : 'bg-success' }}">{{ $station['status'] }}</span></td>
                                             <td class="text-end">
                                                 @isset($station['db_id'])
@@ -371,12 +681,17 @@
                                                             data-edit-form="#monitoring-form"
                                                             data-edit-fields="{{ base64_encode(json_encode([
                                                                 'workspace_id' => $station['workspace_db_id'] ?? '',
+                                                                'project_id' => $station['project_db_id'] ?? '',
+                                                                'corridor_id' => $station['corridor_db_id'] ?? '',
                                                                 'station_code' => $station['id'] ?? '',
                                                                 'name' => $station['name'] ?? '',
+                                                                'station_type' => $station['station_type'] ?? 'environmental_monitoring',
                                                                 'coordinate' => $station['coordinate'] ?? '',
                                                                 'logger_id' => $station['logger_id'] ?? '',
                                                                 'connectivity_status' => $station['connectivity_status'] ?? 'Online',
                                                                 'logger_status' => $station['logger_status'] ?? 'Active',
+                                                                'registration_status' => $station['registration_status'] ?? 'registered',
+                                                                'registered_at' => $station['registered_at'] ?? '',
                                                                 'status' => $station['status'] ?? 'Normal',
                                                             ])) }}">Edit</button>
                                                         <form method="POST" action="{{ route('project-setup.destroy', ['type' => 'monitoring', 'id' => $station['db_id']]) }}">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm">Delete</button></form>
@@ -583,6 +898,32 @@
                                 <div class="col-md-6 mb-3"><label class="form-label">Parameter</label><input name="parameter" class="form-control" @disabled(! $databaseReady)></div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Unit</label><input name="unit" class="form-control" @disabled(! $databaseReady)></div>
                             </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Sentinel Parameter Mapping</label>
+                                    <select name="canonical_parameter_id" class="form-select" @disabled(! $databaseReady || collect($canonicalParameters ?? [])->isEmpty())>
+                                        <option value="">Map later in Canonical Database</option>
+                                        @foreach ($canonicalParameters ?? [] as $parameter)
+                                            <option value="{{ $parameter->id }}">{{ $parameter->field_identity }} - {{ $parameter->domain }}{{ $parameter->canonical_unit ? ' / ' . $parameter->canonical_unit : '' }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Source Parameter</label>
+                                    <input name="source_parameter" class="form-control" placeholder="device payload/register name" @disabled(! $databaseReady)>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="form-label">Source Unit</label><input name="source_unit" class="form-control" @disabled(! $databaseReady)></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Byte Order</label><input name="byte_order" class="form-control" placeholder="ABCD / CDAB" @disabled(! $databaseReady)></div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Value Origin</label>
+                                    <select name="value_origin" class="form-select" @disabled(! $databaseReady)>
+                                        <option value="direct_measurement">Direct Measurement</option>
+                                        <option value="device_processed">Device Processed</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="mb-3 d-none" id="weather-parameters-wrap">
                                 <label class="form-label">Parameter Sensor Cuaca</label>
                                 <div class="row g-2">
@@ -714,6 +1055,11 @@
                                                                 'data_type' => $sensor['data_type'] ?? 'uint16',
                                                                 'parameter' => $sensor['parameter'] ?? '',
                                                                 'weather_parameters' => $sensor['weather_parameters'] ?? [],
+                                                                'canonical_parameter_id' => $sensor['canonical_parameter_db_id'] ?? '',
+                                                                'source_parameter' => $sensor['source_parameter'] ?? '',
+                                                                'source_unit' => $sensor['source_unit'] ?? '',
+                                                                'byte_order' => $sensor['byte_order'] ?? '',
+                                                                'value_origin' => $sensor['value_origin'] ?? 'direct_measurement',
                                                                 'unit' => $sensor['unit'] ?? '',
                                                                 'scale_factor' => $sensor['scale_factor'] ?? 1,
                                                                 'offset' => $sensor['offset'] ?? 0,
@@ -736,6 +1082,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <div class="tab-pane fade" id="canonical-tab-pane" role="tabpanel" aria-labelledby="canonical-tab" tabindex="0">
         <div class="row">
@@ -890,6 +1237,7 @@
         </div>
     </div>
 
+    @if($canMutateAssetRegistry)
     <div class="tab-pane fade" id="operation-tab-pane" role="tabpanel" aria-labelledby="operation-tab" tabindex="0">
         <div class="row">
             <div class="col-xl-12">
@@ -926,6 +1274,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <div class="tab-pane fade" id="user-setup-tab-pane" role="tabpanel" aria-labelledby="user-setup-tab" tabindex="0">
         <div class="card">
@@ -940,7 +1289,17 @@
 @endsection
 
 @section('script')
+<script src="{{ URL::asset('build/libs/leaflet/leaflet.js') }}"></script>
+<script src="{{ URL::asset('build/js/pages/sentinel-spatial-map.js') }}"></script>
 <script>
+    window.SentinelProjectSpatialResources = @json($spatialResources);
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.SentinelSpatialMap) {
+            window.SentinelSpatialMap.createConfigurationMap('project-spatial-config-map', window.SentinelProjectSpatialResources || {});
+        }
+    });
+
     (function () {
         const sensorType = document.querySelector('#sensor-form [name="type"]');
         const quantity = document.querySelector('#sensor-form [name="quantity"]');

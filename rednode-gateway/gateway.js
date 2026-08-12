@@ -20,6 +20,7 @@ const heartbeatMs = numberEnv('REDNODE_HEARTBEAT_MS', 1000);
 
 let modbus = new ModbusRTU();
 let activeSerialKey = null;
+let modbusClients = new Map();
 let activeConfig = null;
 let mqttClient = null;
 let mqttConnected = false;
@@ -349,46 +350,127 @@ async function ensureSerial(serial) {
     timeout: Number(serial.timeout_ms || process.env.REDNODE_TIMEOUT_MS || 1500),
   };
   const key = JSON.stringify(next);
+  const existing = modbusClients.get(key);
 
-  if (activeSerialKey === key && modbus.isOpen) {
-    modbus.setTimeout(next.timeout);
-    return;
+  if (existing?.client?.isOpen) {
+    existing.client.setTimeout(next.timeout);
+    return existing.client;
   }
 
-  if (modbus.isOpen) {
-    await new Promise((resolve) => modbus.close(resolve));
+  if (existing?.client?.isOpen) {
+    await new Promise((resolve) => existing.client.close(resolve));
   }
 
-  modbus = new ModbusRTU();
-  modbus.setTimeout(next.timeout);
-  await modbus.connectRTUBuffered(next.port, {
+  const client = new ModbusRTU();
+  client.setTimeout(next.timeout);
+  await client.connectRTUBuffered(next.port, {
     baudRate: next.baudRate,
     dataBits: next.dataBits,
     stopBits: next.stopBits,
     parity: next.parity,
   });
   activeSerialKey = key;
+  modbus = client;
+  modbusClients.set(key, { client, serial: next });
   console.log(`[serial] opened ${next.port} ${next.baudRate} ${next.dataBits}${next.parity[0]?.toUpperCase() || 'N'}${next.stopBits}`);
+
+  return client;
+}
+
+function serialForSensor(sensor) {
+  return {
+    ...(activeConfig?.serial || {}),
+    ...(sensor.serial || {}),
+  };
 }
 
 async function readSensor(sensor) {
+  const client = await ensureSerial(serialForSensor(sensor));
   const functionCode = normalizeFunctionCode(sensor.function_code);
   const address = Number(sensor.address || 0);
   const quantity = Math.max(Number(sensor.quantity || 1), sensor.data_type?.includes('32') ? 2 : 1);
 
-  modbus.setID(Number(sensor.slave_id || 1));
+  client.setID(Number(sensor.slave_id || 1));
 
   if (functionCode === 'FC01') {
-    return (await modbus.readCoils(address, quantity)).data;
+    return (await client.readCoils(address, quantity)).data;
   }
   if (functionCode === 'FC02') {
-    return (await modbus.readDiscreteInputs(address, quantity)).data;
+    return (await client.readDiscreteInputs(address, quantity)).data;
   }
   if (functionCode === 'FC04') {
-    return (await modbus.readInputRegisters(address, quantity)).data;
+    return (await client.readInputRegisters(address, quantity)).data;
   }
 
-  return (await modbus.readHoldingRegisters(address, quantity)).data;
+  return (await client.readHoldingRegisters(address, quantity)).data;
+}
+
+function crc16Modbus(bytes) {
+  let crc = 0xffff;
+
+  bytes.forEach((byte) => {
+    crc ^= Number(byte) & 0xff;
+
+    for (let index = 0; index < 8; index += 1) {
+      crc = (crc & 1) ? ((crc >> 1) ^ 0xa001) : (crc >> 1);
+    }
+  });
+
+  return crc & 0xffff;
+}
+
+function hexFrame(bytes) {
+  return bytes.map((byte) => (Number(byte) & 0xff).toString(16).toUpperCase().padStart(2, '0')).join(' ');
+}
+
+function functionCodeNumber(sensor) {
+  return Number(normalizeFunctionCode(sensor.function_code).replace('FC', '')) || 3;
+}
+
+function frameWithCrc(bytes) {
+  const crc = crc16Modbus(bytes);
+
+  return bytes.concat([crc & 0xff, (crc >> 8) & 0xff]);
+}
+
+function modbusFrameAudit(sensor, registers) {
+  const slaveId = Number(sensor.slave_id || 1) & 0xff;
+  const functionCode = functionCodeNumber(sensor);
+  const address = Number(sensor.address || 0) & 0xffff;
+  const quantity = Math.max(Number(sensor.quantity || registers.length || 1), registers.length || 1) & 0xffff;
+  const request = frameWithCrc([
+    slaveId,
+    functionCode,
+    (address >> 8) & 0xff,
+    address & 0xff,
+    (quantity >> 8) & 0xff,
+    quantity & 0xff,
+  ]);
+  const registerBytes = [];
+
+  registers.forEach((register) => {
+    const value = Number(register || 0) & 0xffff;
+    registerBytes.push((value >> 8) & 0xff, value & 0xff);
+  });
+
+  const response = frameWithCrc([
+    slaveId,
+    functionCode,
+    registerBytes.length & 0xff,
+    ...registerBytes,
+  ]);
+
+  return {
+    slave_id: slaveId,
+    function_code: normalizeFunctionCode(sensor.function_code),
+    address,
+    quantity,
+    tx: hexFrame(request),
+    rx: hexFrame(response),
+    register_words: registers,
+    register_bytes: hexFrame(registerBytes),
+    note: 'Reconstructed from successful Modbus RTU request/response data captured by the gateway.',
+  };
 }
 
 function valueFromRegisters(registers, sensor) {
@@ -459,6 +541,7 @@ function bufferFromRegisters(registers, byteOrder = 'ABCD') {
 
 function evaluate(sensor, registers) {
   const parameterValues = mappedValuesFromRegisters(registers, sensor);
+  const frame = modbusFrameAudit(sensor, registers);
   const raw = parameterValues.length ? parameterValues[0].raw : valueFromRegisters(registers, sensor);
   const scale = Number(sensor.scale_factor ?? 1);
   const offset = Number(sensor.offset ?? 0);
@@ -475,7 +558,8 @@ function evaluate(sensor, registers) {
     value_text: parameterValues.length
       ? parameterValues.map((item) => `${item.label} ${item.value_text}`).join(', ')
       : `${Number(value).toFixed(2)}${unitSuffix(sensor)}`,
-    parameter_values: parameterValues,
+    parameter_values: parameterValues.map((item) => ({ ...item, modbus_frame: frame })),
+    modbus_frame: frame,
     threshold,
     threshold_exceeded: thresholdExceeded,
   };
@@ -574,6 +658,7 @@ async function postTelemetry(sensor, result) {
     numeric_value: result.value,
     registers: result.registers || [],
     parameter_values: result.parameter_values || [],
+    modbus_frame: result.modbus_frame || null,
     observed_at: new Date().toISOString(),
     ...(result.threshold_exceeded !== null ? { threshold_exceeded: result.threshold_exceeded } : {}),
   };
@@ -628,6 +713,7 @@ function publishTelemetry(sensor, result) {
     parameter_values: result.parameter_values || [],
     raw: result.raw,
     registers: result.registers,
+    modbus_frame: result.modbus_frame,
     threshold: result.threshold,
     threshold_exceeded: result.threshold_exceeded,
     received_at: new Date().toISOString(),
@@ -643,13 +729,11 @@ async function pollDueSensors() {
 
   running = true;
   const heartbeatSensors = [];
-  let connected = false;
+  let connected = true;
   let heartbeatError = null;
+  let polledAnySensor = false;
 
   try {
-    await ensureSerial(activeConfig.serial || {});
-    connected = true;
-
     const now = Date.now();
     for (const sensor of activeConfig.sensors) {
       const state = sensorState.get(sensor.sensor_code) || { nextAt: 0 };
@@ -657,12 +741,14 @@ async function pollDueSensors() {
         continue;
       }
 
+      polledAnySensor = true;
+
       try {
         const registers = await readSensor(sensor);
         const result = evaluate(sensor, registers);
+        const serial = serialForSensor(sensor);
         await postTelemetry(sensor, result);
         publishTelemetry(sensor, result);
-
         state.lastValue = result.value_text;
         state.lastError = null;
         heartbeatSensors.push({
@@ -675,8 +761,11 @@ async function pollDueSensors() {
           address: Number(sensor.address || 0),
           quantity: registers.length,
           function_code: normalizeFunctionCode(sensor.function_code),
+          serial_port: serial.port,
+          pin_mapping: serial.pin_mapping || '',
           registers,
           rows: registerRowsForHeartbeat(sensor, registers),
+          modbus_frame: result.modbus_frame || null,
           raw: result.raw,
           numeric_value: result.value,
           parameter_values: result.parameter_values || [],
@@ -688,9 +777,10 @@ async function pollDueSensors() {
         });
         console.log(
           `[sensor] ${sensor.sensor_code} = ${result.value_text} ` +
-          `| raw=${result.raw} | registers=[${registers.join(', ')}]`
+          `| port=${serial.port || '-'} | raw=${result.raw} | registers=[${registers.join(', ')}]`
         );
       } catch (error) {
+        const serial = serialForSensor(sensor);
         state.lastError = error.message;
         heartbeatError = error.message;
         heartbeatSensors.push({
@@ -703,6 +793,8 @@ async function pollDueSensors() {
           address: Number(sensor.address || 0),
           quantity: Number(sensor.quantity || 1),
           function_code: normalizeFunctionCode(sensor.function_code),
+          serial_port: serial.port,
+          pin_mapping: serial.pin_mapping || '',
           registers: [],
           rows: [],
           raw: null,
@@ -721,6 +813,9 @@ async function pollDueSensors() {
     heartbeatError = error.message;
     console.error(`[serial] ${error.message}`);
   } finally {
+    if (!polledAnySensor) {
+      connected = true;
+    }
     postHeartbeat(connected, heartbeatError, heartbeatSensors).catch((error) => {
       console.error(`[laporan-koneksi] ${error.message}`);
     });
@@ -749,6 +844,11 @@ async function main() {
 process.on('SIGINT', async () => {
   if (mqttClient) {
     mqttClient.end(true);
+  }
+  for (const { client } of modbusClients.values()) {
+    if (client.isOpen) {
+      await new Promise((resolve) => client.close(resolve));
+    }
   }
   if (modbus.isOpen) {
     await new Promise((resolve) => modbus.close(resolve));

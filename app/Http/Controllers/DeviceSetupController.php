@@ -12,7 +12,9 @@ use App\Models\Project;
 use App\Models\RawDataIngestion;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
+use App\Services\AuthorizationService;
 use App\Services\CanonicalMappingService;
+use App\Services\SentinelRuntimeReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,12 +28,18 @@ use phpseclib3\Net\SSH2;
 
 class DeviceSetupController extends Controller
 {
-    public function __construct(private readonly CanonicalMappingService $canonicalMapping)
+    public function __construct(
+        private readonly CanonicalMappingService $canonicalMapping,
+        private readonly AuthorizationService $authorizationService,
+        private readonly SentinelRuntimeReadService $runtimeReadService
+    )
     {
     }
 
     public function storeMstPrefix(Request $request): RedirectResponse
     {
+        $this->authorizeAssetRegistryMutation($request);
+
         $data = $request->validate([
             'prefix_code' => ['required', 'string', 'max:255'],
             'name' => ['nullable', 'string', 'max:255'],
@@ -46,6 +54,8 @@ class DeviceSetupController extends Controller
 
     public function storeDataLogger(Request $request): RedirectResponse
     {
+        $this->authorizeAssetRegistryMutation($request);
+
         $rules = [
             'monitoring_station_id' => ['nullable', 'exists:monitoring_stations,id'],
             'logger_code' => ['required', 'string', 'max:255'],
@@ -264,6 +274,8 @@ class DeviceSetupController extends Controller
 
     public function storeConnectivity(Request $request): RedirectResponse
     {
+        $this->authorizeAssetRegistryMutation($request);
+
         $data = $request->validate([
             'data_logger_id' => ['required', 'exists:data_loggers,id'],
             'connectivity_code' => ['required', 'string', 'max:255'],
@@ -285,6 +297,11 @@ class DeviceSetupController extends Controller
             'apn' => ['nullable', 'string', 'max:255'],
             'connectivity_status' => ['required', 'string', 'max:50'],
         ]);
+        $data['connection_state'] = strtolower($data['connectivity_status']);
+        $data['uplink_state'] = strtolower($data['connectivity_status']);
+        if ($data['connectivity_status'] === 'Online') {
+            $data['last_connected_at'] = now();
+        }
 
         ConnectivityConfig::updateOrCreate(['connectivity_code' => $data['connectivity_code']], $data);
 
@@ -293,6 +310,8 @@ class DeviceSetupController extends Controller
 
     public function storeRednodeSerialConfig(Request $request): RedirectResponse|JsonResponse
     {
+        $this->authorizeAssetRegistryMutation($request);
+
         $data = $request->validate([
             'data_logger_id' => ['required', 'exists:data_loggers,id'],
             'logger_code' => ['nullable', 'string', 'max:255'],
@@ -322,7 +341,7 @@ class DeviceSetupController extends Controller
 
         $logger = DataLogger::findOrFail($data['data_logger_id']);
 
-        $connectivityCode = 'SERIAL-' . $logger->logger_code;
+        $connectivityCode = $this->rednodeConnectivityCode($logger, $data['serial_port']);
         $existingConnectivity = ConnectivityConfig::where('connectivity_code', $connectivityCode)->first();
         $connectivityValues = [
                 'data_logger_id' => $logger->id,
@@ -342,12 +361,15 @@ class DeviceSetupController extends Controller
                 'monitored_sensor_ids' => $request->has('monitored_sensor_ids_present') ? $monitoredSensorIds : null,
                 'rednode_poll_interval_ms' => (int) round(((float) $data['rednode_poll_interval_seconds']) * 1000),
                 'connectivity_status' => $existingConnectivity?->connectivity_status ?? 'Offline',
+                'connection_state' => $existingConnectivity?->connection_state ?? 'configured',
+                'uplink_state' => $existingConnectivity?->uplink_state ?? 'unknown',
         ];
 
         $connectivity = ConnectivityConfig::updateOrCreate(
             ['connectivity_code' => $connectivityCode],
             $connectivityValues
         );
+        $this->removeRednodeSensorsFromOtherSerialConfigs($logger, $connectivity, $monitoredSensorIds);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -373,8 +395,51 @@ class DeviceSetupController extends Controller
         return back()->with('message', 'Konfigurasi serial gateway berhasil disimpan.');
     }
 
+    private function rednodeConnectivityCode(DataLogger $logger, string $serialPort): string
+    {
+        $baseCode = 'SERIAL-' . $logger->logger_code;
+        $defaultPort = trim((string) env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'));
+        $serialPort = trim($serialPort);
+
+        if ($serialPort === '' || $serialPort === $defaultPort) {
+            return $baseCode;
+        }
+
+        $suffix = Str::upper(preg_replace('/[^A-Za-z0-9]+/', '-', basename($serialPort) ?: $serialPort));
+
+        return $baseCode . '-' . trim($suffix, '-');
+    }
+
+    private function removeRednodeSensorsFromOtherSerialConfigs(DataLogger $logger, ConnectivityConfig $current, array $sensorIds): void
+    {
+        if ($sensorIds === []) {
+            return;
+        }
+
+        ConnectivityConfig::where('data_logger_id', $logger->id)
+            ->whereKeyNot($current->id)
+            ->where(function ($query) {
+                $query->where('protocol', 'Modbus RTU')
+                    ->orWhereNotNull('serial_port');
+            })
+            ->get()
+            ->each(function (ConnectivityConfig $config) use ($sensorIds) {
+                $nextIds = collect($config->monitored_sensor_ids ?? [])
+                    ->map(fn ($id) => (int) $id)
+                    ->reject(fn ($id) => in_array($id, $sensorIds, true))
+                    ->values()
+                    ->all();
+
+                if ($nextIds !== ($config->monitored_sensor_ids ?? [])) {
+                    $config->update(['monitored_sensor_ids' => $nextIds]);
+                }
+            });
+    }
+
     public function storeCredential(Request $request): RedirectResponse
     {
+        $this->authorizeAssetRegistryMutation($request);
+
         $data = $request->validate([
             'data_logger_id' => ['required', 'exists:data_loggers,id'],
             'credential_code' => ['required', 'string', 'max:255'],
@@ -393,6 +458,8 @@ class DeviceSetupController extends Controller
 
     public function storeTelemetry(Request $request): RedirectResponse
     {
+        $this->authorizeAssetRegistryMutation($request);
+
         $data = $request->validate([
             'telemetry_id' => ['nullable', 'exists:telemetry_readings,id'],
             'sensor_id' => ['required', 'exists:sensors,id'],
@@ -440,6 +507,7 @@ class DeviceSetupController extends Controller
             'numeric_value' => ['nullable', 'numeric'],
             'registers' => ['nullable', 'array'],
             'parameter_values' => ['nullable', 'array'],
+            'modbus_frame' => ['nullable', 'array'],
             'threshold_exceeded' => ['nullable', 'boolean'],
             'observed_at' => ['nullable', 'date'],
             'payload' => ['nullable', 'array'],
@@ -453,22 +521,32 @@ class DeviceSetupController extends Controller
             $data['registers'] ?? [],
             $data['parameter_values'] ?? []
         );
+        $data['parameter_values'] = $this->parameterValuesWithModbusFrame($data['parameter_values'], $data['modbus_frame'] ?? null);
         $dataLoggerId = $data['data_logger_id'] ?? $sensor->data_logger_id;
         if (! $dataLoggerId && ! empty($data['data_logger_code'])) {
             $dataLoggerId = DataLogger::where('logger_code', $data['data_logger_code'])->value('id');
         }
+        if ($dataLoggerId) {
+            ConnectivityConfig::where('data_logger_id', $dataLoggerId)->update([
+                'connectivity_status' => 'Online',
+                'connection_state' => 'connected',
+                'uplink_state' => 'uplink',
+                'last_seen_at' => now(),
+                'last_connected_at' => now(),
+                'last_error' => null,
+            ]);
+        }
 
         $mappingValue = array_key_exists('raw_value', $data) ? $data['raw_value'] : ($data['value'] ?? null);
         $displayValue = $data['display_value'] ?? $data['value'] ?? null;
+        $mappedPrimaryValue = $this->primaryMappedParameterValue($data['parameter_values'] ?? []);
         $sensorDisplayValue = $this->sensorDisplayValue($displayValue, $data['parameter_values'] ?? []);
-        $readingValue = $sensor->type !== 'weather_station'
-            && $this->canonicalMapping->activeProfileForSensor($sensor)
-            && array_key_exists('raw_value', $data)
-            ? $data['raw_value']
-            : $displayValue;
-        $thresholdExceeded = array_key_exists('threshold_exceeded', $data)
-            ? (bool) $data['threshold_exceeded']
-            : $this->thresholdExceeded($data['numeric_value'] ?? $displayValue, $sensor->threshold ?? $sensor->rule);
+        $readingValue = $mappedPrimaryValue['value_text'] ?? $displayValue;
+        $thresholdValue = $this->thresholdComparisonValue($data['parameter_values'] ?? [], $data['numeric_value'] ?? $displayValue);
+        $thresholdExceeded = $this->thresholdExceeded($thresholdValue, $sensor->threshold ?? $sensor->rule);
+        if (! $thresholdExceeded && array_key_exists('threshold_exceeded', $data) && ! $sensor->threshold && ! $sensor->rule) {
+            $thresholdExceeded = (bool) $data['threshold_exceeded'];
+        }
         $level = $thresholdExceeded ? 'Awas' : 'Normal';
 
         $sensor->update([
@@ -496,7 +574,7 @@ class DeviceSetupController extends Controller
         }
 
         if (Schema::hasColumn('telemetry_readings', 'numeric_value')) {
-            $telemetryPayload['numeric_value'] = $data['numeric_value'] ?? null;
+            $telemetryPayload['numeric_value'] = $this->numericFromText($mappedPrimaryValue['value'] ?? ($data['numeric_value'] ?? $displayValue));
         }
 
         if (Schema::hasColumn('telemetry_readings', 'registers')) {
@@ -605,20 +683,35 @@ class DeviceSetupController extends Controller
         }
 
         $loggerCode = $dataLogger?->logger_code ?? $requestedLoggerCode;
-        $serialConfig = $dataLogger && Schema::hasTable('connectivity_configs')
+        $serialConfigs = $dataLogger && Schema::hasTable('connectivity_configs')
             ? ConnectivityConfig::where('data_logger_id', $dataLogger->id)
                 ->where(function ($query) {
                     $query->where('protocol', 'Modbus RTU')
                         ->orWhereNotNull('serial_port');
                 })
                 ->latest()
-                ->first()
-            : null;
+                ->get()
+            : collect();
+        $serialConfig = $serialConfigs->firstWhere('connectivity_code', 'SERIAL-' . $loggerCode) ?: $serialConfigs->first();
         $serialSettings = $serialConfig?->serial_settings ?? [];
-        $selectedSensorIds = collect($serialConfig?->monitored_sensor_ids ?? ($serialSettings['monitored_sensor_ids'] ?? []))
-            ->map(fn ($id) => (int) $id)
-            ->filter()
-            ->values();
+        $sensorSerialConfigs = collect();
+        $selectedSensorIds = collect();
+        foreach ($serialConfigs as $config) {
+            $settings = $config->serial_settings ?? [];
+            $ids = collect($config->monitored_sensor_ids ?? ($settings['monitored_sensor_ids'] ?? []))
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->unique()
+                ->values();
+
+            $selectedSensorIds = $selectedSensorIds->merge($ids);
+            foreach ($ids as $sensorId) {
+                if (! $sensorSerialConfigs->has($sensorId)) {
+                    $sensorSerialConfigs->put($sensorId, $config);
+                }
+            }
+        }
+        $selectedSensorIds = $selectedSensorIds->unique()->values();
         $rednodePollIntervalMs = (int) ($serialConfig?->rednode_poll_interval_ms ?: ($serialSettings['rednode_poll_interval_ms'] ?? env('REDNODE_POLL_INTERVAL_MS', 1000)));
         $runtimeState = $serialConfig?->runtime_state ?? [];
         $monitoringEnabled = array_key_exists('monitoring_enabled', $runtimeState)
@@ -642,8 +735,12 @@ class DeviceSetupController extends Controller
         }
 
         $sensors = $sensorQuery->get()
-            ->map(function (Sensor $sensor) use ($rednodePollIntervalMs) {
+            ->map(function (Sensor $sensor) use ($rednodePollIntervalMs, $serialConfig, $sensorSerialConfigs) {
                 $rednodeConfig = $this->canonicalMapping->rednodeSensorConfig($sensor);
+                $sensorSerialConfig = $sensorSerialConfigs->get($sensor->id) ?: $serialConfig;
+                $sensorSerialSettings = $sensorSerialConfig?->serial_settings ?? [];
+                $sensorPollIntervalMs = (int) ($sensorSerialConfig?->rednode_poll_interval_ms
+                    ?: ($sensorSerialSettings['rednode_poll_interval_ms'] ?? $rednodePollIntervalMs));
 
                 return array_merge($rednodeConfig, [
                     'sensor_label' => $this->sensorLabel($sensor),
@@ -656,8 +753,9 @@ class DeviceSetupController extends Controller
                         ->values(),
                     'monitoring_station_id' => $sensor->monitoringStation?->station_code,
                     'prefix' => $sensor->mstPrefix?->prefix_code,
-                    'poll_interval_ms' => $rednodePollIntervalMs > 0
-                        ? $rednodePollIntervalMs
+                    'serial' => $this->rednodeSerialPayload($sensorSerialConfig ?: $serialConfig),
+                    'poll_interval_ms' => $sensorPollIntervalMs > 0
+                        ? $sensorPollIntervalMs
                         : (int) ($sensor->poll_interval_ms ?: 1000),
                     'status' => $sensor->status,
                 ]);
@@ -684,17 +782,10 @@ class DeviceSetupController extends Controller
                 'firmware_version' => $dataLogger?->firmware_version,
                 'logger_model' => $dataLogger?->logger_model,
             ],
-            'serial' => [
-                'port' => $serialConfig?->serial_port ?: ($serialSettings['serial_port'] ?? ($serialConfig?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'))),
-                'baud_rate' => (int) ($serialConfig?->baud_rate ?: ($serialSettings['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600))),
-                'data_bits' => (int) ($serialConfig?->data_bits ?: ($serialSettings['data_bits'] ?? env('REDNODE_DATA_BITS', 8))),
-                'stop_bits' => (int) ($serialConfig?->stop_bits ?: ($serialSettings['stop_bits'] ?? env('REDNODE_STOP_BITS', 1))),
-                'parity' => $serialConfig?->parity ?: ($serialSettings['parity'] ?? env('REDNODE_PARITY', 'none')),
-                'timeout_ms' => (int) ($serialConfig?->timeout_ms ?: ($serialSettings['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500))),
-                'pin_mapping' => $serialConfig?->pin_mapping ?: ($serialSettings['pin_mapping'] ?? $serialConfig?->topic_or_api_path),
+            'serial' => array_merge($this->rednodeSerialPayload($serialConfig), [
                 'monitored_sensor_ids' => $selectedSensorIds,
                 'poll_interval_ms' => $rednodePollIntervalMs,
-            ],
+            ]),
             'monitoring' => [
                 'enabled' => $monitoringEnabled,
                 'last_action' => $lastAction,
@@ -724,6 +815,21 @@ class DeviceSetupController extends Controller
             ],
             'sensors' => $sensors,
         ]);
+    }
+
+    private function rednodeSerialPayload(?ConnectivityConfig $config): array
+    {
+        $settings = $config?->serial_settings ?? [];
+
+        return [
+            'port' => $config?->serial_port ?: ($settings['serial_port'] ?? ($config?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'))),
+            'baud_rate' => (int) ($config?->baud_rate ?: ($settings['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600))),
+            'data_bits' => (int) ($config?->data_bits ?: ($settings['data_bits'] ?? env('REDNODE_DATA_BITS', 8))),
+            'stop_bits' => (int) ($config?->stop_bits ?: ($settings['stop_bits'] ?? env('REDNODE_STOP_BITS', 1))),
+            'parity' => $config?->parity ?: ($settings['parity'] ?? env('REDNODE_PARITY', 'none')),
+            'timeout_ms' => (int) ($config?->timeout_ms ?: ($settings['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500))),
+            'pin_mapping' => $config?->pin_mapping ?: ($settings['pin_mapping'] ?? $config?->topic_or_api_path),
+        ];
     }
 
     private function resolveRednodeLogger(string $loggerCode): ?DataLogger
@@ -1008,7 +1114,20 @@ class DeviceSetupController extends Controller
         $this->syncDataLoggerDeviceMetadata($logger, $device, $request);
         $this->recordDataLoggerDiscovery($request, $device, $logger);
 
-        $connectivity = ConnectivityConfig::firstOrCreate(
+        $reportedSerialPort = trim((string) ($data['serial_port'] ?? ''));
+        $connectivity = null;
+
+        if ($reportedSerialPort !== '') {
+            $connectivity = ConnectivityConfig::where('data_logger_id', $logger->id)
+                ->where(function ($query) use ($reportedSerialPort) {
+                    $query->where('serial_port', $reportedSerialPort)
+                        ->orWhere('host_or_endpoint', $reportedSerialPort);
+                })
+                ->latest()
+                ->first();
+        }
+
+        $connectivity ??= ConnectivityConfig::firstOrCreate(
             ['connectivity_code' => 'SERIAL-' . $logger->logger_code],
             [
                 'data_logger_id' => $logger->id,
@@ -1020,10 +1139,13 @@ class DeviceSetupController extends Controller
 
         $connectivity->update([
             'data_logger_id' => $logger->id,
-            'host_or_endpoint' => $data['serial_port'] ?? $connectivity->host_or_endpoint,
-            'serial_port' => $data['serial_port'] ?? $connectivity->serial_port,
-            'pin_mapping' => $data['pin_mapping'] ?? $connectivity->pin_mapping,
-            'connectivity_status' => $data['connected'] ? 'Online' : 'Offline',
+            'host_or_endpoint' => $connectivity->host_or_endpoint ?: ($data['serial_port'] ?? null),
+            'serial_port' => $connectivity->serial_port ?: ($data['serial_port'] ?? null),
+            'pin_mapping' => $connectivity->pin_mapping ?: ($data['pin_mapping'] ?? null),
+            'connectivity_status' => 'Online',
+            'connection_state' => $data['connected'] ? 'connected' : 'degraded',
+            'uplink_state' => $data['connected'] ? 'uplink' : 'degraded',
+            'last_connected_at' => $data['connected'] ? now() : ($connectivity->last_connected_at ?: now()),
             'last_seen_at' => now(),
             'last_error' => $data['last_error'] ?? null,
             'last_payload' => [
@@ -1054,15 +1176,16 @@ class DeviceSetupController extends Controller
         }
 
         $loggerCode = $logger?->logger_code ?? $requestedLoggerCode;
-        $connectivity = $logger
+        $configs = $logger
             ? ConnectivityConfig::where('data_logger_id', $logger->id)
                 ->where(function ($query) {
                     $query->where('protocol', 'Modbus RTU')
                         ->orWhereNotNull('serial_port');
                 })
                 ->latest()
-                ->first()
-            : null;
+                ->get()
+            : collect();
+        $connectivity = $configs->firstWhere('connectivity_code', 'SERIAL-' . $loggerCode) ?: $configs->first();
         $selectedSensorIds = collect($connectivity?->monitored_sensor_ids ?? [])
             ->map(fn ($id) => (int) $id)
             ->filter()
@@ -1197,6 +1320,7 @@ class DeviceSetupController extends Controller
         }
 
         $results = $loggers->map(function (DataLogger $logger) use ($request) {
+            $this->ensureRednodeSerialAssignments($logger);
             $connectivity = $this->rednodeConnectivity($logger->logger_code);
 
             if (! $connectivity) {
@@ -1402,25 +1526,57 @@ class DeviceSetupController extends Controller
         ]);
         $project = Project::findOrFail($data['project_id']);
         $freshAfter = now()->subSeconds((int) env('PROJECT_MONITORING_FRESH_SECONDS', 90));
+        $loggerFreshAfter = now()->subSeconds((int) env('PROJECT_MONITORING_LOGGER_GRACE_SECONDS', 180));
+        $sensorFreshAfter = now()->subSeconds((int) env('PROJECT_MONITORING_SENSOR_GRACE_SECONDS', 180));
         $loggers = $this->projectDataLoggers((int) $project->id);
         $loggerIds = $loggers->pluck('id')->filter()->values();
-        $sensors = Sensor::with(['monitoringStation', 'workspace'])
+        $sensors = Sensor::with(['monitoringStation', 'workspace', 'dataLogger'])
             ->whereHas('monitoringStation.workspace', fn ($query) => $query->where('project_id', $project->id))
             ->orderBy('monitoring_station_id')
             ->orderBy('sensor_code')
             ->get();
-        $readings = TelemetryReading::with('dataLogger')
-            ->whereIn('sensor_id', $sensors->pluck('id'))
-            ->latest('received_at')
-            ->latest()
+        $sensorIds = $sensors->pluck('id')->filter()->values();
+        $readings = $this->runtimeReadService->latestReadingsForSensorIds($sensorIds);
+        $latestSuccessfulPerSensor = TelemetryReading::query()
+            ->select('sensor_id')
+            ->selectRaw('MAX(received_at) as latest_received_at')
+            ->whereIn('sensor_id', $sensorIds)
+            ->whereNotNull('value')
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhereNotIn('status', ['Timed out', 'Sensor Error']);
+            })
+            ->groupBy('sensor_id');
+        $successfulReadings = TelemetryReading::with('dataLogger')
+            ->joinSub($latestSuccessfulPerSensor, 'latest_successful_per_sensor', function ($join) {
+                $join->on('telemetry_readings.sensor_id', '=', 'latest_successful_per_sensor.sensor_id')
+                    ->on('telemetry_readings.received_at', '=', 'latest_successful_per_sensor.latest_received_at');
+            })
+            ->select('telemetry_readings.*')
+            ->latest('telemetry_readings.received_at')
+            ->latest('telemetry_readings.id')
             ->get()
             ->unique('sensor_id')
             ->keyBy('sensor_id');
+        $latestTelemetryByLogger = TelemetryReading::query()
+            ->select('data_logger_id')
+            ->selectRaw('MAX(received_at) as latest_received_at')
+            ->whereIn('data_logger_id', $loggerIds)
+            ->groupBy('data_logger_id')
+            ->get()
+            ->keyBy('data_logger_id');
 
-        $loggerRows = $loggers->map(function (DataLogger $logger) use ($freshAfter) {
+        $loggerRows = $loggers->map(function (DataLogger $logger) use ($loggerFreshAfter, $latestTelemetryByLogger) {
             $connectivity = $this->rednodeConnectivity($logger->logger_code);
             $lastSeen = $connectivity?->last_seen_at;
-            $online = $lastSeen && $lastSeen->gt($freshAfter) && $connectivity?->connectivity_status === 'Online';
+            $latestTelemetryAt = $latestTelemetryByLogger->get($logger->id)?->latest_received_at
+                ? Carbon::parse($latestTelemetryByLogger->get($logger->id)->latest_received_at)
+                : null;
+            $effectiveLastSeen = collect([$lastSeen, $latestTelemetryAt])
+                ->filter()
+                ->sortDesc()
+                ->first();
+            $online = $effectiveLastSeen && $effectiveLastSeen->gt($loggerFreshAfter);
 
             return [
                 'id' => $logger->id,
@@ -1429,29 +1585,53 @@ class DeviceSetupController extends Controller
                 'station' => $logger->monitoringStation?->station_code,
                 'online' => (bool) $online,
                 'status' => $online ? 'Online' : ($connectivity?->connectivity_status ?? 'Offline'),
-                'last_seen_at' => optional($lastSeen)->toISOString(),
+                'last_seen_at' => optional($effectiveLastSeen)->toISOString(),
                 'last_error' => $connectivity?->last_error,
             ];
         })->values();
-        $loggerRowsByStation = $loggerRows->keyBy('id');
+        $loggerRowsById = $loggerRows->keyBy('id');
+        $runtimeParameterRows = $sensors
+            ->pluck('monitoringStation')
+            ->filter()
+            ->unique('id')
+            ->flatMap(fn ($station) => collect($this->runtimeReadService->latestReadings($station)['readings']))
+            ->groupBy('sensor_id');
 
-        $sensorRows = $sensors->map(function (Sensor $sensor) use ($readings, $freshAfter, $loggers, $loggerRowsByStation) {
-            $reading = $readings->get($sensor->id);
+        $sensorRows = $sensors->map(function (Sensor $sensor) use ($readings, $successfulReadings, $sensorFreshAfter, $loggers, $loggerRowsById, $runtimeParameterRows) {
+            $latestReading = $readings->get($sensor->id);
+            $successfulReading = $successfulReadings->get($sensor->id);
+            $latestStatusLower = Str::lower((string) ($latestReading?->status ?? ''));
+            $latestIsError = Str::contains($latestStatusLower, ['timed out', 'timeout', 'sensor error', 'gagal']);
+            $successfulFresh = $successfulReading?->received_at && $successfulReading->received_at->gt($sensorFreshAfter);
+            $reading = $latestIsError && $successfulFresh ? $successfulReading : $latestReading;
             $receivedAt = $reading?->received_at ?: $sensor->last_seen_at;
-            $logger = $loggers->firstWhere('monitoring_station_id', $sensor->monitoring_station_id);
-            $loggerOnline = $logger ? (bool) ($loggerRowsByStation->get($logger->id)['online'] ?? false) : false;
-            $readingFresh = $receivedAt && $receivedAt->gt($freshAfter);
-            $fresh = $readingFresh && $loggerOnline;
-            $parameterValues = collect($reading?->parameter_values ?? [])
-                ->map(fn ($item) => is_array($item) ? [
+            $logger = $sensor->dataLogger ?: $loggers->firstWhere('monitoring_station_id', $sensor->monitoring_station_id);
+            $loggerOnline = $logger ? (bool) ($loggerRowsById->get($logger->id)['online'] ?? false) : false;
+            $readingFresh = $receivedAt && $receivedAt->gt($sensorFreshAfter);
+            $runtimeStatus = (string) ($reading?->status ?? $sensor->status ?? '');
+            $runtimeStatusLower = Str::lower($runtimeStatus);
+            $runtimeError = Str::contains($runtimeStatusLower, ['timed out', 'timeout', 'sensor error', 'gagal']);
+            $fresh = $readingFresh && $loggerOnline && ! $runtimeError;
+            $parameterValues = collect($runtimeParameterRows->get($sensor->id, []))
+                ->map(fn (array $item) => [
                     'parameter' => $item['parameter'] ?? null,
                     'label' => $item['label'] ?? $this->weatherParameterLabel((string) ($item['parameter'] ?? '')),
                     'value' => $item['value'] ?? null,
                     'value_text' => $this->valueWithUnit($item['value_text'] ?? ($item['value'] ?? null), $item['unit'] ?? null),
                     'unit' => $item['unit'] ?? null,
                     'raw' => $item['raw'] ?? null,
-                ] : null)
-                ->filter()
+                    'source_parameter' => $item['source_parameter'] ?? null,
+                    'register_address' => $item['register_address'] ?? null,
+                    'register_index' => $item['register_index'] ?? null,
+                    'registers' => $item['registers'] ?? null,
+                    'value_type' => $item['value_type'] ?? null,
+                    'data_length' => $item['data_length'] ?? null,
+                    'byte_order' => $item['byte_order'] ?? null,
+                    'scale_factor' => $item['scale_factor'] ?? null,
+                    'offset' => $item['offset'] ?? null,
+                    'modbus_frame' => $item['modbus_frame'] ?? null,
+                    'fresh' => $fresh && (bool) ($item['fresh'] ?? false),
+                ])
                 ->values();
 
             return [
@@ -1464,18 +1644,57 @@ class DeviceSetupController extends Controller
                 'parameter_values' => $parameterValues,
                 'station' => $sensor->monitoringStation?->station_code,
                 'logger_code' => $reading?->dataLogger?->logger_code ?: $logger?->logger_code,
-                'value' => $sensor->type === 'weather_station' && $parameterValues->isNotEmpty()
+                'value' => $parameterValues->isNotEmpty()
                     ? $parameterValues->pluck('value_text')->filter()->implode(', ')
                     : $this->valueWithUnit($reading?->value ?? $sensor->value, $sensor->unit),
-                'status' => $fresh ? ($reading?->status ?? $sensor->status ?? 'Normal') : ($loggerOnline ? 'Online - Tunggu Data' : 'Data Lama'),
+                'threshold' => $sensor->threshold,
+                'rule' => $sensor->rule,
+                'status' => $runtimeError
+                    ? ($runtimeStatus ?: 'Sensor Error')
+                    : ($fresh ? ($reading?->status ?? $sensor->status ?? 'Normal') : ($loggerOnline ? 'Online - Tunggu Data' : 'Data Lama')),
                 'alert_level' => $reading?->alert_level ?? $sensor->alert_level,
                 'fresh' => (bool) $fresh,
                 'online' => $loggerOnline,
                 'received_at' => optional($receivedAt)->toISOString(),
             ];
         })->values();
+        $mappingAuditRows = $sensorRows
+            ->flatMap(fn (array $sensor) => collect($sensor['parameter_values'] ?? [])->map(fn (array $parameter) => [
+                'sensor_id' => $sensor['id'],
+                'sensor_code' => $sensor['sensor_code'],
+                'station' => $sensor['station'],
+                'logger_code' => $sensor['logger_code'],
+                'parameter' => $parameter['parameter'] ?? null,
+                'source_parameter' => $parameter['source_parameter'] ?? null,
+                'raw' => $parameter['raw'] ?? null,
+                'raw_registers' => $parameter['registers'] ?? null,
+                'register_address' => $parameter['register_address'] ?? null,
+                'register_index' => $parameter['register_index'] ?? null,
+                'value_type' => $parameter['value_type'] ?? null,
+                'data_length' => $parameter['data_length'] ?? null,
+                'byte_order' => $parameter['byte_order'] ?? null,
+                'scale_factor' => $parameter['scale_factor'] ?? null,
+                'offset' => $parameter['offset'] ?? null,
+                'modbus_frame' => $parameter['modbus_frame'] ?? null,
+                'tx_frame' => $parameter['modbus_frame']['tx'] ?? null,
+                'rx_frame' => $parameter['modbus_frame']['rx'] ?? null,
+                'register_bytes' => $parameter['modbus_frame']['register_bytes'] ?? null,
+                'mapped_value' => $parameter['value'] ?? null,
+                'mapped_text' => $parameter['value_text'] ?? null,
+                'unit' => $parameter['unit'] ?? null,
+                'threshold' => $sensor['threshold'] ?? null,
+                'rule' => $sensor['rule'] ?? null,
+                'status' => $sensor['status'] ?? null,
+                'alert_level' => $sensor['alert_level'] ?? null,
+                'received_at' => $sensor['received_at'] ?? null,
+            ]))
+            ->values();
+        $parameterCount = $sensorRows->sum(fn (array $row) => max(1, collect($row['parameter_values'] ?? [])->count()));
+        $freshParameterCount = $sensorRows->sum(fn (array $row) => collect($row['parameter_values'] ?? [])->isNotEmpty()
+            ? collect($row['parameter_values'])->where('fresh', true)->count()
+            : ((bool) ($row['fresh'] ?? false) ? 1 : 0));
 
-        return response()->json([
+        $response = response()->json([
             'ok' => true,
             'generated_at' => now()->toISOString(),
             'fresh_after' => $freshAfter->toISOString(),
@@ -1489,10 +1708,16 @@ class DeviceSetupController extends Controller
                 'online_loggers' => $loggerRows->where('online', true)->count(),
                 'sensors' => $sensorRows->count(),
                 'fresh_sensors' => $sensorRows->where('fresh', true)->count(),
+                'parameters' => $parameterCount,
+                'fresh_parameters' => $freshParameterCount,
             ],
             'loggers' => $loggerRows,
             'sensors' => $sensorRows,
+            'mapping_audit' => $mappingAuditRows,
         ]);
+        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+
+        return $response;
     }
 
     public function rednodePortTest(Request $request): JsonResponse
@@ -1761,13 +1986,39 @@ class DeviceSetupController extends Controller
 
         return $numericValue !== null
             && $numericThreshold !== null
-            && $numericValue > $numericThreshold;
+            && $numericValue >= $numericThreshold;
+    }
+
+    private function thresholdComparisonValue(array $parameterValues, mixed $fallback): mixed
+    {
+        $values = collect($parameterValues)
+            ->filter(fn ($item) => is_array($item))
+            ->map(fn (array $item) => $item['value'] ?? $item['numeric_value'] ?? $item['raw'] ?? null)
+            ->map(fn ($value) => $this->numericFromText($value))
+            ->filter(fn ($value) => $value !== null);
+
+        if ($values->isNotEmpty()) {
+            return $values->max();
+        }
+
+        return $fallback;
+    }
+
+    private function primaryMappedParameterValue(array $parameterValues): ?array
+    {
+        return collect($parameterValues)
+            ->first(fn ($item) => is_array($item) && array_key_exists('value', $item));
     }
 
     private function syncRednodeHeartbeatSensors(array $heartbeatSensors, ?int $dataLoggerId): void
     {
         foreach ($heartbeatSensors as $item) {
-            if (! is_array($item) || empty($item['sensor_code']) || ! empty($item['error'])) {
+            if (! is_array($item) || empty($item['sensor_code'])) {
+                continue;
+            }
+
+            if (! empty($item['error'])) {
+                $this->markRednodeSensorRuntimeError($item, $dataLoggerId);
                 continue;
             }
 
@@ -1782,6 +2033,7 @@ class DeviceSetupController extends Controller
                 $item['registers'] ?? [],
                 $item['parameter_values'] ?? []
             );
+            $item['parameter_values'] = $this->parameterValuesWithModbusFrame($item['parameter_values'], $item['modbus_frame'] ?? null);
 
             $mappingValue = array_key_exists('raw_value', $item) && $item['raw_value'] !== null
                 ? $item['raw_value']
@@ -1797,9 +2049,11 @@ class DeviceSetupController extends Controller
                 continue;
             }
 
-            $thresholdExceeded = array_key_exists('threshold_exceeded', $item) && $item['threshold_exceeded'] !== null
-                ? (bool) $item['threshold_exceeded']
-                : $this->thresholdExceeded($valueText, $sensor->threshold ?? $sensor->rule);
+            $thresholdValue = $this->thresholdComparisonValue($item['parameter_values'] ?? [], $valueText);
+            $thresholdExceeded = $this->thresholdExceeded($thresholdValue, $sensor->threshold ?? $sensor->rule);
+            if (! $thresholdExceeded && array_key_exists('threshold_exceeded', $item) && $item['threshold_exceeded'] !== null && ! $sensor->threshold && ! $sensor->rule && $sensor->type !== 'weather_station') {
+                $thresholdExceeded = (bool) $item['threshold_exceeded'];
+            }
             $level = $thresholdExceeded ? 'Awas' : 'Normal';
             $receivedAt = ! empty($item['received_at']) ? $item['received_at'] : now();
 
@@ -1893,6 +2147,53 @@ class DeviceSetupController extends Controller
         }
     }
 
+    private function markRednodeSensorRuntimeError(array $item, ?int $dataLoggerId): void
+    {
+        $sensor = Sensor::where('sensor_code', $item['sensor_code'] ?? null)->first();
+
+        if (! $sensor) {
+            return;
+        }
+
+        $error = trim((string) ($item['error'] ?? 'Sensor error'));
+        $status = Str::contains(Str::lower($error), 'timed out') ? 'Timed out' : 'Sensor Error';
+        $receivedAt = ! empty($item['received_at']) ? $item['received_at'] : now();
+
+        $sensor->update([
+            'value' => null,
+            'alert_level' => 'Warning',
+            'status' => $status,
+            'last_seen_at' => $receivedAt,
+        ]);
+
+        $telemetryPayload = [
+            'sensor_id' => $sensor->id,
+            'data_logger_id' => $dataLoggerId,
+            'value' => null,
+            'alert_level' => 'Warning',
+            'status' => $status,
+            'received_at' => $receivedAt,
+        ];
+
+        if (Schema::hasColumn('telemetry_readings', 'parameter_values')) {
+            $telemetryPayload['parameter_values'] = [];
+        }
+
+        if (Schema::hasColumn('telemetry_readings', 'raw_value')) {
+            $telemetryPayload['raw_value'] = null;
+        }
+
+        if (Schema::hasColumn('telemetry_readings', 'numeric_value')) {
+            $telemetryPayload['numeric_value'] = null;
+        }
+
+        if (Schema::hasColumn('telemetry_readings', 'registers')) {
+            $telemetryPayload['registers'] = [];
+        }
+
+        $this->upsertTelemetryReading($telemetryPayload);
+    }
+
     private function projectDataLoggers(int $projectId)
     {
         return DataLogger::with(['monitoringStation.workspace'])
@@ -1905,16 +2206,80 @@ class DeviceSetupController extends Controller
     {
         $logger = DataLogger::where('logger_code', $loggerCode)->first();
 
-        return $logger
-            ? ConnectivityConfig::with('dataLogger')
+        if (! $logger) {
+            return null;
+        }
+
+        $configs = ConnectivityConfig::with('dataLogger')
                 ->where('data_logger_id', $logger->id)
                 ->where(function ($query) {
                     $query->where('protocol', 'Modbus RTU')
                         ->orWhereNotNull('serial_port');
                 })
                 ->latest()
-                ->first()
-            : null;
+                ->get();
+
+        return $configs->firstWhere('connectivity_code', 'SERIAL-' . $loggerCode) ?: $configs->first();
+    }
+
+    private function ensureRednodeSerialAssignments(DataLogger $logger): void
+    {
+        $sensors = Sensor::where(function ($query) use ($logger) {
+            $query->where('data_logger_id', $logger->id);
+
+            if ($logger->monitoring_station_id) {
+                $query->orWhere('monitoring_station_id', $logger->monitoring_station_id);
+            }
+        })
+            ->whereNotNull('slave_id')
+            ->whereNotNull('address')
+            ->get();
+
+        if ($sensors->isEmpty()) {
+            return;
+        }
+
+        $primaryPort = env('REDNODE_SERIAL_PORT', '/dev/ttyAS2');
+        $sensorIds = $sensors
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        ConnectivityConfig::updateOrCreate(
+            ['connectivity_code' => 'SERIAL-' . $logger->logger_code],
+            [
+                'data_logger_id' => $logger->id,
+                'communication_type' => 'Serial',
+                'protocol' => 'Modbus RTU',
+                'host_or_endpoint' => $primaryPort,
+                'serial_port' => $primaryPort,
+                'baud_rate' => 9600,
+                'data_bits' => 8,
+                'parity' => 'none',
+                'stop_bits' => 1,
+                'timeout_ms' => 1500,
+                'topic_or_api_path' => 'Pin 5-6 / ' . $primaryPort,
+                'pin_mapping' => 'Pin 5 = B, Pin 6 = A',
+                'monitored_sensor_ids' => $sensorIds,
+                'rednode_poll_interval_ms' => 1000,
+                'connectivity_status' => 'Online',
+                'connection_state' => 'connected',
+                'uplink_state' => 'uplink',
+            ]
+        );
+
+        ConnectivityConfig::where('data_logger_id', $logger->id)
+            ->where('connectivity_code', '!=', 'SERIAL-' . $logger->logger_code)
+            ->where(function ($query) {
+                $query->where('protocol', 'Modbus RTU')
+                    ->orWhereNotNull('serial_port');
+            })
+            ->update([
+                'monitored_sensor_ids' => [],
+                'connectivity_status' => 'Offline',
+                'connection_state' => 'disabled',
+                'uplink_state' => 'disabled',
+            ]);
     }
 
     private function ensureRednodeConnectivity(DataLogger $logger): ConnectivityConfig
@@ -2318,8 +2683,10 @@ class DeviceSetupController extends Controller
             '  [ "$PID" = "$PARENT_PID" ] && return',
             '  CMD="$(ps -p "$PID" -o args= 2>/dev/null || true)"',
             '  [ -z "$CMD" ] && return',
+            '  PROC_CWD="$(readlink "/proc/$PID/cwd" 2>/dev/null || true)"',
             '  case "$CMD" in',
             '    *"gateway.js"*"--logger-code $REDNODE_LOGGER_CODE"*|*"gateway.js"*"--logger-code=$REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code $REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code=$REDNODE_LOGGER_CODE"*) ;;',
+            '    *"gateway.js"*|*"node gateway"*|*"npm run gateway"*) [ "$PROC_CWD" = "$GATEWAY_DIR" ] || { echo "skip pid=$PID cwd=$PROC_CWD cmd=$CMD"; return; } ;;',
             '    *) echo "skip pid=$PID cmd=$CMD"; return ;;',
             '  esac',
             '  kill "$PID" 2>/dev/null || true',
@@ -2341,6 +2708,7 @@ class DeviceSetupController extends Controller
             '  CMD="${LINE#*$PID }"',
             '  case "$CMD" in',
             '    *"gateway.js"*"--logger-code $REDNODE_LOGGER_CODE"*|*"gateway.js"*"--logger-code=$REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code $REDNODE_LOGGER_CODE"*|*"npm run gateway"*"--logger-code=$REDNODE_LOGGER_CODE"*) stop_pid "$PID" ;;',
+            '    *"gateway.js"*|*"node gateway"*|*"npm run gateway"*) stop_pid "$PID" ;;',
             '  esac',
             'done',
             'if [ "$STOPPED" = "1" ] || [ -f "$STOP_FILE" ]; then echo "pid gateway logger $REDNODE_LOGGER_CODE sudah dihentikan"; else echo "not running"; fi',
@@ -2354,21 +2722,22 @@ class DeviceSetupController extends Controller
 
     private function upsertTelemetryReading(array $data, ?int $telemetryId = null): TelemetryReading
     {
-        $reading = $telemetryId
-            ? TelemetryReading::findOrFail($telemetryId)
-            : TelemetryReading::where('sensor_id', $data['sensor_id'])
-                ->latest('received_at')
-                ->latest()
-                ->first();
-
-        if ($reading) {
+        if ($telemetryId) {
+            $reading = TelemetryReading::findOrFail($telemetryId);
             $reading->update($data);
-        } else {
-            $reading = TelemetryReading::create($data);
+
+            return $reading;
         }
 
+        $reading = TelemetryReading::create($data);
+
+        $historyLimit = max((int) env('TELEMETRY_HISTORY_PER_SENSOR_LIMIT', 2000), 100);
         TelemetryReading::where('sensor_id', $data['sensor_id'])
-            ->whereKeyNot($reading->id)
+            ->whereNotIn('id', TelemetryReading::where('sensor_id', $data['sensor_id'])
+                ->latest('received_at')
+                ->latest()
+                ->limit($historyLimit)
+                ->pluck('id'))
             ->delete();
 
         return $reading;
@@ -2455,9 +2824,11 @@ class DeviceSetupController extends Controller
                 ->min();
         }
 
-        return $profiles
+        $frame = $this->modbusFrameAudit($sensor, $registers);
+
+        return $this->deduplicateParameterRows($profiles
             ->filter(fn ($profile) => $profile->canonicalParameter !== null)
-            ->map(function ($profile) use ($sensor, $registers, $baseAddress) {
+            ->map(function ($profile) use ($sensor, $registers, $baseAddress, $frame) {
                 $address = $this->integerAddressValue($profile->register_address) ?? 0;
                 $registerIndex = max($address - (int) ($baseAddress ?? 0), 0);
                 $dataLength = max((int) ($profile->data_length ?? 1), 1);
@@ -2488,6 +2859,12 @@ class DeviceSetupController extends Controller
                     'raw' => $raw,
                     'value' => $value,
                     'unit' => $unit,
+                    'value_type' => $profile->value_type ?? $sensor->data_type ?? 'uint16',
+                    'data_length' => $dataLength,
+                    'byte_order' => $profile->byte_order,
+                    'scale_factor' => $scale,
+                    'offset' => $offset,
+                    'modbus_frame' => $frame,
                     'requirements' => $parameter->input_requirements ?? null,
                     'datasheet_source_url' => $parameter->input_requirements['source_url'] ?? null,
                     'datasheet_reference' => $parameter->input_requirements['source_reference'] ?? null,
@@ -2495,6 +2872,41 @@ class DeviceSetupController extends Controller
                 ];
             })
             ->filter()
+            ->values()
+            ->all());
+    }
+
+    private function parameterValuesWithModbusFrame(array $rows, ?array $frame): array
+    {
+        if (! $frame) {
+            return $rows;
+        }
+
+        return collect($rows)
+            ->map(function ($row) use ($frame) {
+                if (! is_array($row)) {
+                    return $row;
+                }
+
+                $row['modbus_frame'] = $frame;
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function deduplicateParameterRows(array $rows): array
+    {
+        return collect($rows)
+            ->reverse()
+            ->unique(function (array $row) {
+                $parameter = $row['parameter'] ?? $row['canonical_field'] ?? $row['field'] ?? $row['source_parameter'] ?? 'parameter';
+                $register = $row['register_address'] ?? '';
+
+                return Str::lower(preg_replace('/[^a-z0-9]+/i', '', (string) $parameter) ?: (string) $parameter) . '|' . (string) $register;
+            })
+            ->reverse()
             ->values()
             ->all();
     }
@@ -2520,6 +2932,79 @@ class DeviceSetupController extends Controller
         $raw = ((int) ($registers[0] ?? 0)) & 0xffff;
 
         return Str::contains($dataType, 'int16') && $raw > 0x7fff ? $raw - 0x10000 : $raw;
+    }
+
+    private function modbusFrameAudit(Sensor $sensor, array $registers): array
+    {
+        $slaveId = ((int) ($sensor->slave_id ?: 1)) & 0xff;
+        $functionCode = $this->functionCodeNumber($sensor->function_code);
+        $address = (int) ($this->integerAddressValue($sensor->address) ?? 0);
+        $quantity = max((int) ($sensor->quantity ?: count($registers) ?: 1), count($registers) ?: 1);
+        $request = $this->appendModbusCrc([
+            $slaveId,
+            $functionCode,
+            ($address >> 8) & 0xff,
+            $address & 0xff,
+            ($quantity >> 8) & 0xff,
+            $quantity & 0xff,
+        ]);
+        $registerBytes = [];
+
+        foreach ($registers as $register) {
+            $word = ((int) $register) & 0xffff;
+            $registerBytes[] = ($word >> 8) & 0xff;
+            $registerBytes[] = $word & 0xff;
+        }
+
+        $response = $this->appendModbusCrc([
+            $slaveId,
+            $functionCode,
+            count($registerBytes) & 0xff,
+            ...$registerBytes,
+        ]);
+
+        return [
+            'slave_id' => $slaveId,
+            'function_code' => 'FC' . str_pad((string) $functionCode, 2, '0', STR_PAD_LEFT),
+            'address' => $address,
+            'quantity' => $quantity,
+            'tx' => $this->hexFrame($request),
+            'rx' => $this->hexFrame($response),
+            'register_words' => $registers,
+            'register_bytes' => $this->hexFrame($registerBytes),
+            'note' => 'Reconstructed from stored Modbus registers.',
+        ];
+    }
+
+    private function functionCodeNumber(mixed $functionCode): int
+    {
+        $digits = preg_replace('/[^0-9]/', '', (string) ($functionCode ?: '03'));
+
+        return max((int) $digits, 1);
+    }
+
+    private function appendModbusCrc(array $bytes): array
+    {
+        $crc = 0xffff;
+
+        foreach ($bytes as $byte) {
+            $crc ^= ((int) $byte) & 0xff;
+
+            for ($index = 0; $index < 8; $index++) {
+                $crc = ($crc & 1) ? (($crc >> 1) ^ 0xa001) : ($crc >> 1);
+            }
+        }
+
+        $crc &= 0xffff;
+
+        return [...$bytes, $crc & 0xff, ($crc >> 8) & 0xff];
+    }
+
+    private function hexFrame(array $bytes): string
+    {
+        return collect($bytes)
+            ->map(fn ($byte) => str_pad(strtoupper(dechex(((int) $byte) & 0xff)), 2, '0', STR_PAD_LEFT))
+            ->implode(' ');
     }
 
     private function modbusFloatBytes(array $registers, ?string $byteOrder): string
@@ -2549,7 +3034,21 @@ class DeviceSetupController extends Controller
             return null;
         }
 
-        return is_numeric($address) ? (int) $address : null;
+        if (! is_numeric($address)) {
+            return null;
+        }
+
+        $value = (int) $address;
+
+        if ($value >= 40001 && $value <= 49999) {
+            return $value - 40001;
+        }
+
+        if ($value >= 30001 && $value <= 39999) {
+            return $value - 30001;
+        }
+
+        return $value;
     }
 
     private function valueWithUnit(mixed $value, ?string $unit): string
@@ -2572,6 +3071,8 @@ class DeviceSetupController extends Controller
 
     public function destroy(string $type, int $id): RedirectResponse
     {
+        $this->authorizeAssetRegistryMutation(request());
+
         $models = [
             'data-logger' => DataLogger::class,
             'connectivity' => ConnectivityConfig::class,
@@ -2588,6 +3089,11 @@ class DeviceSetupController extends Controller
         $models[$type]::findOrFail($id)->delete();
 
         return back()->with('message', 'Data berhasil dihapus.');
+    }
+
+    private function authorizeAssetRegistryMutation(Request $request): void
+    {
+        abort_unless($this->authorizationService->canMutateAssetRegistry($request->user()), 403);
     }
 
     private function localIpv4Interfaces(): array
