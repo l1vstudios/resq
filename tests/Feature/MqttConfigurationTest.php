@@ -59,6 +59,40 @@ class MqttConfigurationTest extends TestCase
         $this->assertSame(28.5, data_get($config->example_payload, 'data.temperature'));
     }
 
+    public function test_invalid_configuration_submit_shows_errors_and_preserves_input(): void
+    {
+        $user = User::create([
+            'name' => 'Operator', 'email' => 'mqtt-validation@example.test', 'password' => bcrypt('secret'),
+            'dob' => '2000-01-01', 'avatar' => 'avatar.png', 'type' => 'sentinel', 'status' => 'active',
+        ]);
+        $project = Project::create(['project_code' => 'PRJ-MQTT-VALIDATION', 'name' => 'MQTT Validation']);
+
+        $this->actingAs($user)->get(route('mqtt-configurations.index'))->assertOk();
+
+        $response = $this->actingAs($user)->followingRedirects()->post(route('mqtt-configurations.store'), [
+            'project_id' => $project->id,
+            'configuration_code' => 'MQTT-INVALID-01',
+            'name' => 'Invalid Broker',
+            'broker_url' => 'mqtt://broker.example.test:1883',
+            'consumer_enabled' => '1',
+            'consumer_topic' => '',
+            'consumer_qos' => 1,
+            'example_payload' => '',
+            'sensor_code_path' => 'sensor_code',
+            'producer_enabled' => '0',
+            'producer_qos' => 0,
+            'producer_retain' => '0',
+            'publish_canonical' => '0',
+            'publish_warning' => '0',
+            'is_active' => '1',
+        ]);
+
+        $response->assertOk()
+            ->assertSee('Periksa kembali konfigurasi MQTT berikut')
+            ->assertSee('MQTT-INVALID-01');
+        $this->assertDatabaseCount('mqtt_configurations', 0);
+    }
+
     public function test_consumer_ingestion_stores_canonical_data_and_producer_outbox(): void
     {
         $project = Project::create(['project_code' => 'PRJ-INGEST', 'name' => 'Ingestion Project']);
