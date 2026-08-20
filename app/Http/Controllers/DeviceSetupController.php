@@ -14,6 +14,7 @@ use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Services\AuthorizationService;
 use App\Services\CanonicalMappingService;
+use App\Services\MqttOutboxService;
 use App\Services\SentinelRuntimeReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -31,7 +32,8 @@ class DeviceSetupController extends Controller
     public function __construct(
         private readonly CanonicalMappingService $canonicalMapping,
         private readonly AuthorizationService $authorizationService,
-        private readonly SentinelRuntimeReadService $runtimeReadService
+        private readonly SentinelRuntimeReadService $runtimeReadService,
+        private readonly MqttOutboxService $mqttOutbox
     )
     {
     }
@@ -549,6 +551,7 @@ class DeviceSetupController extends Controller
         }
         $level = $thresholdExceeded ? 'Awas' : 'Normal';
 
+        $previousLevel = $sensor->alert_level ?: 'Normal';
         $sensor->update([
             'value' => $sensorDisplayValue,
             'alert_level' => $level,
@@ -581,7 +584,7 @@ class DeviceSetupController extends Controller
             $telemetryPayload['registers'] = $data['registers'] ?? null;
         }
 
-        $this->upsertTelemetryReading($telemetryPayload);
+        $telemetryReading = $this->upsertTelemetryReading($telemetryPayload);
 
         $observedAt = ! empty($data['observed_at']) ? Carbon::parse($data['observed_at']) : now();
         $payload = $data['payload'] ?? $request->all();
@@ -628,6 +631,11 @@ class DeviceSetupController extends Controller
                 $payload
             );
         }
+
+        if ($canonicalObservation) {
+            $this->mqttOutbox->enqueueCanonical($canonicalObservation->fresh(), $sensor);
+        }
+        $this->mqttOutbox->enqueueWarning($sensor, $previousLevel, $level, $telemetryReading->id);
 
         $mappedValue = $this->canonicalMapping->mappedParameterValue($sensor, $mappingValue);
 

@@ -96,4 +96,9 @@ class Project extends Model
     {
         return $this->hasOne(ProjectRecoveryAccount::class);
     }
+
+    public function mqttConfigurations()
+    {
+        return $this->hasMany(MqttConfiguration::class);
+    }
 }

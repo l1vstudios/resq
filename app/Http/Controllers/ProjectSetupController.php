@@ -9,6 +9,7 @@ use App\Models\DeviceCredential;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
 use App\Models\MstPrefix;
+use App\Models\MqttConfiguration;
 use App\Models\Project;
 use App\Models\Province;
 use App\Models\ReferencePoint;
@@ -688,10 +689,13 @@ class ProjectSetupController extends Controller
 
     public function storeSensor(Request $request): RedirectResponse
     {
+        $request->merge(['input_source' => $request->input('input_source', 'data_logger')]);
         $data = $request->validate([
             'workspace_id' => ['required', 'exists:geospatial_workspaces,id'],
             'monitoring_station_id' => ['required', 'exists:monitoring_stations,id'],
+            'input_source' => ['required', Rule::in(['data_logger', 'mqtt'])],
             'data_logger_id' => ['nullable', 'exists:data_loggers,id'],
+            'mqtt_configuration_id' => ['nullable', 'required_if:input_source,mqtt', 'exists:mqtt_configurations,id'],
             'warning_station_id' => ['nullable', 'exists:warning_stations,id'],
             'mst_prefix_id' => ['required', 'exists:mst_prefixes,id'],
             'slave_id' => ['required', 'string', 'max:255'],
@@ -745,7 +749,17 @@ class ProjectSetupController extends Controller
         $workspace = GeospatialWorkspace::findOrFail($data['workspace_id']);
         $this->assertBelongsToWorkspace(MonitoringStation::class, $data['monitoring_station_id'], $workspace->id);
         $this->assertNullableBelongsToWorkspace(WarningStation::class, $data['warning_station_id'] ?? null, $workspace->id);
-        $this->assertNullableDataLoggerForStation($data['data_logger_id'] ?? null, $data['monitoring_station_id']);
+        if ($data['input_source'] === 'mqtt') {
+            $mqttConfiguration = MqttConfiguration::findOrFail($data['mqtt_configuration_id']);
+            abort_unless((int) $mqttConfiguration->project_id === (int) $workspace->project_id && $mqttConfiguration->consumer_enabled, 422);
+            if (! empty($data['source_parameter']) && data_get($mqttConfiguration->example_payload ?? [], $data['source_parameter']) === null) {
+                throw ValidationException::withMessages(['source_parameter' => 'JSON path tidak ditemukan pada example output MQTT.']);
+            }
+            $data['data_logger_id'] = null;
+        } else {
+            $this->assertNullableDataLoggerForStation($data['data_logger_id'] ?? null, $data['monitoring_station_id']);
+            $data['mqtt_configuration_id'] = null;
+        }
         $existing = Sensor::where('sensor_code', $data['sensor_code'])->first();
         abort_if($existing && (int) $existing->workspace?->project_id !== (int) $workspace->project_id, 403);
         $this->authorizeAssetRegistryMutation($request);
@@ -768,7 +782,7 @@ class ProjectSetupController extends Controller
             $data['byte_order']
         );
 
-        $addressAlreadyUsed = Sensor::query()
+        $addressAlreadyUsed = $data['input_source'] === 'data_logger' && Sensor::query()
             ->where('mst_prefix_id', $data['mst_prefix_id'])
             ->where('slave_id', $data['slave_id'])
             ->where('address', $data['address'])
@@ -1104,6 +1118,7 @@ class ProjectSetupController extends Controller
                 'dataLoggers' => collect(config('resq_dummy.data_loggers')),
                 'connectivity' => collect(config('resq_dummy.connectivity')),
                 'credentials' => collect(config('resq_dummy.credentials')),
+                'mqttConfigurations' => collect([]),
                 'telemetryReadings' => collect([]),
                 'mstPrefixes' => collect([]),
                 'responsePlans' => collect([]),
@@ -1146,7 +1161,7 @@ class ProjectSetupController extends Controller
             ->whereIn('workspace_id', $accessibleWorkspaceIds)
             ->latest()
             ->get();
-        $sensorQuery = Sensor::with(['workspace', 'monitoringStation', 'dataLogger', 'warningStation', 'mstPrefix']);
+        $sensorQuery = Sensor::with(['workspace', 'monitoringStation', 'dataLogger', 'mqttConfiguration', 'warningStation', 'mstPrefix']);
         $sensorQuery->whereIn('workspace_id', $accessibleWorkspaceIds);
         if (Schema::hasTable('sensor_mapping_profiles')) {
             $sensorQuery->with('mappingProfile');
@@ -1188,6 +1203,9 @@ class ProjectSetupController extends Controller
             : collect();
         $telemetryModels = Schema::hasTable('telemetry_readings')
             ? TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])->latest('received_at')->latest()->limit(100)->get()
+            : collect();
+        $mqttConfigurations = Schema::hasTable('mqtt_configurations')
+            ? MqttConfiguration::whereIn('project_id', $accessibleProjectIds)->orderBy('name')->get()
             : collect();
 
         $projects = $projectModels->map(fn (Project $project) => [
@@ -1278,6 +1296,9 @@ class ProjectSetupController extends Controller
             'workspace_db_id' => $sensor->workspace_id,
             'monitoring_station_db_id' => $sensor->monitoring_station_id,
             'data_logger_db_id' => $sensor->data_logger_id,
+            'input_source' => $sensor->input_source ?? 'data_logger',
+            'mqtt_configuration_db_id' => $sensor->mqtt_configuration_id,
+            'mqtt_configuration_code' => $sensor->mqttConfiguration?->configuration_code,
             'warning_station_db_id' => $sensor->warning_station_id,
             'mst_prefix_db_id' => $sensor->mst_prefix_id,
             'id' => $sensor->sensor_code,
@@ -1429,6 +1450,7 @@ class ProjectSetupController extends Controller
             'dataLoggers' => $this->dataLoggersFromModels($dataLoggerModels),
             'connectivity' => $this->connectivityFromModels($connectivityModels),
             'credentials' => $this->credentialsFromModels($credentialModels),
+            'mqttConfigurations' => $mqttConfigurations,
             'telemetryReadings' => $this->telemetryFromModels($telemetryModels),
             'mstPrefixes' => $mstPrefixes,
             'responsePlans' => ResponsePlan::latest()->get(),

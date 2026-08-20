@@ -2,6 +2,10 @@
 
 return [
 
+    'mqtt' => [
+        'credential_key' => env('MQTT_CREDENTIAL_KEY'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

@@ -213,10 +213,10 @@
         'monitoring_station_id' => $sensor['monitoring_station_id'] ?? '-',
     ])->values();
     $gatewayBaseUrl = rtrim(env('MODBUS_BACKEND_URL', ''), '/');
-    $mqttBrokerUrl = env('MQTT_BROKER_URL', '');
-    $mqttTopic = env('MQTT_TOPIC', 'resq/telemetry/#');
-    $mqttUsername = env('MQTT_USERNAME', '');
-    $mqttPassword = env('MQTT_PASSWORD', '');
+    $mqttBrokerUrl = '';
+    $mqttTopic = '';
+    $mqttUsername = '';
+    $mqttPassword = '';
     $dataLoggers = collect($dataLoggers ?? []);
     $connectivity = collect($connectivity ?? []);
     $serialConfigs = $connectivity
@@ -308,6 +308,7 @@
                         </div>
                     </div>
                     <div class="mqtt-fields d-none">
+                        <div class="alert alert-info">Konfigurasi MQTT persisten sekarang dikelola dari <a href="{{ route('mqtt-configurations.index') }}" class="alert-link">MQTT Configuration</a>. Form berikut hanya untuk diagnostic session dan tidak menyimpan password.</div>
                         <div class="mb-3">
                             <label class="form-label modbus-label">Broker URL</label>
                             <input type="text" class="form-control" id="mqtt-broker" value="{{ $mqttBrokerUrl }}" placeholder="mqtts://broker.example.com:8883">
@@ -336,8 +337,8 @@
                             </div>
                         </div>
                         <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="mqtt-save-config" checked>
-                            <label class="form-check-label fw-bold text-muted" for="mqtt-save-config">Simpan config MQTT</label>
+                            <input class="form-check-input" type="checkbox" id="mqtt-save-config">
+                            <label class="form-check-label fw-bold text-muted" for="mqtt-save-config">Simpan broker/topic diagnostic (password tidak disimpan)</label>
                         </div>
                     </div>
                     <button type="button" class="btn btn-primary modbus-btn-run w-100" id="modbus-connect">Connect</button>
@@ -705,7 +706,6 @@
             broker: 'resqMqttBrokerUrl',
             topic: 'resqMqttTopic',
             username: 'resqMqttUsername',
-            password: 'resqMqttPassword',
             testValue: 'resqMqttTestValue',
             sensorIndex: 'resqMqttSensorIndex',
             save: 'resqMqttSaveConfig',
@@ -723,7 +723,6 @@
                 ['mqtt-broker', mqttConfigKeys.broker],
                 ['mqtt-topic', mqttConfigKeys.topic],
                 ['mqtt-username', mqttConfigKeys.username],
-                ['mqtt-password', mqttConfigKeys.password],
                 ['mqtt-test-value', mqttConfigKeys.testValue],
             ].forEach(([id, key]) => {
                 const value = localStorage.getItem(key);
@@ -741,7 +740,6 @@
                     mqttConfigKeys.broker,
                     mqttConfigKeys.topic,
                     mqttConfigKeys.username,
-                    mqttConfigKeys.password,
                     mqttConfigKeys.testValue,
                     mqttConfigKeys.sensorIndex,
                 ].forEach((key) => localStorage.removeItem(key));
@@ -752,7 +750,6 @@
             localStorage.setItem(mqttConfigKeys.broker, el('mqtt-broker').value.trim());
             localStorage.setItem(mqttConfigKeys.topic, el('mqtt-topic').value.trim());
             localStorage.setItem(mqttConfigKeys.username, el('mqtt-username').value.trim());
-            localStorage.setItem(mqttConfigKeys.password, el('mqtt-password').value);
             localStorage.setItem(mqttConfigKeys.testValue, el('mqtt-test-value').value.trim());
             localStorage.setItem(mqttConfigKeys.sensorIndex, el('modbus-sensor').value);
         }

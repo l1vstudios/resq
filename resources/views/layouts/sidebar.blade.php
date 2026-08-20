@@ -147,6 +147,11 @@
                                 Canonical Database
                             </a>
                         </li>
+                        <li class="{{ request()->routeIs('mqtt-configurations.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('mqtt-configurations.index') }}" class="{{ request()->routeIs('mqtt-configurations.*') ? 'active' : '' }}">
+                                MQTT Configuration
+                            </a>
+                        </li>
 
                     </ul>
                 </li>

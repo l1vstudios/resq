@@ -13,6 +13,8 @@ class Sensor extends Model
         'workspace_id',
         'monitoring_station_id',
         'data_logger_id',
+        'input_source',
+        'mqtt_configuration_id',
         'warning_station_id',
         'mst_prefix_id',
         'slave_id',
@@ -38,7 +40,6 @@ class Sensor extends Model
     ];
 
     protected $casts = [
-        'weather_parameters' => 'array',
         'last_seen_at' => 'datetime',
         'weather_parameters' => 'array',
     ];
@@ -61,6 +62,11 @@ class Sensor extends Model
     public function dataLogger()
     {
         return $this->belongsTo(DataLogger::class);
+    }
+
+    public function mqttConfiguration()
+    {
+        return $this->belongsTo(MqttConfiguration::class);
     }
 
     public function mstPrefix()

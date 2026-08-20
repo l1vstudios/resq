@@ -89,6 +89,15 @@
                     return;
                 }
 
+                if (input.tagName === 'SELECT' && input.multiple && Array.isArray(value)) {
+                    var selectedValues = value.map(String);
+                    Array.from(input.options).forEach(function (option) {
+                        option.selected = selectedValues.includes(option.value);
+                    });
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    return;
+                }
+
                 input.value = value ?? '';
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             });
