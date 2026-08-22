@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MqttConfiguration;
 use App\Models\Project;
+use App\Models\CanonicalParameter;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Services\AuthorizationService;
@@ -38,7 +39,9 @@ class MqttConfigurationController extends Controller
             ->latest()
             ->get();
 
-        return view('modules.mqtt-configurations.index', compact('projects', 'configurations'));
+        $canonicalParameters = CanonicalParameter::orderBy('field_identity')->get();
+
+        return view('modules.mqtt-configurations.index', compact('projects', 'configurations', 'canonicalParameters'));
     }
 
     public function store(Request $request): RedirectResponse

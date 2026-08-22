@@ -57,6 +57,21 @@
 
         event.preventDefault();
 
+        var tabPane = form.closest('.tab-pane');
+        if (tabPane && window.bootstrap) {
+            var tabTrigger = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]')).find(function (trigger) {
+                return trigger.dataset.bsTarget === '#' + tabPane.id;
+            });
+            if (tabTrigger) {
+                bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+            }
+        }
+
+        var collapse = form.closest('.collapse');
+        if (collapse && window.bootstrap) {
+            bootstrap.Collapse.getOrCreateInstance(collapse, { toggle: false }).show();
+        }
+
         var cssEscape = window.CSS && CSS.escape
             ? CSS.escape
             : function (value) {
@@ -123,12 +138,30 @@
             });
         });
 
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
         form.classList.add('border', 'border-primary', 'rounded', 'p-2');
+
+        setTimeout(function () {
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
 
         setTimeout(function () {
             form.classList.remove('border', 'border-primary', 'rounded', 'p-2');
         }, 1800);
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var openCollapse = document.querySelector('.tab-pane:not(.active) .collapse.show');
+        var tabPane = openCollapse ? openCollapse.closest('.tab-pane') : null;
+        if (!tabPane || !window.bootstrap) {
+            return;
+        }
+
+        var tabTrigger = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]')).find(function (trigger) {
+            return trigger.dataset.bsTarget === '#' + tabPane.id;
+        });
+        if (tabTrigger) {
+            bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+        }
     });
 </script>
 

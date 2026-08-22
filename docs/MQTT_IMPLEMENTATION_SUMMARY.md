@@ -88,10 +88,11 @@ belong to the database configuration.
 
 ## Consumer behavior
 
-1. A user creates an active consumer configuration in **Configuration → MQTT
-   Configuration**.
-2. In **Project Setup → Sensor Data**, the user selects `MQTT Configuration`
-   as `input_source` and chooses a configuration from the same project.
+1. In **Project Setup → Sensor & Data**, a user expands **Tambah / Edit MQTT
+   Configuration** and creates an active consumer configuration.
+2. In the same tab, the user expands **Tambah / Edit Sensor**, selects `MQTT
+   Configuration` as `input_source`, and chooses a configuration from the same
+   project.
 3. Each active mapping profile stores a `source_parameter` JSON path such as
    `data.temperature`. That path is validated against `example_payload` on
    sensor save.
@@ -147,9 +148,11 @@ Node gateway routes in `modbus-server/server.js`:
 - `GET /api/mqtt/configurations/status`
 - `POST /api/mqtt/configurations/:configurationId/test`
 
-The Monitor and Test button show persisted/runtime status. The test endpoint
-does not publish to wildcard topics (`+` or `#`); it reports a successful
-connection and skips the publish instead.
+The MQTT form, Monitor, and Test button are surfaced in **Project Setup → Sensor
+& Data**. The legacy standalone URL remains available for compatibility, but is
+no longer linked from the sidebar. The test endpoint does not publish to
+wildcard topics (`+` or `#`); it reports a successful connection and skips the
+publish instead.
 
 ## Safe change checklist
 

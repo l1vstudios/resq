@@ -93,7 +93,7 @@ class MqttConfigurationTest extends TestCase
         $this->assertDatabaseCount('mqtt_configurations', 0);
     }
 
-    public function test_edit_form_keeps_checkbox_fallback_as_a_boolean_value(): void
+    public function test_mqtt_edit_form_is_available_in_collapsible_sensor_tab(): void
     {
         $user = User::create([
             'name' => 'Operator', 'email' => 'mqtt-edit@example.test', 'password' => bcrypt('secret'),
@@ -111,6 +111,16 @@ class MqttConfigurationTest extends TestCase
             ->assertOk()
             ->assertSee("var checkboxInputs = Array.from(inputs).filter", false)
             ->assertSee("input.value = '0';", false);
+
+        $this->actingAs($user)->get(route('projects.index'))
+            ->assertOk()
+            ->assertSee('data-bs-target="#data-logger-configuration-collapse"', false)
+            ->assertSee('data-bs-target="#mqtt-configuration-collapse"', false)
+            ->assertSee('data-bs-target="#sensor-configuration-collapse"', false)
+            ->assertSee('id="project-mqtt-configuration-form"', false)
+            ->assertSee('data-edit-form="#project-mqtt-configuration-form"', false)
+            ->assertSee('bootstrap.Collapse.getOrCreateInstance', false)
+            ->assertSee('MQTT-EDIT-01');
     }
 
     public function test_consumer_ingestion_stores_canonical_data_and_producer_outbox(): void

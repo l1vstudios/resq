@@ -1118,6 +1118,7 @@ class ProjectSetupController extends Controller
                 'dataLoggers' => collect(config('resq_dummy.data_loggers')),
                 'connectivity' => collect(config('resq_dummy.connectivity')),
                 'credentials' => collect(config('resq_dummy.credentials')),
+                'mqttProjects' => collect([]),
                 'mqttConfigurations' => collect([]),
                 'telemetryReadings' => collect([]),
                 'mstPrefixes' => collect([]),
@@ -1205,7 +1206,7 @@ class ProjectSetupController extends Controller
             ? TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])->latest('received_at')->latest()->limit(100)->get()
             : collect();
         $mqttConfigurations = Schema::hasTable('mqtt_configurations')
-            ? MqttConfiguration::whereIn('project_id', $accessibleProjectIds)->orderBy('name')->get()
+            ? MqttConfiguration::with(['project', 'sensors'])->whereIn('project_id', $accessibleProjectIds)->orderBy('name')->get()
             : collect();
 
         $projects = $projectModels->map(fn (Project $project) => [
@@ -1450,6 +1451,7 @@ class ProjectSetupController extends Controller
             'dataLoggers' => $this->dataLoggersFromModels($dataLoggerModels),
             'connectivity' => $this->connectivityFromModels($connectivityModels),
             'credentials' => $this->credentialsFromModels($credentialModels),
+            'mqttProjects' => $projectModels,
             'mqttConfigurations' => $mqttConfigurations,
             'telemetryReadings' => $this->telemetryFromModels($telemetryModels),
             'mstPrefixes' => $mstPrefixes,

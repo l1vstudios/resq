@@ -87,6 +87,7 @@
     $warningStations = collect($warningStations ?? config('resq_dummy.warning_stations'));
     $sensors = collect($sensors ?? config('resq_dummy.sensors'));
     $dataLoggers = collect($dataLoggers ?? config('resq_dummy.data_loggers'));
+    $mqttProjects = collect($mqttProjects ?? []);
     $mqttConfigurations = collect($mqttConfigurations ?? []);
     $mstPrefixes = collect($mstPrefixes ?? []);
     $responsePlans = collect($responsePlans ?? []);
@@ -155,6 +156,9 @@
     $selectedMonitoringStation = $monitoringStations->first();
     $selectedWarningStation = $warningStations->first();
     $selectedSensor = $sensors->first();
+    $loggerSectionOpen = old('logger_code') !== null;
+    $mqttSectionOpen = old('configuration_code') !== null;
+    $sensorSectionOpen = old('sensor_code') !== null;
 @endphp
 
 @if (session('message'))
@@ -792,9 +796,16 @@
     <div class="tab-pane fade" id="data-tab-pane" role="tabpanel" aria-labelledby="data-tab" tabindex="0">
         <div class="row">
             <div class="col-xl-12">
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h4 class="card-title mb-4">Data Logger Setup</h4>
+                <div class="accordion mb-3" id="sensor-data-actions">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="data-logger-configuration-heading">
+                            <button class="accordion-button {{ $loggerSectionOpen ? '' : 'collapsed' }}" type="button" data-bs-toggle="collapse" data-bs-target="#data-logger-configuration-collapse" aria-expanded="{{ $loggerSectionOpen ? 'true' : 'false' }}" aria-controls="data-logger-configuration-collapse">
+                                <span class="fw-semibold">Tambah / Edit Data Logger</span>
+                                <span class="badge bg-primary-subtle text-primary ms-2">{{ $dataLoggers->count() }}</span>
+                            </button>
+                        </h2>
+                        <div id="data-logger-configuration-collapse" class="accordion-collapse collapse {{ $loggerSectionOpen ? 'show' : '' }}" aria-labelledby="data-logger-configuration-heading">
+                            <div class="accordion-body">
                         <form method="POST" action="{{ route('data-loggers.store') }}" id="project-data-logger-form">
                             @csrf
                             <div class="mb-3">
@@ -829,12 +840,38 @@
                             </div>
                             <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>Save / Update Logger</button>
                         </form>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="card">
-                    <div class="card-body">
-                        <h4 class="card-title mb-4">Sensor & Data Configuration</h4>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="mqtt-configuration-heading">
+                            <button class="accordion-button {{ $mqttSectionOpen ? '' : 'collapsed' }}" type="button" data-bs-toggle="collapse" data-bs-target="#mqtt-configuration-collapse" aria-expanded="{{ $mqttSectionOpen ? 'true' : 'false' }}" aria-controls="mqtt-configuration-collapse">
+                                <span class="fw-semibold">Tambah / Edit MQTT Configuration</span>
+                                <span class="badge bg-info-subtle text-info ms-2">{{ $mqttConfigurations->count() }}</span>
+                            </button>
+                        </h2>
+                        <div id="mqtt-configuration-collapse" class="accordion-collapse collapse {{ $mqttSectionOpen ? 'show' : '' }}" aria-labelledby="mqtt-configuration-heading">
+                            <div class="accordion-body">
+                                <p class="text-muted">Hubungkan broker ke project, lalu pilih konfigurasi consumer tersebut saat menambahkan sensor.</p>
+                                @include('modules.mqtt-configurations._form', [
+                                    'mqttFormId' => 'project-mqtt-configuration-form',
+                                    'mqttProjects' => $mqttProjects,
+                                    'mqttCanonicalParameters' => $canonicalParameters ?? collect(),
+                                ])
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="sensor-configuration-heading">
+                            <button class="accordion-button {{ $sensorSectionOpen ? '' : 'collapsed' }}" type="button" data-bs-toggle="collapse" data-bs-target="#sensor-configuration-collapse" aria-expanded="{{ $sensorSectionOpen ? 'true' : 'false' }}" aria-controls="sensor-configuration-collapse">
+                                <span class="fw-semibold">Tambah / Edit Sensor</span>
+                                <span class="badge bg-danger-subtle text-danger ms-2">{{ $sensors->count() }}</span>
+                            </button>
+                        </h2>
+                        <div id="sensor-configuration-collapse" class="accordion-collapse collapse {{ $sensorSectionOpen ? 'show' : '' }}" aria-labelledby="sensor-configuration-heading">
+                            <div class="accordion-body">
                         <form method="POST" action="{{ route('project-sensors.store') }}" id="sensor-form">
                             @csrf
                             <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}" data-project-id="{{ $cluster['project_db_id'] ?? '' }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
@@ -842,7 +879,7 @@
 	                            <div class="row">
 	                                <div class="col-md-4 mb-3"><label class="form-label">Input Source</label><select name="input_source" class="form-select" id="sensor-input-source"><option value="data_logger">Data Logger</option><option value="mqtt">MQTT Configuration</option></select></div>
 	                                <div class="col-md-4 mb-3" id="sensor-data-logger-wrap"><label class="form-label">Data Logger</label><select name="data_logger_id" class="form-select"><option value="">-</option>@foreach($dataLoggers->whereNotNull('db_id') as $logger)<option value="{{ $logger['db_id'] }}">{{ $logger['id'] }}</option>@endforeach</select></div>
-	                                <div class="col-md-4 mb-3 d-none" id="sensor-mqtt-wrap"><label class="form-label">MQTT Configuration</label><select name="mqtt_configuration_id" class="form-select"><option value="">-</option>@foreach($mqttConfigurations->where('consumer_enabled', true) as $config)<option value="{{ $config->id }}" data-project-id="{{ $config->project_id }}">{{ $config->configuration_code }} - {{ $config->name }}</option>@endforeach</select><small class="text-muted"><a href="{{ route('mqtt-configurations.index') }}">Manage MQTT</a></small></div>
+	                                <div class="col-md-4 mb-3 d-none" id="sensor-mqtt-wrap"><label class="form-label">MQTT Configuration</label><select name="mqtt_configuration_id" class="form-select"><option value="">-</option>@foreach($mqttConfigurations->where('consumer_enabled', true) as $config)<option value="{{ $config->id }}" data-project-id="{{ $config->project_id }}">{{ $config->configuration_code }} - {{ $config->name }}</option>@endforeach</select><small class="text-muted"><a href="#mqtt-configuration-collapse" data-bs-toggle="collapse" aria-controls="mqtt-configuration-collapse">Tambah / kelola MQTT di tab ini</a></small></div>
 	                            </div>
 	                            <div class="mb-3"><label class="form-label">Warning Station</label><select name="warning_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($warningStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
 	                            <div class="mb-3"><label class="form-label">Sensor ID</label><input name="sensor_code" class="form-control" placeholder="PS-PDG-01" required @disabled(! $databaseReady)></div>
@@ -967,6 +1004,8 @@
                             <input type="hidden" name="status" value="Normal">
 	                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty() || $mstPrefixes->whereNotNull('id')->isEmpty())>Save / Update Sensor</button>
                         </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -974,7 +1013,11 @@
             <div class="col-xl-12">
                 <div class="card h-100">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Sensor Registry</h4>
+                        <h4 class="card-title mb-4">Sensor & Data Registry</h4>
+                        @include('modules.mqtt-configurations._monitor', [
+                            'mqttConfigurations' => $mqttConfigurations,
+                            'mqttEditForm' => '#project-mqtt-configuration-form',
+                        ])
                         <h5 class="font-size-14 mb-3">Data Logger Registry</h5>
                         <div class="table-responsive mb-4">
                             <table class="table table-nowrap align-middle mb-0">
@@ -1390,4 +1433,5 @@
     })();
 
 </script>
+@include('modules.mqtt-configurations._scripts')
 @endsection
