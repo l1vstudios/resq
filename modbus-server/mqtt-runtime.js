@@ -59,7 +59,7 @@ async function createDatabase() {
     throw new Error(`DB_CONNECTION ${driver} belum didukung MQTT runtime; gunakan mysql atau pgsql.`);
   }
   const mysql = require('mysql2/promise');
-  const pool = mysql.createPool({ ...common, username: undefined, connectionLimit: 5 });
+  const pool = mysql.createPool({ ...common, connectionLimit: 5 });
   return {
     driver: 'mysql',
     async query(sql, params = []) { return (await pool.execute(sql, params))[0]; },

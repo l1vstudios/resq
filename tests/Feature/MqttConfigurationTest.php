@@ -93,6 +93,26 @@ class MqttConfigurationTest extends TestCase
         $this->assertDatabaseCount('mqtt_configurations', 0);
     }
 
+    public function test_edit_form_keeps_checkbox_fallback_as_a_boolean_value(): void
+    {
+        $user = User::create([
+            'name' => 'Operator', 'email' => 'mqtt-edit@example.test', 'password' => bcrypt('secret'),
+            'dob' => '2000-01-01', 'avatar' => 'avatar.png', 'type' => 'sentinel', 'status' => 'active',
+        ]);
+        $project = Project::create(['project_code' => 'PRJ-MQTT-EDIT', 'name' => 'MQTT Edit']);
+        MqttConfiguration::create([
+            'project_id' => $project->id, 'configuration_code' => 'MQTT-EDIT-01', 'name' => 'Broker',
+            'broker_url' => 'mqtt://broker.example.test:1883', 'consumer_enabled' => true,
+            'consumer_topic' => 'project/input/#', 'consumer_qos' => 0, 'example_payload' => ['sensor_code' => 'SNS-01'],
+            'producer_enabled' => false, 'producer_qos' => 0, 'is_active' => true,
+        ]);
+
+        $this->actingAs($user)->get(route('mqtt-configurations.index'))
+            ->assertOk()
+            ->assertSee("var checkboxInputs = Array.from(inputs).filter", false)
+            ->assertSee("input.value = '0';", false);
+    }
+
     public function test_consumer_ingestion_stores_canonical_data_and_producer_outbox(): void
     {
         $project = Project::create(['project_code' => 'PRJ-INGEST', 'name' => 'Ingestion Project']);

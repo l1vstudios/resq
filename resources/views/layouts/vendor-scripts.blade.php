@@ -74,6 +74,26 @@
             var escapedName = cssEscape(name);
             var inputs = form.querySelectorAll('[name="' + escapedName + '"], [name="' + escapedName + '[]"]');
 
+            var checkboxInputs = Array.from(inputs).filter(function (input) {
+                return input.type === 'checkbox';
+            });
+            if (checkboxInputs.length) {
+                var checked = value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+                checkboxInputs.forEach(function (input) {
+                    if (input.name.endsWith('[]')) {
+                        input.checked = Array.isArray(value) && value.map(String).includes(input.value);
+                    } else {
+                        input.checked = checked;
+                    }
+                });
+                inputs.forEach(function (input) {
+                    if (input.type === 'hidden') {
+                        input.value = '0';
+                    }
+                });
+                return;
+            }
+
             inputs.forEach(function (input) {
                 if (input.type === 'checkbox') {
                     if (input.name.endsWith('[]')) {
