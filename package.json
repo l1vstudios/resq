@@ -10,6 +10,8 @@
     ],
     "scripts": {
         "dev": "vite",
+        "start": "php artisan serve & node modbus-server/server.js",
+        "start:all": "php artisan serve & node modbus-server/server.js & npm run dev",
         "modbus:server": "node modbus-server/server.js",
         "gateway": "node modbus-server/gateway.js",
         "mqtt:gateway": "node modbus-server/server.js",

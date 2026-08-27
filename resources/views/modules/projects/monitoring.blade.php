@@ -11,8 +11,6 @@
 @php
     $projects = collect($projects ?? []);
     $databaseReady = $databaseReady ?? false;
-    $projectMonitoringStartUrl = route('projects.start-monitoring', [], false);
-    $projectMonitoringStopUrl = route('projects.stop-monitoring', [], false);
     $projectMonitoringLiveUrl = route('projects.live-monitoring', [], false);
 @endphp
 
@@ -22,14 +20,14 @@
     </div>
 @endunless
 
-<div class="row" id="project-monitoring-runtime" data-start-url="{{ $projectMonitoringStartUrl }}" data-stop-url="{{ $projectMonitoringStopUrl }}" data-live-url="{{ $projectMonitoringLiveUrl }}">
+<div class="row" id="project-monitoring-runtime" data-live-url="{{ $projectMonitoringLiveUrl }}">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
                     <div>
                         <h4 class="card-title mb-1">Project Live Monitoring</h4>
-                        <p class="text-muted mb-0">Mulai koneksi logger project dan pantau nilai sensor terbaru.</p>
+                        <p class="text-muted mb-0">Pantau nilai sensor terbaru. Start/Stop gateway dari halaman Data Loggers.</p>
                     </div>
                     <div class="d-flex flex-wrap align-items-end gap-2">
                         <div>
@@ -40,12 +38,6 @@
                                 @endforeach
                             </select>
                         </div>
-                        <button type="button" class="btn btn-success" id="project-monitor-start" @disabled(! $databaseReady || $projects->whereNotNull('db_id')->isEmpty())>
-                            <i class="bx bx-play me-1"></i> Start Monitoring
-                        </button>
-                        <button type="button" class="btn btn-danger" id="project-monitor-stop" @disabled(! $databaseReady || $projects->whereNotNull('db_id')->isEmpty())>
-                            <i class="bx bx-stop me-1"></i> Stop Monitoring
-                        </button>
                     </div>
                 </div>
 
@@ -57,6 +49,8 @@
                 </div>
 
                 <div class="alert alert-info py-2 d-none" id="project-monitor-message"></div>
+
+                <div class="mb-3" id="project-monitor-infrastructure"></div>
 
                 <div class="btn-group mb-3" role="group" aria-label="Monitoring views">
                     <button type="button" class="btn btn-primary" data-monitor-view="realtime">Realtime Data</button>
@@ -136,12 +130,8 @@
         }
 
         const csrfToken = @json(csrf_token());
-        const startUrl = root.dataset.startUrl;
-        const stopUrl = root.dataset.stopUrl;
         const liveUrl = root.dataset.liveUrl;
         const select = document.getElementById('project-monitor-select');
-        const startButton = document.getElementById('project-monitor-start');
-        const stopButton = document.getElementById('project-monitor-stop');
         const rowsEl = document.getElementById('project-monitor-rows');
         const logRowsEl = document.getElementById('project-monitor-log-rows');
         const messageEl = document.getElementById('project-monitor-message');
@@ -149,6 +139,7 @@
         const freshEl = document.getElementById('project-monitor-fresh');
         const refreshEl = document.getElementById('project-monitor-refresh');
         const stateEl = document.getElementById('project-monitor-state');
+        const infrastructureEl = document.getElementById('project-monitor-infrastructure');
         const realtimeViewEl = document.getElementById('project-monitor-realtime-view');
         const auditViewEl = document.getElementById('project-monitor-audit-view');
         const auditRowsEl = document.getElementById('project-monitor-audit-rows');
@@ -158,7 +149,6 @@
         const previousValues = new Map();
         let lastAuditRows = [];
         let timer = null;
-        let busy = false;
         let liveRequestInFlight = false;
         let liveRequestSeq = 0;
 
@@ -284,6 +274,36 @@
             });
         }
 
+        function renderInfrastructure(stations) {
+            if (!infrastructureEl || !stations.length) {
+                if (infrastructureEl) infrastructureEl.innerHTML = '';
+                return;
+            }
+
+            infrastructureEl.innerHTML = '<div class="border rounded p-3 bg-light" style="font-size:0.85rem">' +
+                '<div class="fw-bold mb-2"><i class="bx bx-sitemap me-1"></i>Project Infrastructure</div>' +
+                stations.map(function (station) {
+                    const stationBadge = '<span class="badge bg-primary-subtle text-primary me-1">' + escapeHtml(station.station_type || 'station') + '</span>';
+                    const loggers = (station.loggers || []).map(function (logger) {
+                        const onlineBadge = logger.online
+                            ? '<span class="badge bg-success ms-1">Online</span>'
+                            : '<span class="badge bg-secondary ms-1">' + escapeHtml(logger.status || 'Offline') + '</span>';
+                        const sensors = (logger.sensors || []).map(function (sensor) {
+                            const paramCount = sensor.parameter_count > 1 ? ' <span class="text-muted">(' + sensor.parameter_count + ' param)</span>' : '';
+                            return '<div class="ms-4 text-muted"><i class="bx bx-chip me-1"></i>' + escapeHtml(sensor.sensor_code) + ' — ' + escapeHtml(sensor.type || sensor.parameter || '-') + paramCount + '</div>';
+                        }).join('');
+                        return '<div class="ms-3 mb-1"><i class="bx bx-server me-1 text-info"></i><strong>' + escapeHtml(logger.logger_code) + '</strong> <small class="text-muted">' + escapeHtml(logger.model || '') + '</small>' + onlineBadge + '</div>' + sensors;
+                    }).join('');
+
+                    const warnings = (station.warning_stations || []).map(function (ws) {
+                        return '<div class="ms-3 text-warning"><i class="bx bx-bell me-1"></i>' + escapeHtml(ws.station_code) + ' — ' + escapeHtml(ws.name || '-') + ' <span class="badge bg-warning-subtle text-warning">' + escapeHtml(ws.status || '-') + '</span></div>';
+                    }).join('');
+
+                    return '<div class="mb-2"><div><i class="bx bx-map-pin me-1 text-primary"></i><strong>' + escapeHtml(station.station_code) + '</strong> — ' + escapeHtml(station.station_name || '-') + ' ' + stationBadge + '</div>' + loggers + (warnings || '') + '</div>';
+                }).join('<hr class="my-2">') +
+            '</div>';
+        }
+
         function renderLiveData(data) {
             const summary = data.summary || {};
             const sensors = Array.isArray(data.sensors) ? data.sensors : [];
@@ -291,9 +311,20 @@
             onlineEl.textContent = (summary.online_loggers || 0) + ' / ' + (summary.loggers || 0);
             freshEl.textContent = (summary.fresh_parameters ?? summary.fresh_sensors ?? 0) + ' / ' + (summary.parameters ?? summary.sensors ?? 0);
             refreshEl.textContent = formatTime(data.generated_at);
-            stateEl.textContent = (summary.online_loggers || 0) > 0 ? 'Running' : 'Menunggu';
+            stateEl.textContent = (summary.online_loggers || 0) > 0 ? 'Running' : 'Idle';
             stateEl.className = 'fs-5 fw-bold ' + ((summary.online_loggers || 0) > 0 ? 'text-success' : 'text-muted');
-            updateMonitorButtons();
+
+            // Update polling interval if changed (1:1 with logger setting, max 5 min)
+            const serverInterval = Math.min(Math.max(summary.poll_interval_ms || 2000, 500), 300000);
+            if (serverInterval !== pollIntervalMs) {
+                pollIntervalMs = serverInterval;
+                if (timer) {
+                    clearInterval(timer);
+                    timer = setInterval(() => {
+                        loadLiveData().catch((error) => showMonitorMessage(error.message, 'warning'));
+                    }, pollIntervalMs);
+                }
+            }
 
             rowsEl.innerHTML = sensors.length
                 ? sensors.map((sensor) => {
@@ -320,6 +351,7 @@
                 : '<tr><td colspan="6" class="text-center text-muted py-3">Belum ada sensor pada project ini.</td></tr>';
 
             renderAuditRows(data.mapping_audit || []);
+            renderInfrastructure(data.infrastructure || []);
         }
 
         async function loadLiveData() {
@@ -368,91 +400,19 @@
             }
         }
 
+        let pollIntervalMs = 2000;
+
         function startPolling() {
             clearInterval(timer);
             loadLiveData().catch((error) => showMonitorMessage(error.message, 'warning'));
             timer = setInterval(() => {
                 loadLiveData().catch((error) => showMonitorMessage(error.message, 'warning'));
-            }, 2000);
+            }, pollIntervalMs);
         }
 
         function stopPolling() {
             clearInterval(timer);
             timer = null;
-        }
-
-        function updateMonitorButtons() {
-            if (startButton) {
-                startButton.disabled = busy || !select || !select.value;
-            }
-
-            if (stopButton) {
-                stopButton.disabled = busy || !select || !select.value;
-            }
-        }
-
-        async function submitMonitoringAction(action) {
-            if (!select || !select.value) {
-                showMonitorMessage('Pilih project dulu.', 'warning');
-                return;
-            }
-
-            const isStart = action === 'start';
-            const button = isStart ? startButton : stopButton;
-            const originalText = button.innerHTML;
-            busy = true;
-            updateMonitorButtons();
-            button.innerHTML = '<i class="bx bx-loader-alt bx-spin me-1"></i> ' + (isStart ? 'Starting...' : 'Stopping...');
-            showMonitorMessage(isStart ? 'Menghubungkan semua logger pada project...' : 'Menghentikan monitoring semua logger pada project...', 'info');
-
-            try {
-                const response = await fetch(isStart ? startUrl : stopUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                    },
-                    body: JSON.stringify({ project_id: select.value }),
-                });
-                const data = await response.json().catch(() => ({}));
-
-                if (!response.ok || data.ok === false) {
-                    (data.loggers || []).forEach((logger) => {
-                        appendMonitorLogLines(logger);
-                    });
-                    throw new Error(data.message || (isStart ? 'Start monitoring gagal.' : 'Stop monitoring gagal.'));
-                }
-
-                (data.loggers || []).forEach((logger) => {
-                    appendMonitorLogLines(logger);
-                });
-                showMonitorMessage(data.message + (isStart ? ' Live data akan refresh otomatis.' : ' Monitoring sudah berhenti.'), 'success');
-
-                if (isStart) {
-                    startPolling();
-                } else {
-                    stopPolling();
-                    await loadLiveData().catch(() => {});
-                    stateEl.textContent = 'Stopped';
-                    stateEl.className = 'fs-5 fw-bold text-danger';
-                }
-            } catch (error) {
-                appendMonitorLog('Project', error.message, 'Gagal');
-                showMonitorMessage(error.message, 'warning');
-            } finally {
-                busy = false;
-                button.innerHTML = originalText;
-                updateMonitorButtons();
-            }
-        }
-
-        if (startButton) {
-            startButton.addEventListener('click', () => submitMonitoringAction('start'));
-        }
-
-        if (stopButton) {
-            stopButton.addEventListener('click', () => submitMonitoringAction('stop'));
         }
 
         viewButtons.forEach((button) => {
@@ -468,7 +428,6 @@
                 previousValues.clear();
                 startPolling();
             });
-            updateMonitorButtons();
             startPolling();
         }
     })();

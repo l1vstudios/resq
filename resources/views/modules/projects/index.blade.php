@@ -809,12 +809,14 @@
                         <form method="POST" action="{{ route('data-loggers.store') }}" id="project-data-logger-form">
                             @csrf
                             <div class="mb-3">
-                                <label class="form-label">Monitoring Station</label>
-                                <select name="monitoring_station_id" class="form-select" required @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>
+                                <label class="form-label">Monitoring Station <span class="text-muted fw-normal">— opsional</span></label>
+                                <select name="monitoring_station_id" class="form-select" @disabled(! $databaseReady)>
+                                    <option value="">— Tanpa Monitoring Station —</option>
                                     @foreach ($monitoringStations->whereNotNull('db_id') as $station)
                                         <option value="{{ $station['db_id'] }}">{{ $station['id'] }} - {{ $station['name'] }}</option>
                                     @endforeach
                                 </select>
+                                <small class="text-muted">Pilih monitoring station agar logger terdeteksi di Start Monitoring. Bisa diisi nanti.</small>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Logger ID</label>
@@ -829,16 +831,23 @@
                                 <div class="col-md-6 mb-3"><label class="form-label">Firmware</label><input name="firmware_version" class="form-control" @disabled(! $databaseReady)></div>
                             </div>
                             <div class="mb-3"><label class="form-label">Device Label / QR</label><input name="device_label" class="form-control" @disabled(! $databaseReady)></div>
-                            <div class="mb-3">
-                                <label class="form-label">Status</label>
-                                <select name="logger_status" class="form-select" required @disabled(! $databaseReady)>
-                                    <option>Active</option>
-                                    <option>Inactive</option>
-                                    <option>Maintenance</option>
-                                    <option>Fault</option>
-                                </select>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Status</label>
+                                    <select name="logger_status" class="form-select" required @disabled(! $databaseReady)>
+                                        <option>Active</option>
+                                        <option>Inactive</option>
+                                        <option>Maintenance</option>
+                                        <option>Fault</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Polling Interval (ms)</label>
+                                    <input type="number" name="poll_interval_ms" class="form-control" value="2000" min="500" max="300000" step="500" @disabled(! $databaseReady)>
+                                    <small class="text-muted">Interval baca sensor & refresh monitoring (500ms – 5 menit)</small>
+                                </div>
                             </div>
-                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>Save / Update Logger</button>
+                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady)>Save / Update Logger</button>
                         </form>
                             </div>
                         </div>
@@ -853,7 +862,17 @@
                         </h2>
                         <div id="mqtt-configuration-collapse" class="accordion-collapse collapse {{ $mqttSectionOpen ? 'show' : '' }}" aria-labelledby="mqtt-configuration-heading">
                             <div class="accordion-body">
-                                <p class="text-muted">Hubungkan broker ke project, lalu pilih konfigurasi consumer tersebut saat menambahkan sensor.</p>
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <p class="text-muted mb-0">Hubungkan broker ke project, lalu pilih konfigurasi consumer tersebut saat menambahkan sensor.</p>
+                                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#mqtt-inline-guide" aria-expanded="false">
+                                        <i class="bx bx-book-open me-1"></i> Panduan
+                                    </button>
+                                </div>
+                                <div class="collapse mb-3" id="mqtt-inline-guide">
+                                    <div class="border rounded p-3 bg-light" style="max-height:400px;overflow-y:auto;font-size:0.85rem">
+                                        @include('modules.mqtt-configurations._guide-content')
+                                    </div>
+                                </div>
                                 @include('modules.mqtt-configurations._form', [
                                     'mqttFormId' => 'project-mqtt-configuration-form',
                                     'mqttProjects' => $mqttProjects,
@@ -1021,7 +1040,7 @@
                         <h5 class="font-size-14 mb-3">Data Logger Registry</h5>
                         <div class="table-responsive mb-4">
                             <table class="table table-nowrap align-middle mb-0">
-                                <thead class="table-light"><tr><th>Logger ID</th><th>Monitoring</th><th>Serial</th><th>Model</th><th>Status</th><th></th></tr></thead>
+                                <thead class="table-light"><tr><th>Logger ID</th><th>Monitoring</th><th>Serial</th><th>Model</th><th>Poll</th><th>Status</th><th></th></tr></thead>
                                 <tbody>
                                     @forelse ($dataLoggers as $logger)
                                         <tr>
@@ -1029,6 +1048,7 @@
                                             <td>{{ $logger['monitoring_station_id'] ?? '-' }}</td>
                                             <td>{{ $logger['serial_number'] ?? '-' }}</td>
                                             <td>{{ $logger['logger_model'] ?? '-' }}</td>
+                                            <td><span class="text-muted">{{ number_format(($logger['poll_interval_ms'] ?? 2000) / 1000, 1) }}s</span></td>
                                             <td><span class="badge {{ ($logger['logger_status'] ?? '') === 'Active' ? 'bg-success' : 'bg-secondary' }}">{{ $logger['logger_status'] ?? '-' }}</span></td>
                                             <td class="text-end">
                                                 @isset($logger['db_id'])
@@ -1044,6 +1064,7 @@
                                                                 'firmware_version' => $logger['firmware_version'] ?? '',
                                                                 'device_label' => $logger['device_label'] ?? '',
                                                                 'logger_status' => $logger['logger_status'] ?? 'Active',
+                                                                'poll_interval_ms' => $logger['poll_interval_ms'] ?? 2000,
                                                             ])) }}">Edit</button>
                                                         <form method="POST" action="{{ route('device-setup.destroy', ['type' => 'data-logger', 'id' => $logger['db_id']]) }}">
                                                             @csrf

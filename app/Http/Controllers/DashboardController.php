@@ -187,12 +187,18 @@ class DashboardController extends Controller
     {
         $provinceCoordinates = $this->provinceCoordinates();
         $sensorModels = Sensor::with(['workspace', 'monitoringStation', 'warningStation'])->get();
+        $sensorIds = $sensorModels->pluck('id');
+
+        // Optimized: only fetch the latest reading per sensor using a subquery
         $latestReadings = TelemetryReading::query()
-            ->whereIn('sensor_id', $sensorModels->pluck('id'))
-            ->latest('received_at')
-            ->latest()
+            ->whereIn('sensor_id', $sensorIds)
+            ->whereIn('id', function ($query) use ($sensorIds) {
+                $query->selectRaw('MAX(id)')
+                    ->from('telemetry_readings')
+                    ->whereIn('sensor_id', $sensorIds)
+                    ->groupBy('sensor_id');
+            })
             ->get()
-            ->unique('sensor_id')
             ->keyBy('sensor_id');
 
         return $sensorModels

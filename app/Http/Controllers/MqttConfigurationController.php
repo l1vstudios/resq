@@ -34,10 +34,30 @@ class MqttConfigurationController extends Controller
     public function index(Request $request): View
     {
         $projects = $this->authorization->scopeProjectsForUser($request->user(), Project::query())->orderBy('name')->get();
-        $configurations = MqttConfiguration::with(['project', 'sensors'])
+        $configurations = MqttConfiguration::with(['project', 'sensors', 'nodeRedDataLoggers'])
             ->whereIn('project_id', $projects->pluck('id'))
             ->latest()
-            ->get();
+            ->get()
+            ->each(function (MqttConfiguration $config) {
+                $loggerCodes = $config->nodeRedDataLoggers
+                    ->where('logger_status', '!=', 'Inactive')
+                    ->pluck('logger_code')
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                $config->setAttribute('current_logger_codes', $loggerCodes->all());
+                $config->setAttribute('current_sensor_count', $this->mqttConfigurationSensorCount($config));
+                $config->setAttribute('is_current', $loggerCodes->isNotEmpty());
+            })
+            ->sortByDesc(fn (MqttConfiguration $config) => sprintf(
+                '%d|%010d|%010d|%010d',
+                $config->getAttribute('is_current') ? 1 : 0,
+                optional($config->last_received_at)->timestamp ?? 0,
+                optional($config->last_connected_at)->timestamp ?? 0,
+                $config->id
+            ))
+            ->values();
 
         $canonicalParameters = CanonicalParameter::orderBy('field_identity')->get();
 
@@ -56,7 +76,7 @@ class MqttConfigurationController extends Controller
             'consumer_enabled' => ['nullable', 'boolean'],
             'consumer_topic' => ['nullable', 'required_if:consumer_enabled,1', 'string', 'max:1024'],
             'consumer_qos' => ['required', 'integer', 'min:0', 'max:2'],
-            'example_payload' => ['nullable', 'required_if:consumer_enabled,1', 'json'],
+            'example_payload' => ['nullable', 'json'],
             'sensor_code_path' => ['nullable', 'string', 'max:255'],
             'producer_enabled' => ['nullable', 'boolean'],
             'producer_topic' => ['nullable', 'required_if:producer_enabled,1', 'string', 'max:1024'],
@@ -100,11 +120,15 @@ class MqttConfigurationController extends Controller
         }
 
         if ($data['consumer_enabled']) {
-            $example = json_decode($data['example_payload'], true, flags: JSON_THROW_ON_ERROR);
-            if (! empty($data['sensor_code_path']) && data_get($example, $data['sensor_code_path']) === null) {
-                throw ValidationException::withMessages(['sensor_code_path' => 'Path tidak ditemukan pada example payload.']);
+            if (! empty($data['example_payload'])) {
+                $example = json_decode($data['example_payload'], true, flags: JSON_THROW_ON_ERROR);
+                if (! empty($data['sensor_code_path']) && data_get($example, $data['sensor_code_path']) === null) {
+                    throw ValidationException::withMessages(['sensor_code_path' => 'Path tidak ditemukan pada example payload.']);
+                }
+                $data['example_payload'] = $example;
+            } else {
+                $data['example_payload'] = null;
             }
-            $data['example_payload'] = $example;
         } else {
             $data['example_payload'] = null;
         }
@@ -129,6 +153,9 @@ class MqttConfigurationController extends Controller
             && $this->authorization->canMutateAssetRegistry($request->user()), 403);
         if ($configuration->sensors()->exists()) {
             return back()->withErrors(['mqtt_configuration' => 'Configuration masih dipakai sensor. Lepaskan terlebih dahulu.']);
+        }
+        if ($configuration->nodeRedDataLoggers()->where('logger_status', '!=', 'Inactive')->exists()) {
+            return back()->withErrors(['mqtt_configuration' => 'Configuration masih dipakai Data Logger aktif. Lepaskan dari Data Logger terlebih dahulu.']);
         }
         $configuration->delete();
 
@@ -188,11 +215,7 @@ class MqttConfigurationController extends Controller
 
         $config = MqttConfiguration::findOrFail($data['mqtt_configuration_id']);
         abort_unless($config->is_active && $config->consumer_enabled, 409);
-        $sensor = Sensor::with(['workspace.project', 'mappingProfiles.canonicalParameter'])
-            ->where('mqtt_configuration_id', $config->id)
-            ->where('input_source', 'mqtt')
-            ->where('sensor_code', $data['sensor_code'])
-            ->firstOrFail();
+        $sensor = $this->resolveIncomingSensor($config, $data['sensor_code']);
         abort_unless((int) $sensor->workspace?->project_id === (int) $config->project_id, 422);
 
         $observedAt = ! empty($data['observed_at']) ? Carbon::parse($data['observed_at']) : now();
@@ -220,14 +243,253 @@ class MqttConfigurationController extends Controller
         $numeric = is_numeric($primary) ? (float) $primary : null;
         $threshold = is_numeric($sensor->threshold) ? (float) $sensor->threshold : null;
         $level = $numeric !== null && $threshold !== null && $numeric >= $threshold ? 'Awas' : 'Normal';
-        $sensor->update(['value' => is_scalar($primary) ? (string) $primary : json_encode($primary), 'alert_level' => $level, 'status' => $level, 'last_seen_at' => now()]);
-        $reading = TelemetryReading::create([
-            'sensor_id' => $sensor->id, 'data_logger_id' => null, 'value' => is_scalar($primary) ? (string) $primary : json_encode($primary),
-            'alert_level' => $level, 'status' => $level, 'received_at' => now(),
-        ]);
+
+        // Build parameter_values from the incoming payload to preserve multi-parameter display
+        $incomingParameterValues = $data['payload']['parameter_values'] ?? [];
+        if (empty($incomingParameterValues)) {
+            // Fallback: build from the matched values array
+            $incomingParameterValues = collect($data['values'])->map(fn ($item) => [
+                'parameter' => $item['source_path'] ?? null,
+                'value' => $item['value'] ?? null,
+                'value_text' => is_numeric($item['value'] ?? null)
+                    ? (string) $item['value']
+                    : ($item['value'] ?? null),
+            ])->all();
+        }
+
+        // Use the full display value from payload if available (e.g. RedNode sends value_text with all params)
+        $payloadDisplayValue = $data['payload']['value_text'] ?? $data['payload']['value'] ?? null;
+        $sensorDisplayValue = $payloadDisplayValue ?: (is_scalar($primary) ? (string) $primary : json_encode($primary));
+
+        // Only update sensor.value if the incoming display value is richer or same
+        // (avoid overwriting a multi-parameter display string with a bare numeric)
+        $currentSensorValue = $sensor->value;
+        $shouldUpdateValue = $payloadDisplayValue
+            || !$currentSensorValue
+            || strlen((string) $sensorDisplayValue) >= strlen((string) $currentSensorValue);
+
+        if ($shouldUpdateValue) {
+            $sensor->update(['value' => $sensorDisplayValue, 'alert_level' => $level, 'status' => $level, 'last_seen_at' => now()]);
+        } else {
+            $sensor->update(['alert_level' => $level, 'status' => $level, 'last_seen_at' => now()]);
+        }
+
+        $readingPayload = [
+            'sensor_id' => $sensor->id,
+            'data_logger_id' => $sensor->data_logger_id,
+            'value' => $sensorDisplayValue,
+            'alert_level' => $level,
+            'status' => $level,
+            'received_at' => now(),
+        ];
+
+        if (\Schema::hasColumn('telemetry_readings', 'parameter_values') && !empty($incomingParameterValues)) {
+            $readingPayload['parameter_values'] = $incomingParameterValues;
+        }
+
+        if (\Schema::hasColumn('telemetry_readings', 'numeric_value') && $numeric !== null) {
+            $readingPayload['numeric_value'] = $numeric;
+        }
+
+        if (\Schema::hasColumn('telemetry_readings', 'raw_value') && isset($data['payload']['raw'])) {
+            $readingPayload['raw_value'] = (string) $data['payload']['raw'];
+        }
+
+        if (\Schema::hasColumn('telemetry_readings', 'registers') && isset($data['payload']['registers'])) {
+            $readingPayload['registers'] = $data['payload']['registers'];
+        }
+
+        $reading = TelemetryReading::create($readingPayload);
         $this->outbox->enqueueCanonical($observation->fresh(), $sensor);
         $this->outbox->enqueueWarning($sensor, $previousLevel, $level, $reading->id);
 
         return response()->json(['ok' => true, 'sensor_id' => $sensor->id, 'canonical_observation_id' => $observation->id]);
+    }
+
+    private function resolveIncomingSensor(MqttConfiguration $config, string $sensorCode): Sensor
+    {
+        return Sensor::with(['workspace.project', 'mappingProfiles.canonicalParameter', 'dataLogger'])
+            ->where('sensor_code', $sensorCode)
+            ->where(function ($query) use ($config) {
+                $query->where(function ($nested) use ($config) {
+                    $nested->where('mqtt_configuration_id', $config->id)
+                        ->where('input_source', 'mqtt');
+                })->orWhereHas('dataLogger', function ($nested) use ($config) {
+                    $nested->where('node_red_mqtt_configuration_id', $config->id)
+                        ->where('logger_status', '!=', 'Inactive');
+                });
+            })
+            ->orderByRaw('CASE WHEN mqtt_configuration_id = ? AND input_source = ? THEN 0 ELSE 1 END', [$config->id, 'mqtt'])
+            ->firstOrFail();
+    }
+
+    private function mqttConfigurationSensorCount(MqttConfiguration $config): int
+    {
+        return Sensor::query()
+            ->where(function ($query) use ($config) {
+                $query->where(function ($nested) use ($config) {
+                    $nested->where('mqtt_configuration_id', $config->id)
+                        ->where('input_source', 'mqtt');
+                })->orWhereHas('dataLogger', function ($nested) use ($config) {
+                    $nested->where('node_red_mqtt_configuration_id', $config->id)
+                        ->where('logger_status', '!=', 'Inactive');
+                });
+            })
+            ->count();
+    }
+
+    /**
+     * Check if MQTT gateway process is running.
+     */
+    public function gatewayStatus(): JsonResponse
+    {
+        $gatewayUrl = $this->gatewayBaseUrl();
+
+        try {
+            $response = Http::timeout(3)->get("{$gatewayUrl}/health");
+
+            if ($response->ok()) {
+                $data = $response->json();
+
+                return response()->json([
+                    'ok' => true,
+                    'running' => true,
+                    'mqtt' => $data['mqtt'] ?? null,
+                    'stats' => $data['stats'] ?? null,
+                    'configurations' => $data['mqtt']['configurations'] ?? [],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Gateway not running
+        }
+
+        return response()->json([
+            'ok' => true,
+            'running' => false,
+            'mqtt' => null,
+            'stats' => null,
+        ]);
+    }
+
+    /**
+     * Start the MQTT gateway process.
+     */
+    public function gatewayStart(Request $request): JsonResponse
+    {
+        $gatewayUrl = $this->gatewayBaseUrl();
+
+        // Check if already running
+        try {
+            $health = Http::timeout(3)->get("{$gatewayUrl}/health");
+            if ($health->ok()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'MQTT Gateway sudah running.',
+                    'already_running' => true,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Not running, proceed to start
+        }
+
+        $projectRoot = base_path();
+        $nodeScript = $projectRoot . '/modbus-server/server.js';
+        $logFile = storage_path('logs/mqtt-gateway.log');
+
+        if (! file_exists($nodeScript)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'File gateway tidak ditemukan: modbus-server/server.js',
+            ], 422);
+        }
+
+        // Start the gateway process in background
+        $command = sprintf(
+            'cd %s && nohup node %s >> %s 2>&1 & echo $!',
+            escapeshellarg($projectRoot),
+            escapeshellarg($nodeScript),
+            escapeshellarg($logFile)
+        );
+
+        $pid = trim(shell_exec($command) ?? '');
+
+        // Wait a moment and verify
+        usleep(1500000); // 1.5 seconds
+
+        try {
+            $health = Http::timeout(3)->get("{$gatewayUrl}/health");
+            if ($health->ok()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'MQTT Gateway berhasil dijalankan.',
+                    'pid' => $pid,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Still not responding
+        }
+
+        return response()->json([
+            'ok' => false,
+            'message' => 'Gateway dimulai (PID: ' . $pid . ') tapi belum merespons. Cek log: storage/logs/mqtt-gateway.log',
+            'pid' => $pid,
+        ], 422);
+    }
+
+    /**
+     * Stop the MQTT gateway process.
+     */
+    public function gatewayStop(): JsonResponse
+    {
+        $gatewayUrl = $this->gatewayBaseUrl();
+        $port = (int) (config('services.modbus.port') ?: env('MODBUS_BACKEND_PORT', 3100));
+
+        // Find and kill process on the gateway port
+        $pid = trim(shell_exec("lsof -ti :{$port} 2>/dev/null") ?? '');
+
+        if ($pid === '') {
+            return response()->json([
+                'ok' => true,
+                'message' => 'MQTT Gateway tidak sedang berjalan.',
+                'was_running' => false,
+            ]);
+        }
+
+        // Kill the process
+        $pids = array_filter(explode("\n", $pid));
+        foreach ($pids as $p) {
+            if (is_numeric(trim($p))) {
+                posix_kill((int) trim($p), SIGTERM);
+            }
+        }
+
+        usleep(500000); // 0.5 seconds
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'MQTT Gateway dihentikan.',
+            'was_running' => true,
+            'killed_pids' => $pids,
+        ]);
+    }
+
+    /**
+     * Restart the MQTT gateway (stop then start).
+     */
+    public function gatewayRestart(Request $request): JsonResponse
+    {
+        $this->gatewayStop();
+        usleep(1000000); // 1 second
+
+        return $this->gatewayStart($request);
+    }
+
+    private function gatewayBaseUrl(): string
+    {
+        return rtrim(
+            config('services.modbus.url')
+                ?: env('MODBUS_BACKEND_URL', 'http://127.0.0.1:3100'),
+            '/'
+        );
     }
 }

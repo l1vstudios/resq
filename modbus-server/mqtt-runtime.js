@@ -14,6 +14,44 @@ function dataGet(value, path) {
   ), value);
 }
 
+function normalizedKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function resolvePayloadValue(payload, path) {
+  const direct = dataGet(payload, path);
+  if (direct !== undefined && direct !== null) return direct;
+
+  const expected = normalizedKey(path);
+  if (!expected) return undefined;
+
+  const collections = [
+    payload?.parameter_values,
+    payload?.mapped_parameters,
+    payload?.values,
+  ];
+
+  for (const collection of collections) {
+    if (!Array.isArray(collection)) continue;
+    const match = collection.find((item) => {
+      const keys = [
+        item?.source_path,
+        item?.source_parameter,
+        item?.parameter,
+        item?.label,
+        item?.canonical_field,
+      ];
+      return keys.some((key) => normalizedKey(key) === expected);
+    });
+    if (!match) continue;
+    if (match.value !== undefined && match.value !== null) return match.value;
+    if (match.raw !== undefined && match.raw !== null) return match.raw;
+    if (match.value_text !== undefined && match.value_text !== null) return match.value_text;
+  }
+
+  return undefined;
+}
+
 function topicSensorCode(topic) {
   const parts = String(topic || '').split('/').filter(Boolean);
   return parts[parts.length - 1] || null;
@@ -114,21 +152,27 @@ class MqttDatabaseRuntime {
 
     for (const config of configs) {
       const id = Number(config.id);
+      const sensors = await this.loadSensors(id);
+      const sensorSignature = this.sensorSignature(sensors);
       const signature = crypto.createHash('sha256').update(JSON.stringify([
         config.broker_url, config.username, config.password_ciphertext, config.consumer_enabled,
         config.consumer_topic, config.consumer_qos, config.producer_enabled, config.producer_topic,
-        config.producer_qos, config.producer_retain, config.sensor_code_path,
+        config.producer_qos, config.producer_retain, config.sensor_code_path, sensorSignature,
       ])).digest('hex');
-      if (this.clients.get(id)?.signature === signature) continue;
-      await this.connectConfig(config, signature);
+      const current = this.clients.get(id);
+      if (current?.signature === signature) {
+        current.sensors = sensors;
+        current.sensorSignature = sensorSignature;
+        continue;
+      }
+      await this.connectConfig(config, signature, sensors, sensorSignature);
     }
   }
 
-  async connectConfig(config, signature) {
+  async connectConfig(config, signature, sensors, sensorSignature) {
     const id = Number(config.id);
     const previous = this.clients.get(id);
     if (previous) previous.client.end(true);
-    const sensors = await this.loadSensors(id);
     let password;
     try { password = decryptCredential(config.password_ciphertext); } catch (error) {
       await this.updateStatus(id, 'error', error.message);
@@ -139,8 +183,9 @@ class MqttDatabaseRuntime {
       password,
       reconnectPeriod: 2000,
       connectTimeout: Number(process.env.MQTT_CONNECT_TIMEOUT_MS || 10000),
+      manualConnect: true,
     });
-    const state = { client, config, signature, sensors, connected: false, received: 0, published: 0 };
+    const state = { client, config, signature, sensors, sensorSignature, connected: false, received: 0, published: 0 };
     this.clients.set(id, state);
     await this.updateStatus(id, 'connecting', null);
 
@@ -159,22 +204,35 @@ class MqttDatabaseRuntime {
     client.on('message', (topic, buffer) => this.consume(state, topic, buffer).catch((error) => {
       this.updateStatus(id, 'error', error.message).catch(() => {});
     }));
+    client.connect();
   }
 
   async loadSensors(configurationId) {
     const rows = await this.db.query(`
-      SELECT s.id, s.sensor_code, smp.source_parameter
+      SELECT DISTINCT s.id, s.sensor_code, smp.source_parameter
       FROM sensors s
+      LEFT JOIN data_loggers dl ON dl.id = s.data_logger_id
       LEFT JOIN sensor_mapping_profiles smp ON smp.sensor_id = s.id AND smp.status = ?
-      WHERE s.mqtt_configuration_id = ? AND s.input_source = ?
-      ORDER BY s.id, smp.id
-    `, ['active', configurationId, 'mqtt']);
+      WHERE (
+        (s.mqtt_configuration_id = ? AND s.input_source = ?)
+        OR (dl.node_red_mqtt_configuration_id = ? AND dl.logger_status <> ?)
+      )
+      ORDER BY s.id, smp.source_parameter
+    `, ['active', configurationId, 'mqtt', configurationId, 'Inactive']);
     const sensors = new Map();
     rows.forEach((row) => {
       if (!sensors.has(row.sensor_code)) sensors.set(row.sensor_code, { id: Number(row.id), code: row.sensor_code, paths: [] });
       if (row.source_parameter) sensors.get(row.sensor_code).paths.push(row.source_parameter);
     });
     return sensors;
+  }
+
+  sensorSignature(sensors) {
+    return JSON.stringify([...sensors.entries()].map(([code, sensor]) => ({
+      code,
+      id: sensor.id,
+      paths: [...new Set(sensor.paths)].sort(),
+    })));
   }
 
   async consume(state, topic, buffer) {
@@ -185,7 +243,7 @@ class MqttDatabaseRuntime {
       || payload.sensor_code || topicSensorCode(topic);
     const sensor = state.sensors.get(String(sensorCode));
     if (!sensor) throw new Error(`Sensor ${sensorCode || '-'} tidak terdaftar pada config ${state.config.configuration_code}.`);
-    const values = sensor.paths.map((path) => ({ source_path: path, value: dataGet(payload, path) }))
+    const values = sensor.paths.map((path) => ({ source_path: path, value: resolvePayloadValue(payload, path) }))
       .filter((item) => item.value !== undefined && item.value !== null);
     if (!values.length) throw new Error(`Tidak ada JSON path mapping yang cocok untuk sensor ${sensor.code}.`);
     const observedAt = payload.observed_at || payload.timestamp || payload.recorded_at || null;
@@ -197,8 +255,8 @@ class MqttDatabaseRuntime {
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body.ok === false) throw new Error(body.message || `MQTT ingestion HTTP ${response.status}.`);
     state.received += 1;
-    await this.db.query('UPDATE mqtt_configurations SET last_received_at = ?, last_error = NULL, runtime_metrics = ?, updated_at = ? WHERE id = ?', [
-      new Date(), JSON.stringify({ received: state.received, published: state.published }), new Date(), Number(state.config.id),
+    await this.db.query('UPDATE mqtt_configurations SET connection_status = ?, last_received_at = ?, last_error = NULL, runtime_metrics = ?, updated_at = ? WHERE id = ?', [
+      'connected', new Date(), JSON.stringify({ received: state.received, published: state.published }), new Date(), Number(state.config.id),
     ]);
   }
 
@@ -228,7 +286,7 @@ class MqttDatabaseRuntime {
       ));
       state.published += 1;
       await this.db.query('UPDATE mqtt_outbox_messages SET status = ?, published_at = ?, last_error = NULL, updated_at = ? WHERE id = ?', ['published', new Date(), new Date(), Number(message.id)]);
-      await this.db.query('UPDATE mqtt_configurations SET last_published_at = ?, last_error = NULL, runtime_metrics = ?, updated_at = ? WHERE id = ?', [new Date(), JSON.stringify({ received: state.received, published: state.published }), new Date(), Number(state.config.id)]);
+      await this.db.query('UPDATE mqtt_configurations SET connection_status = ?, last_published_at = ?, last_error = NULL, runtime_metrics = ?, updated_at = ? WHERE id = ?', ['connected', new Date(), JSON.stringify({ received: state.received, published: state.published }), new Date(), Number(state.config.id)]);
     } catch (error) {
       const attempts = Number(message.attempts || 0) + 1;
       const delaySeconds = Math.min(300, 2 ** Math.min(attempts, 8));

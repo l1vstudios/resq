@@ -26,28 +26,24 @@
     </div>
 @endif
 
-<div class="row">
-    <div class="col-xl-5">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-1">Broker & Project Binding</h4>
-                <p class="text-muted">Credential disimpan terenkripsi dan tidak pernah ditampilkan kembali.</p>
-                @include('modules.mqtt-configurations._form', [
-                    'mqttProjects' => $projects,
-                    'mqttCanonicalParameters' => $canonicalParameters,
-                ])
-            </div>
-        </div>
-    </div>
+@include('modules.mqtt-configurations._guide')
 
-    <div class="col-xl-7">
-        <div class="card">
-            <div class="card-body">
-                @include('modules.mqtt-configurations._monitor', [
-                    'mqttConfigurations' => $configurations,
-                ])
-            </div>
-        </div>
+<div class="card mb-4">
+    <div class="card-body">
+        <h4 class="card-title mb-1">Broker & Project Binding</h4>
+        <p class="text-muted">Credential disimpan terenkripsi dan tidak pernah ditampilkan kembali.</p>
+        @include('modules.mqtt-configurations._form', [
+            'mqttProjects' => $projects,
+            'mqttCanonicalParameters' => $canonicalParameters,
+        ])
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        @include('modules.mqtt-configurations._monitor', [
+            'mqttConfigurations' => $configurations,
+        ])
     </div>
 </div>
 @endsection

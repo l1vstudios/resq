@@ -25,12 +25,25 @@ class DataLogger extends Model
         'remote_last_tested_at',
         'remote_last_status',
         'remote_last_message',
+        'node_red_mqtt_configuration_id',
+        'node_red_publish_topic',
+        'node_red_service_name',
+        'node_red_user_dir',
+        'node_red_environment_file',
+        'node_red_restart_command',
+        'node_red_last_applied_at',
+        'node_red_last_tested_at',
+        'node_red_last_status',
+        'node_red_last_message',
         'logger_status',
+        'poll_interval_ms',
     ];
 
     protected $casts = [
         'remote_ssh_password' => 'encrypted',
         'remote_last_tested_at' => 'datetime',
+        'node_red_last_applied_at' => 'datetime',
+        'node_red_last_tested_at' => 'datetime',
     ];
 
     public function monitoringStation()
@@ -56,5 +69,10 @@ class DataLogger extends Model
     public function sensors()
     {
         return $this->hasMany(Sensor::class);
+    }
+
+    public function nodeRedMqttConfiguration()
+    {
+        return $this->belongsTo(MqttConfiguration::class, 'node_red_mqtt_configuration_id');
     }
 }

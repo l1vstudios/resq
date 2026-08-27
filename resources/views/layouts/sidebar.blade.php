@@ -147,6 +147,11 @@
                                 Canonical Database
                             </a>
                         </li>
+                        <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('data-loggers.index') }}" class="{{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
+                                Data Loggers
+                            </a>
+                        </li>
                     </ul>
                 </li>
 
@@ -171,6 +176,11 @@
                                 Warning Station
                             </a>
                         </li>
+                        <li>
+                            <a href="{{ route('cfpe.index') }}" class="{{ request()->routeIs('cfpe.*') ? 'active' : '' }}">
+                                CFPE Corridor
+                            </a>
+                        </li>
                     </ul>
                 </li>
 
@@ -183,12 +193,15 @@
                     </a>
                 </li>
 
+                {{-- Modbus Configuration hidden — data now flows via MQTT --}}
+                {{--
                 <li class="{{ request()->routeIs('modbus-configuration.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('modbus-configuration.index') }}" class="waves-effect {{ request()->routeIs('modbus-configuration.*') ? 'active' : '' }}">
                         <i class="bx bx-cog"></i>
                         <span>Modbus Configuration</span>
                     </a>
                 </li>
+                --}}
 
                 <li class="{{ request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('rednode-pin-scan.index') }}" class="waves-effect {{ request()->routeIs('rednode-pin-scan.*') ? 'active' : '' }}">
@@ -197,20 +210,18 @@
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('data-loggers.index') }}" class="waves-effect {{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
-                        <i class="bx bx-data"></i>
-                        <span>Data Loggers</span>
-                    </a>
-                </li>
-
+                {{-- Mini Server hidden --}}
+                {{--
                 <li class="{{ request()->routeIs('mini-server.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('mini-server.index') }}" class="waves-effect {{ request()->routeIs('mini-server.*') ? 'active' : '' }}">
                         <i class="bx bx-server"></i>
                         <span>Mini Server</span>
                     </a>
                 </li>
+                --}}
 
+                {{-- Telemetry & Command Test hidden --}}
+                {{--
                 <li class="menu-title">Telemetry</li>
 
                 <li class="{{ request()->routeIs('telemetry.*') ? 'mm-active' : '' }}">
@@ -226,6 +237,7 @@
                         <span>Command Test</span>
                     </a>
                 </li>
+                --}}
 
                 <li class="menu-title">Administration</li>
 

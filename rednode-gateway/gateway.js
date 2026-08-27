@@ -322,7 +322,7 @@ function ensureMqtt(config) {
   mqttBrokerUrl = brokerUrl;
   mqttClient = mqtt.connect(brokerUrl, {
     username: process.env.REDNODE_MQTT_USERNAME || mqttConfig.username || process.env.MQTT_USERNAME || undefined,
-    password: process.env.REDNODE_MQTT_PASSWORD || process.env.MQTT_PASSWORD || undefined,
+    password: process.env.REDNODE_MQTT_PASSWORD || mqttConfig.password || process.env.MQTT_PASSWORD || undefined,
     reconnectPeriod: 2000,
     connectTimeout: numberEnv('REDNODE_MQTT_TIMEOUT_MS', 10000),
   });

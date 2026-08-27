@@ -7,13 +7,16 @@ use App\Models\CanonicalObservation;
 use App\Models\DataLogger;
 use App\Models\DataLoggerDiscovery;
 use App\Models\DeviceCredential;
+use App\Models\MonitoringStation;
 use App\Models\MstPrefix;
+use App\Models\MqttConfiguration;
 use App\Models\Project;
 use App\Models\RawDataIngestion;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Services\AuthorizationService;
 use App\Services\CanonicalMappingService;
+use App\Services\MqttCredentialCipher;
 use App\Services\MqttOutboxService;
 use App\Services\SentinelRuntimeReadService;
 use Illuminate\Http\JsonResponse;
@@ -33,7 +36,8 @@ class DeviceSetupController extends Controller
         private readonly CanonicalMappingService $canonicalMapping,
         private readonly AuthorizationService $authorizationService,
         private readonly SentinelRuntimeReadService $runtimeReadService,
-        private readonly MqttOutboxService $mqttOutbox
+        private readonly MqttOutboxService $mqttOutbox,
+        private readonly MqttCredentialCipher $mqttCipher
     )
     {
     }
@@ -71,7 +75,14 @@ class DeviceSetupController extends Controller
             'remote_ssh_user' => ['nullable', 'string', 'max:255'],
             'remote_ssh_password' => ['nullable', 'string', 'max:255'],
             'remote_gateway_path' => ['nullable', 'string', 'max:255'],
+            'node_red_mqtt_configuration_id' => ['nullable', 'exists:mqtt_configurations,id'],
+            'node_red_publish_topic' => ['nullable', 'string', 'max:1024'],
+            'node_red_service_name' => ['nullable', 'string', 'max:255'],
+            'node_red_user_dir' => ['nullable', 'string', 'max:255'],
+            'node_red_environment_file' => ['nullable', 'string', 'max:255'],
+            'node_red_restart_command' => ['nullable', 'string', 'max:255'],
             'logger_status' => ['required', 'string', 'max:50'],
+            'poll_interval_ms' => ['nullable', 'integer', 'min:500', 'max:300000'],
         ];
 
         if (Schema::hasTable('data_logger_discoveries')) {
@@ -88,6 +99,18 @@ class DeviceSetupController extends Controller
 
         $discoveryId = $data['discovery_id'] ?? null;
         unset($data['discovery_id']);
+
+        $draftLogger = $logger ? $logger->replicate() : new DataLogger();
+        $draftLogger->fill($data);
+
+        $data['remote_gateway_path'] = $this->nodeRedGatewayPath($draftLogger);
+        $draftLogger->remote_gateway_path = $data['remote_gateway_path'];
+        $data['node_red_service_name'] = $this->nodeRedServiceName($draftLogger);
+        $draftLogger->node_red_service_name = $data['node_red_service_name'];
+        $data['node_red_user_dir'] = $this->nodeRedUserDir($draftLogger);
+        $draftLogger->node_red_user_dir = $data['node_red_user_dir'];
+        $data['node_red_environment_file'] = $this->nodeRedEnvironmentFile($draftLogger, $data['node_red_service_name']);
+        $data['node_red_restart_command'] = $this->nodeRedRestartCommand($draftLogger, $data['node_red_service_name']);
 
         $logger = DataLogger::updateOrCreate(['logger_code' => $data['logger_code']], $data);
 
@@ -200,6 +223,237 @@ class DeviceSetupController extends Controller
             'app_url' => $appUrl,
             'output' => $output,
             'terminal_log' => $terminalLog,
+        ]);
+    }
+
+    public function applyNodeRedMqttConfig(Request $request): JsonResponse
+    {
+        $this->authorizeAssetRegistryMutation($request);
+
+        $data = $request->validate([
+            'data_logger_id' => ['required', 'exists:data_loggers,id'],
+            'mqtt_configuration_id' => ['nullable', 'exists:mqtt_configurations,id'],
+        ]);
+
+        $logger = DataLogger::findOrFail($data['data_logger_id']);
+        $mqttConfigurationId = (int) ($data['mqtt_configuration_id'] ?? $logger->node_red_mqtt_configuration_id ?? 0);
+        if ($mqttConfigurationId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Pilih MQTT Configuration untuk logger ini dulu.',
+            ], 422);
+        }
+
+        $config = MqttConfiguration::with('project')->findOrFail($mqttConfigurationId);
+        if (! $config->is_active || ! $config->consumer_enabled || empty($config->consumer_topic)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'MQTT Configuration harus aktif, mode consumer aktif, dan punya input topic.',
+            ], 422);
+        }
+
+        $publishTopic = $this->nodeRedPublishTopic($logger, $config);
+        if ($publishTopic === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Isi Gateway Publish Topic pada Data Logger. Topic publish gateway tidak boleh kosong atau wildcard-only.',
+            ], 422);
+        }
+
+        try {
+            $password = $this->mqttCipher->decrypt($config->password_ciphertext);
+        } catch (\RuntimeException $error) {
+            return response()->json([
+                'ok' => false,
+                'message' => $error->getMessage(),
+            ], 422);
+        }
+
+        $serviceName = $this->nodeRedServiceName($logger);
+        $environmentFile = $this->nodeRedEnvironmentFile($logger, $serviceName);
+        $userDir = $this->nodeRedUserDir($logger);
+        $restartCommand = $this->nodeRedRestartCommand($logger, $serviceName);
+        $terminalLog = [
+            '$ ssh ' . $this->dataLoggerSshLabel($logger),
+            '[web] update remote MQTT gateway for ' . $logger->logger_code,
+            '[web] broker=' . $config->broker_url,
+            '[web] publish_topic=' . $publishTopic,
+            '[web] service=' . $serviceName,
+            '[web] env_file=' . $environmentFile,
+            '[web] app_dir=' . $userDir,
+        ];
+
+        $runtimeEnv = [
+            'RESQ_MQTT_ENABLED' => '1',
+            'RESQ_MQTT_CONFIGURATION_CODE' => (string) $config->configuration_code,
+            'RESQ_MQTT_PROJECT_CODE' => (string) ($config->project?->project_code ?? ''),
+            'RESQ_MQTT_BROKER_URL' => (string) $config->broker_url,
+            'RESQ_MQTT_USERNAME' => (string) ($config->username ?? ''),
+            'RESQ_MQTT_PASSWORD' => (string) ($password ?? ''),
+            'RESQ_MQTT_TOPIC_PATTERN' => (string) $config->consumer_topic,
+            'RESQ_MQTT_QOS' => (string) ($config->consumer_qos ?? 0),
+            'RESQ_MQTT_SENSOR_CODE_PATH' => (string) ($config->sensor_code_path ?? ''),
+            'RESQ_NODE_RED_MQTT_TOPIC' => $publishTopic,
+            'RESQ_NODE_RED_USER_DIR' => $userDir,
+            'RESQ_REMOTE_GATEWAY_PATH' => $userDir,
+        ];
+
+        try {
+            $output = trim($this->runDataLoggerSshCommand(
+                $logger,
+                $this->nodeRedApplyCommand($serviceName, $environmentFile, $restartCommand, $runtimeEnv),
+                90
+            ));
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first() ?: 'Gagal mengatur MQTT gateway remote.';
+            $logger->update([
+                'node_red_mqtt_configuration_id' => $config->id,
+                'node_red_last_applied_at' => now(),
+                'node_red_last_status' => 'Failed',
+                'node_red_last_message' => $message,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $message,
+                'terminal_log' => array_merge($terminalLog, [$message]),
+            ], 422);
+        }
+
+        $logger->update([
+            'node_red_mqtt_configuration_id' => $config->id,
+            'node_red_last_applied_at' => now(),
+            'node_red_last_status' => 'Applied',
+            'node_red_last_message' => 'MQTT gateway diperbarui dan service direstart.',
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'MQTT gateway berhasil diterapkan ke remote server.',
+            'terminal_log' => array_merge($terminalLog, $this->rednodeTerminalOutputLines($output)),
+            'output' => $output,
+        ]);
+    }
+
+    public function testNodeRedMqtt(Request $request): JsonResponse
+    {
+        $this->authorizeAssetRegistryMutation($request);
+
+        $data = $request->validate([
+            'data_logger_id' => ['required', 'exists:data_loggers,id'],
+            'mqtt_configuration_id' => ['nullable', 'exists:mqtt_configurations,id'],
+        ]);
+
+        $logger = DataLogger::findOrFail($data['data_logger_id']);
+        $mqttConfigurationId = (int) ($data['mqtt_configuration_id'] ?? $logger->node_red_mqtt_configuration_id ?? 0);
+        if ($mqttConfigurationId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Pilih MQTT Configuration untuk logger ini dulu.',
+            ], 422);
+        }
+
+        $config = MqttConfiguration::with('project')->findOrFail($mqttConfigurationId);
+        $publishTopic = $this->nodeRedPublishTopic($logger, $config);
+        if ($publishTopic === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Isi Gateway Publish Topic pada Data Logger agar test publish bisa dijalankan.',
+            ], 422);
+        }
+
+        try {
+            $password = $this->mqttCipher->decrypt($config->password_ciphertext);
+        } catch (\RuntimeException $error) {
+            return response()->json([
+                'ok' => false,
+                'message' => $error->getMessage(),
+            ], 422);
+        }
+
+        $serviceName = $this->nodeRedServiceName($logger);
+        $userDir = $this->nodeRedUserDir($logger);
+        $terminalLog = [
+            '$ ssh ' . $this->dataLoggerSshLabel($logger),
+            '[web] remote MQTT simulation for ' . $logger->logger_code,
+            '[web] broker=' . $config->broker_url,
+            '[web] publish_topic=' . $publishTopic,
+            '[web] service=' . $serviceName,
+            '[web] app_dir=' . $userDir,
+        ];
+
+        $testPayload = $this->buildMqttTestPayload($logger, $publishTopic, $config);
+        $isWildcard = str_contains($publishTopic, '*') || str_contains($publishTopic, '#') || str_contains($publishTopic, '+');
+
+        if ($isWildcard) {
+            // Wildcard: publish to ALL sensors of this logger
+            $allPayloads = $this->buildAllSensorPayloads($logger, $publishTopic, $config);
+            $terminalLog[] = '[web] mode=wildcard (publish to ' . count($allPayloads) . ' sensors)';
+            foreach ($allPayloads as $p) {
+                $display = $p['value_text'] ?? $p['value'];
+                $terminalLog[] = '[web] → ' . $p['sensor_code'] . ' = ' . $display;
+            }
+            $terminalLog[] = '';
+            $terminalLog[] = '[json] payload:';
+            foreach ($allPayloads as $p) {
+                $terminalLog[] = json_encode($p, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            }
+        } else {
+            $allPayloads = [$testPayload];
+            $terminalLog[] = '[web] sensor_code=' . ($testPayload['sensor_code'] ?? '-');
+            $terminalLog[] = '[web] value=' . ($testPayload['value'] ?? '-');
+            $terminalLog[] = '';
+            $terminalLog[] = '[json] payload:';
+            $terminalLog[] = json_encode($testPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        }
+
+        $runtimeEnv = [
+            'RESQ_MQTT_BROKER_URL' => (string) $config->broker_url,
+            'RESQ_MQTT_USERNAME' => (string) ($config->username ?? ''),
+            'RESQ_MQTT_PASSWORD' => (string) ($password ?? ''),
+            'RESQ_MQTT_QOS' => (string) ($config->consumer_qos ?? 0),
+            'RESQ_NODE_RED_MQTT_TOPIC' => $publishTopic,
+            'RESQ_NODE_RED_USER_DIR' => $userDir,
+            'RESQ_REMOTE_GATEWAY_PATH' => $userDir,
+            'RESQ_NODE_RED_CLIENT_ID' => 'resq-node-red-test-' . Str::slug($logger->logger_code ?: 'logger'),
+            'RESQ_NODE_RED_TEST_MESSAGE' => json_encode($allPayloads, JSON_UNESCAPED_SLASHES),
+            'RESQ_NODE_RED_WILDCARD' => $isWildcard ? '1' : '0',
+        ];
+
+        try {
+            $output = trim($this->runDataLoggerSshCommand(
+                $logger,
+                $this->nodeRedTestCommand($serviceName, $runtimeEnv),
+                90
+            ));
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first() ?: 'Test MQTT gateway gagal.';
+            $logger->update([
+                'node_red_mqtt_configuration_id' => $config->id,
+                'node_red_last_tested_at' => now(),
+                'node_red_last_status' => 'Failed',
+                'node_red_last_message' => $message,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $message,
+                'terminal_log' => array_merge($terminalLog, [$message]),
+            ], 422);
+        }
+
+        $logger->update([
+            'node_red_mqtt_configuration_id' => $config->id,
+            'node_red_last_tested_at' => now(),
+            'node_red_last_status' => 'Success',
+            'node_red_last_message' => 'Simulasi MQTT dari remote server berhasil.',
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Simulasi MQTT dari remote server berhasil.',
+            'terminal_log' => array_merge($terminalLog, $this->rednodeTerminalOutputLines($output)),
+            'output' => $output,
         ]);
     }
 
@@ -720,7 +974,7 @@ class DeviceSetupController extends Controller
             }
         }
         $selectedSensorIds = $selectedSensorIds->unique()->values();
-        $rednodePollIntervalMs = (int) ($serialConfig?->rednode_poll_interval_ms ?: ($serialSettings['rednode_poll_interval_ms'] ?? env('REDNODE_POLL_INTERVAL_MS', 1000)));
+        $rednodePollIntervalMs = (int) ($serialConfig?->rednode_poll_interval_ms ?: ($serialSettings['rednode_poll_interval_ms'] ?? ($dataLogger?->poll_interval_ms ?: env('REDNODE_POLL_INTERVAL_MS', 1000))));
         $runtimeState = $serialConfig?->runtime_state ?? [];
         $monitoringEnabled = array_key_exists('monitoring_enabled', $runtimeState)
             ? (bool) $runtimeState['monitoring_enabled']
@@ -807,12 +1061,7 @@ class DeviceSetupController extends Controller
                     ?: $publicAppUrl . '/api/realtime-sensor-status',
                 'token_required' => (bool) (env('MQTT_CALLBACK_TOKEN') ?: env('MODBUS_CALLBACK_TOKEN')),
             ],
-            'mqtt' => [
-                'enabled' => filter_var(env('REDNODE_MQTT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-                'broker_url' => env('REDNODE_MQTT_BROKER_URL') ?: env('MQTT_BROKER_URL'),
-                'topic_prefix' => env('REDNODE_MQTT_TOPIC_PREFIX', 'resq/telemetry'),
-                'username' => env('REDNODE_MQTT_USERNAME') ?: env('MQTT_USERNAME'),
-            ],
+            'mqtt' => $this->rednodeMqttPayload($dataLogger),
             'heartbeat' => [
                 'url' => $this->rednodeSetting('REDNODE_HEARTBEAT_URL')
                     ?: $publicAppUrl . '/api/rednode/heartbeat',
@@ -838,6 +1087,69 @@ class DeviceSetupController extends Controller
             'timeout_ms' => (int) ($config?->timeout_ms ?: ($settings['timeout_ms'] ?? env('REDNODE_TIMEOUT_MS', 1500))),
             'pin_mapping' => $config?->pin_mapping ?: ($settings['pin_mapping'] ?? $config?->topic_or_api_path),
         ];
+    }
+
+    private function rednodeMqttPayload(?DataLogger $logger): array
+    {
+        $fallbackTopicPrefix = trim((string) env('REDNODE_MQTT_TOPIC_PREFIX', 'resq/telemetry'));
+        if ($fallbackTopicPrefix === '') {
+            $fallbackTopicPrefix = 'resq/telemetry';
+        }
+
+        $fallbackPayload = [
+            'enabled' => filter_var(env('REDNODE_MQTT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'broker_url' => env('REDNODE_MQTT_BROKER_URL') ?: env('MQTT_BROKER_URL'),
+            'topic_prefix' => $fallbackTopicPrefix,
+            'username' => env('REDNODE_MQTT_USERNAME') ?: env('MQTT_USERNAME'),
+            'password' => env('REDNODE_MQTT_PASSWORD') ?: env('MQTT_PASSWORD'),
+        ];
+
+        if (! $logger) {
+            return $fallbackPayload;
+        }
+
+        $logger->loadMissing('nodeRedMqttConfiguration');
+        $config = $logger->nodeRedMqttConfiguration;
+
+        if (! $config || ! $config->is_active) {
+            return $fallbackPayload;
+        }
+
+        $password = '';
+        if (! empty($config->password_ciphertext)) {
+            try {
+                $password = (string) $this->mqttCipher->decrypt($config->password_ciphertext);
+            } catch (\RuntimeException) {
+                $password = '';
+            }
+        }
+
+        return [
+            'enabled' => (bool) $config->consumer_enabled && ! empty($config->broker_url),
+            'broker_url' => $config->broker_url ?: $fallbackPayload['broker_url'],
+            'topic_prefix' => $this->rednodeMqttTopicPrefix($config, $fallbackTopicPrefix),
+            'username' => $config->username ?: $fallbackPayload['username'],
+            'password' => $password !== '' ? $password : $fallbackPayload['password'],
+            'configuration_code' => $config->configuration_code,
+        ];
+    }
+
+    private function rednodeMqttTopicPrefix(MqttConfiguration $config, string $fallback): string
+    {
+        $topic = trim((string) ($config->consumer_topic ?: ''));
+        if ($topic === '') {
+            return $fallback;
+        }
+
+        $topic = preg_replace('#/\#$#', '', $topic);
+        $topic = preg_replace('#/\+$#', '', $topic);
+        $topic = rtrim((string) $topic, '/');
+
+        if ($topic === '' || str_contains($topic, '#') || str_contains($topic, '+')) {
+            return $fallback;
+        }
+
+        return $topic;
     }
 
     private function resolveRednodeLogger(string $loggerCode): ?DataLogger
@@ -986,6 +1298,10 @@ class DeviceSetupController extends Controller
             return null;
         }
 
+        if (! $this->shouldPersistRednodeDiscovery($requestIp, $device)) {
+            return null;
+        }
+
         $query = DataLoggerDiscovery::query();
         if ($reportedDeviceUid !== '') {
             $query->where('device_uid', $reportedDeviceUid);
@@ -1016,6 +1332,28 @@ class DeviceSetupController extends Controller
         $discovery->save();
 
         return $discovery;
+    }
+
+    private function shouldPersistRednodeDiscovery(string $requestIp, array $device): bool
+    {
+        if (! in_array($requestIp, ['127.0.0.1', '::1', 'localhost'], true)) {
+            return true;
+        }
+
+        $reportedDeviceUid = trim((string) ($device['device_uid'] ?? ''));
+        if ($reportedDeviceUid !== '' && ! str_starts_with($reportedDeviceUid, 'rn-web-')) {
+            return true;
+        }
+
+        return collect([
+            $device['serial_number'] ?? null,
+            $device['logger_model'] ?? null,
+            $device['vendor'] ?? null,
+            $device['firmware_version'] ?? null,
+            $device['device_label'] ?? null,
+            $device['hostname'] ?? null,
+            ...($device['mac_addresses'] ?? []),
+        ])->contains(fn ($value) => trim((string) $value) !== '');
     }
 
     private function fallbackRednodeDeviceUid(array $device, ?DataLogger $logger, string $requestIp): string
@@ -1702,6 +2040,46 @@ class DeviceSetupController extends Controller
             ? collect($row['parameter_values'])->where('fresh', true)->count()
             : ((bool) ($row['fresh'] ?? false) ? 1 : 0));
 
+        // Build infrastructure tree
+        $monitoringStations = MonitoringStation::with(['warningStations'])
+            ->whereHas('workspace', fn ($q) => $q->where('project_id', $project->id))
+            ->orderBy('station_code')
+            ->get();
+
+        $infrastructure = $monitoringStations->map(function ($station) use ($loggers, $sensors, $loggerRowsById) {
+            $stationLoggers = $loggers->where('monitoring_station_id', $station->id);
+            $stationWarnings = $station->warningStations;
+
+            return [
+                'station_code' => $station->station_code,
+                'station_name' => $station->name,
+                'station_type' => $station->station_type,
+                'status' => $station->status,
+                'loggers' => $stationLoggers->map(function ($logger) use ($sensors, $loggerRowsById) {
+                    $loggerSensors = $sensors->where('data_logger_id', $logger->id);
+                    $loggerStatus = $loggerRowsById->get($logger->id);
+
+                    return [
+                        'logger_code' => $logger->logger_code,
+                        'model' => $logger->logger_model,
+                        'status' => $logger->logger_status,
+                        'online' => (bool) ($loggerStatus['online'] ?? false),
+                        'sensors' => $loggerSensors->map(fn ($s) => [
+                            'sensor_code' => $s->sensor_code,
+                            'type' => $s->type,
+                            'parameter' => $s->parameter,
+                            'parameter_count' => count($s->weather_parameters ?? []) ?: 1,
+                        ])->values()->all(),
+                    ];
+                })->values()->all(),
+                'warning_stations' => $stationWarnings->map(fn ($ws) => [
+                    'station_code' => $ws->station_code,
+                    'name' => $ws->name,
+                    'status' => $ws->status,
+                ])->values()->all(),
+            ];
+        })->values();
+
         $response = response()->json([
             'ok' => true,
             'generated_at' => now()->toISOString(),
@@ -1718,7 +2096,9 @@ class DeviceSetupController extends Controller
                 'fresh_sensors' => $sensorRows->where('fresh', true)->count(),
                 'parameters' => $parameterCount,
                 'fresh_parameters' => $freshParameterCount,
+                'poll_interval_ms' => $loggers->max('poll_interval_ms') ?: 2000,
             ],
+            'infrastructure' => $infrastructure,
             'loggers' => $loggerRows,
             'sensors' => $sensorRows,
             'mapping_audit' => $mappingAuditRows,
@@ -2204,10 +2584,28 @@ class DeviceSetupController extends Controller
 
     private function projectDataLoggers(int $projectId)
     {
-        return DataLogger::with(['monitoringStation.workspace'])
+        // Primary: loggers linked via monitoring station workspace
+        $loggers = DataLogger::with(['monitoringStation.workspace'])
             ->whereHas('monitoringStation.workspace', fn ($query) => $query->where('project_id', $projectId))
             ->orderBy('logger_code')
             ->get();
+
+        // Fallback: loggers linked via sensors that belong to project workspaces
+        if ($loggers->isEmpty()) {
+            $loggerIds = Sensor::whereHas('workspace', fn ($q) => $q->where('project_id', $projectId))
+                ->whereNotNull('data_logger_id')
+                ->pluck('data_logger_id')
+                ->unique();
+
+            if ($loggerIds->isNotEmpty()) {
+                $loggers = DataLogger::with(['monitoringStation.workspace'])
+                    ->whereIn('id', $loggerIds)
+                    ->orderBy('logger_code')
+                    ->get();
+            }
+        }
+
+        return $loggers;
     }
 
     private function rednodeConnectivity(string $loggerCode): ?ConnectivityConfig
@@ -2321,6 +2719,404 @@ class DeviceSetupController extends Controller
         $password = (string) ($logger?->remote_ssh_password ?: env('REDNODE_SSH_PASSWORD'));
 
         return $host !== '' && $user !== '' && $password !== '';
+    }
+
+    private function nodeRedPublishTopic(DataLogger $logger, MqttConfiguration $config): string
+    {
+        $topic = trim((string) ($logger->node_red_publish_topic ?: ''));
+
+        if ($topic === '') {
+            $fallback = trim((string) ($config->consumer_topic ?: ''));
+            if ($fallback !== '') {
+                $topic = $fallback;
+            }
+        }
+
+        return $topic;
+    }
+
+    private function nodeRedGatewayPath(DataLogger $logger): string
+    {
+        $path = trim((string) ($logger->remote_gateway_path ?: ''));
+
+        if ($path !== '') {
+            return $path;
+        }
+
+        $user = trim((string) ($logger->remote_ssh_user ?: 'root'));
+        $defaultPath = trim((string) env('REDNODE_GATEWAY_PATH', ''));
+
+        if ($defaultPath !== '') {
+            return $defaultPath;
+        }
+
+        return $user !== '' && $user !== 'root'
+            ? '/home/' . $user . '/rednode-gateway'
+            : '/root/rednode-gateway';
+    }
+
+    private function nodeRedServiceName(DataLogger $logger): string
+    {
+        $serviceName = trim((string) ($logger->node_red_service_name ?: ''));
+
+        if ($serviceName !== '') {
+            return $serviceName;
+        }
+
+        $serviceName = trim((string) env('REDNODE_GATEWAY_SERVICE', ''));
+
+        if ($serviceName !== '') {
+            return $serviceName;
+        }
+
+        $basename = trim(basename($this->nodeRedGatewayPath($logger)), './\\');
+
+        return $basename !== '' ? $basename : 'rednode-gateway';
+    }
+
+    private function nodeRedUserDir(DataLogger $logger): string
+    {
+        $userDir = trim((string) ($logger->node_red_user_dir ?: ''));
+
+        if ($userDir !== '') {
+            return $userDir;
+        }
+
+        return $this->nodeRedGatewayPath($logger);
+    }
+
+    private function nodeRedEnvironmentFile(DataLogger $logger, string $serviceName): string
+    {
+        $environmentFile = trim((string) ($logger->node_red_environment_file ?: ''));
+
+        if ($environmentFile !== '') {
+            return $environmentFile;
+        }
+
+        return '/etc/systemd/system/' . $serviceName . '.service.d/resq-mqtt.conf';
+    }
+
+    private function nodeRedRestartCommand(DataLogger $logger, string $serviceName): string
+    {
+        $restartCommand = trim((string) ($logger->node_red_restart_command ?: ''));
+
+        if ($restartCommand !== '') {
+            return $restartCommand;
+        }
+
+        return 'systemctl restart ' . $serviceName;
+    }
+
+    private function dataLoggerSshLabel(DataLogger $logger): string
+    {
+        $host = $logger->remote_host ?: '(host-belum-diisi)';
+        $port = (int) ($logger->remote_ssh_port ?: 22);
+        $user = $logger->remote_ssh_user ?: 'root';
+
+        return $user . '@' . $host . ':' . $port;
+    }
+
+    private function runDataLoggerSshCommand(DataLogger $logger, string $command, int $timeoutSeconds = 25): string
+    {
+        $host = $logger->remote_host;
+        $port = (int) ($logger->remote_ssh_port ?: 22);
+        $user = $logger->remote_ssh_user ?: 'root';
+        $password = $logger->remote_ssh_password;
+
+        if (! $host || ! $user || ! $password) {
+            throw ValidationException::withMessages([
+                'node_red_ssh' => 'Isi IP / Host Remote, SSH User, dan SSH Password di Data Loggers dulu.',
+            ]);
+        }
+
+        $ssh = new SSH2($host, $port, 10);
+        $ssh->setTimeout($timeoutSeconds);
+
+        if (! $ssh->login($user, $password)) {
+            throw ValidationException::withMessages([
+                'node_red_ssh' => 'Login SSH ke remote logger gagal. Cek host, user, atau password.',
+            ]);
+        }
+
+        $exitMarker = '__RESQ_EXIT_STATUS__';
+        $output = $ssh->exec($command . "\nprintf '\\n" . $exitMarker . ":%s\\n' \"$?\"");
+        $exitStatus = $ssh->getExitStatus();
+
+        if (preg_match('/\R?' . preg_quote($exitMarker, '/') . ':(-?\d+)\s*$/', $output ?: '', $matches)) {
+            $exitStatus = (int) $matches[1];
+            $output = preg_replace('/\R?' . preg_quote($exitMarker, '/') . ':-?\d+\s*$/', '', $output ?: '');
+        }
+
+        if ($exitStatus !== 0) {
+            $message = trim($output ?: '') ?: sprintf(
+                'Command SSH gagal tanpa output. Cek service gateway remote di %s@%s:%s.',
+                $user,
+                $host,
+                $port
+            );
+
+            throw ValidationException::withMessages([
+                'node_red_ssh' => $message,
+            ]);
+        }
+
+        return $output ?: '';
+    }
+
+    private function nodeRedApplyCommand(string $serviceName, string $environmentFile, string $restartCommand, array $runtimeEnv): string
+    {
+        $exportCommands = collect($runtimeEnv)
+            ->map(fn ($value, $key) => 'export ' . $key . '=' . escapeshellarg((string) $value))
+            ->values()
+            ->all();
+        $environmentLines = collect($runtimeEnv)
+            ->map(function ($value, $key) {
+                $escaped = str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $value);
+
+                return 'Environment="' . $key . '=' . $escaped . '"';
+            })
+            ->values()
+            ->all();
+        $restartLine = $restartCommand !== ''
+            ? 'sh -lc ' . escapeshellarg($restartCommand)
+            : 'systemctl restart ' . escapeshellarg($serviceName);
+
+        $script = implode("\n", [
+            'echo "[web] apply remote MQTT gateway via systemd drop-in"',
+            'echo "[ssh] login berhasil: $(whoami)@$(hostname)"',
+            'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"',
+            ...$exportCommands,
+            'ENV_FILE=' . escapeshellarg($environmentFile),
+            'ENV_DIR="$(dirname "$ENV_FILE")"',
+            'mkdir -p "$ENV_DIR"',
+            'cp "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true',
+            'cat > "$ENV_FILE" <<\'EOF_ENV\'',
+            '[Service]',
+            ...$environmentLines,
+            'EOF_ENV',
+            'echo "[web] wrote $ENV_FILE"',
+            'systemctl daemon-reload',
+            'echo ' . escapeshellarg('$ ' . ($restartCommand !== '' ? $restartCommand : 'systemctl restart ' . $serviceName)),
+            $restartLine,
+            'sleep 3',
+            'echo ' . escapeshellarg('$ systemctl is-active ' . $serviceName),
+            'systemctl is-active ' . escapeshellarg($serviceName),
+            'echo ' . escapeshellarg('$ systemctl --no-pager --lines=12 status ' . $serviceName),
+            'systemctl --no-pager --lines=12 status ' . escapeshellarg($serviceName) . ' || true',
+        ]);
+
+        return 'sh -c ' . escapeshellarg($script);
+    }
+
+    private function nodeRedTestCommand(string $serviceName, array $runtimeEnv): string
+    {
+        $exportCommands = collect($runtimeEnv)
+            ->map(fn ($value, $key) => 'export ' . $key . '=' . escapeshellarg((string) $value))
+            ->values()
+            ->all();
+        $script = implode("\n", [
+            'echo "[web] test MQTT dari remote gateway server"',
+            'echo "[ssh] login berhasil: $(whoami)@$(hostname)"',
+            'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"',
+            ...$exportCommands,
+            'NODE_BIN="$(command -v node || true)"',
+            'if [ -z "$NODE_BIN" ]; then echo "node binary not found"; exit 1; fi',
+            'NPM_BIN="$(command -v npm || true)"',
+            'GLOBAL_ROOT="$([ -n "$NPM_BIN" ] && "$NPM_BIN" root -g 2>/dev/null || true)"',
+            'MQTT_REQUIRE_PATH="$("$NODE_BIN" -p "(() => { try { return require.resolve(\'mqtt\'); } catch (error) { return \'\'; } })()" 2>/dev/null || true)"',
+            'if [ -z "$MQTT_REQUIRE_PATH" ] && [ -n "$GLOBAL_ROOT" ] && [ -f "$GLOBAL_ROOT/mqtt/package.json" ]; then MQTT_REQUIRE_PATH="$GLOBAL_ROOT/mqtt"; fi',
+            'if [ -z "$MQTT_REQUIRE_PATH" ] && [ -n "$GLOBAL_ROOT" ] && [ -f "$GLOBAL_ROOT/rednode-gateway/node_modules/mqtt/package.json" ]; then MQTT_REQUIRE_PATH="$GLOBAL_ROOT/rednode-gateway/node_modules/mqtt"; fi',
+            'if [ -z "$MQTT_REQUIRE_PATH" ] && [ -n "$RESQ_REMOTE_GATEWAY_PATH" ] && [ -f "$RESQ_REMOTE_GATEWAY_PATH/node_modules/mqtt/package.json" ]; then MQTT_REQUIRE_PATH="$RESQ_REMOTE_GATEWAY_PATH/node_modules/mqtt"; fi',
+            'if [ -z "$MQTT_REQUIRE_PATH" ] && [ -n "$RESQ_NODE_RED_USER_DIR" ] && [ -f "$RESQ_NODE_RED_USER_DIR/node_modules/mqtt/package.json" ]; then MQTT_REQUIRE_PATH="$RESQ_NODE_RED_USER_DIR/node_modules/mqtt"; fi',
+            'if [ -z "$MQTT_REQUIRE_PATH" ]; then echo "mqtt module tidak ditemukan di server remote."; exit 1; fi',
+            'TEST_SCRIPT="$(mktemp /tmp/resq-remote-gateway-mqtt-test.XXXXXX.js)"',
+            'cat > "$TEST_SCRIPT" <<\'EOF_JS\'',
+            'const mqtt = require(process.env.MQTT_REQUIRE_PATH);',
+            'const url = process.env.RESQ_MQTT_BROKER_URL;',
+            'const topicEnv = process.env.RESQ_NODE_RED_MQTT_TOPIC;',
+            'const qos = Number(process.env.RESQ_MQTT_QOS || 0);',
+            'const rawMessage = process.env.RESQ_NODE_RED_TEST_MESSAGE || "[]";',
+            'const isWildcard = process.env.RESQ_NODE_RED_WILDCARD === "1";',
+            'const payloads = (() => { try { const p = JSON.parse(rawMessage); return Array.isArray(p) ? p : [p]; } catch(e) { return []; } })();',
+            'if (!payloads.length) { console.error("no sensor payloads"); process.exit(1); }',
+            'const client = mqtt.connect(url, {',
+            '  username: process.env.RESQ_MQTT_USERNAME || undefined,',
+            '  password: process.env.RESQ_MQTT_PASSWORD || undefined,',
+            '  clientId: process.env.RESQ_NODE_RED_CLIENT_ID || undefined,',
+            '  connectTimeout: 10000,',
+            '  reconnectPeriod: 0,',
+            '});',
+            'const fail = (message) => { console.error(message); process.exit(1); };',
+            'client.on("error", (error) => fail(error.message));',
+            'client.on("connect", () => {',
+            '  let published = 0;',
+            '  const total = payloads.length;',
+            '  payloads.forEach((item) => {',
+            '    const topic = item.topic || topicEnv;',
+            '    const msg = JSON.stringify({ sensor_code: item.sensor_code, value: item.value });',
+            '    client.publish(topic, msg, { qos, retain: false }, (error) => {',
+            '      if (error) { fail(error.message); return; }',
+            '      console.log(`[mqtt] published to ${topic} → sensor_code=${item.sensor_code}, value=${item.value}`);',
+            '      published++;',
+            '      if (published >= total) {',
+            '        client.end(true, () => {',
+            '          console.log(`connected and published ${total} sensor(s)`);',
+            '          process.exit(0);',
+            '        });',
+            '      }',
+            '    });',
+            '  });',
+            '});',
+            'setTimeout(() => fail("timeout menunggu koneksi MQTT"), 15000);',
+            'EOF_JS',
+            'echo ' . escapeshellarg('$ node mqtt test'),
+            'MQTT_REQUIRE_PATH="$MQTT_REQUIRE_PATH" "$NODE_BIN" "$TEST_SCRIPT"',
+            'rm -f "$TEST_SCRIPT"',
+            'echo ' . escapeshellarg('$ systemctl is-active ' . $serviceName),
+            'systemctl is-active ' . escapeshellarg($serviceName) . ' || true',
+        ]);
+
+        return 'sh -c ' . escapeshellarg($script);
+    }
+
+    /**
+     * Build a realistic MQTT test payload using the sensor's latest value.
+     *
+     * If the data logger has sensors, we pick the first sensor that matches the
+     * publish topic (or just the first sensor) and use its stored value.  When
+     * no value exists yet we generate a plausible reading below the threshold.
+     */
+    private function buildMqttTestPayload(DataLogger $logger, string $publishTopic, MqttConfiguration $config): array
+    {
+        // Extract sensor_code from the last segment of the topic (resq/telemetry/SENSOR-CODE)
+        $topicSegments = explode('/', rtrim($publishTopic, '/'));
+        $topicSensorCode = end($topicSegments);
+
+        // Try to find the sensor matching the topic, fallback to first sensor of the logger
+        $sensor = Sensor::where('data_logger_id', $logger->id)
+            ->when($topicSensorCode, fn ($query) => $query->where('sensor_code', $topicSensorCode))
+            ->first();
+
+        if (!$sensor) {
+            $sensor = Sensor::where('data_logger_id', $logger->id)->first();
+        }
+
+        // Also try via mqtt_configuration_id or by sensor_code globally
+        if (!$sensor && $config->id) {
+            $sensor = Sensor::where('mqtt_configuration_id', $config->id)
+                ->when($topicSensorCode, fn ($query) => $query->where('sensor_code', $topicSensorCode))
+                ->first();
+        }
+
+        if (!$sensor && $topicSensorCode) {
+            $sensor = Sensor::where('sensor_code', $topicSensorCode)->first();
+        }
+
+        $sensorCode = $sensor?->sensor_code ?? $topicSensorCode;
+
+        // Determine the test value: prefer the sensor's latest stored value
+        $testValue = null;
+        if ($sensor && $sensor->value !== null && $sensor->value !== '') {
+            $testValue = is_numeric($sensor->value) ? (float) $sensor->value : $sensor->value;
+        } elseif ($sensor && $sensor->threshold !== null && is_numeric($sensor->threshold)) {
+            // Generate a realistic value slightly below threshold (normal reading)
+            $threshold = (float) $sensor->threshold;
+            $testValue = round($threshold * 0.75, 2);
+        } else {
+            // Fallback: generic test value
+            $testValue = 12.4;
+        }
+
+        return [
+            'sensor_code' => $sensorCode,
+            'value' => $testValue,
+            'event' => 'resq_node_red_test',
+            'logger_code' => $logger->logger_code,
+            'sent_at' => now()->toISOString(),
+        ];
+    }
+
+    /**
+     * Build payloads for ALL sensors of the logger (wildcard mode).
+     *
+     * Each sensor gets its own payload with sensor_code and current value.
+     * The topic prefix is extracted by removing the wildcard segment.
+     */
+    private function buildAllSensorPayloads(DataLogger $logger, string $publishTopic, MqttConfiguration $config): array
+    {
+        // Get all sensors for this logger
+        $sensors = Sensor::where('data_logger_id', $logger->id)->get();
+
+        // Also include sensors linked via mqtt_configuration_id
+        if ($sensors->isEmpty()) {
+            $sensors = Sensor::where('mqtt_configuration_id', $config->id)->get();
+        }
+
+        if ($sensors->isEmpty()) {
+            return [$this->buildMqttTestPayload($logger, $publishTopic, $config)];
+        }
+
+        // Build topic prefix by removing wildcard part (*, #, +)
+        $topicPrefix = preg_replace('/[*#+].*$/', '', rtrim($publishTopic, '/'));
+        $topicPrefix = rtrim($topicPrefix, '/');
+
+        return $sensors->map(function ($sensor) use ($topicPrefix, $logger) {
+            $latestReading = $sensor->telemetryReadings()
+                ->latest('received_at')
+                ->first();
+
+            $parameterValues = $latestReading?->parameter_values ?? [];
+
+            // Determine numeric value
+            $numericValue = null;
+            if (! empty($parameterValues) && is_array($parameterValues)) {
+                $numericValue = $latestReading?->numeric_value
+                    ?? ($parameterValues[0]['value'] ?? null);
+            }
+
+            if ($numericValue === null) {
+                if ($sensor->value !== null && is_numeric($sensor->value)) {
+                    $numericValue = (float) $sensor->value;
+                } elseif ($sensor->threshold !== null && is_numeric($sensor->threshold)) {
+                    $numericValue = round((float) $sensor->threshold * 0.75, 2);
+                } else {
+                    $numericValue = 12.4;
+                }
+            }
+
+            // Build display value_text
+            $valueText = null;
+            if (! empty($parameterValues) && is_array($parameterValues)) {
+                $valueText = collect($parameterValues)
+                    ->map(fn ($item) => trim(($item['label'] ?? $item['parameter'] ?? '') . ' ' . ($item['value_text'] ?? $item['value'] ?? '')))
+                    ->filter()
+                    ->implode(', ');
+            }
+
+            $payload = [
+                'sensor_code' => $sensor->sensor_code,
+                'value' => $numericValue,
+                'topic' => $topicPrefix . '/' . $sensor->sensor_code,
+                'event' => 'resq_node_red_test',
+                'logger_code' => $logger->logger_code,
+                'sent_at' => now()->toISOString(),
+            ];
+
+            if ($valueText) {
+                $payload['value_text'] = $valueText;
+            }
+
+            if (! empty($parameterValues) && is_array($parameterValues)) {
+                $payload['parameter_values'] = collect($parameterValues)->map(fn ($item) => [
+                    'parameter' => $item['parameter'] ?? $item['label'] ?? null,
+                    'value' => $item['value'] ?? null,
+                    'unit' => $item['unit'] ?? null,
+                    'value_text' => $item['value_text'] ?? null,
+                ])->values()->all();
+            }
+
+            return $payload;
+        })->values()->all();
     }
 
     private function updateRednodeRuntimeState(ConnectivityConfig $connectivity, string $action, bool $sshConfirmed = false): void
@@ -2774,7 +3570,6 @@ class DeviceSetupController extends Controller
 
         if ($parameters->isNotEmpty()) {
             $summary = $parameters
-                ->take(3)
                 ->map(function (array $item) {
                     $label = $item['label']
                         ?? $item['parameter']
@@ -2791,9 +3586,8 @@ class DeviceSetupController extends Controller
                 })
                 ->filter()
                 ->implode(', ');
-            $remaining = $parameters->count() - 3;
 
-            return Str::limit($summary . ($remaining > 0 ? ' +' . $remaining . ' parameter' : ''), 240, '...');
+            return $summary;
         }
 
         if ($displayValue === null) {

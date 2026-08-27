@@ -23,7 +23,8 @@
             <div class="col-md-9 mb-3"><label class="form-label">Input Topic</label><input name="consumer_topic" class="form-control" value="{{ old('consumer_topic') }}" placeholder="project/telemetry/#"></div>
             <div class="col-md-3 mb-3"><label class="form-label">QoS</label><select name="consumer_qos" class="form-select">@foreach([0, 1, 2] as $qos)<option value="{{ $qos }}" @selected((string) old('consumer_qos', 0) === (string) $qos)>{{ $qos }}</option>@endforeach</select></div>
         </div>
-        <div class="mb-3"><label class="form-label">Example Output (JSON)</label><textarea name="example_payload" rows="5" class="form-control font-monospace" placeholder='{"sensor_code":"SNS-01","data":{"temperature":28.5}}'>{{ old('example_payload') }}</textarea></div>
+        <div class="mb-3"><label class="form-label">Example Output (JSON) <span class="text-muted fw-normal">— opsional, auto-generate dari sensor</span></label><textarea name="example_payload" rows="3" class="form-control font-monospace" placeholder="Kosongkan — payload otomatis dibuat dari sensor & preset yang terpasang di logger">{{ old('example_payload') }}</textarea><small class="text-muted">Biarkan kosong untuk mode plug-and-play. RESQ akan otomatis generate payload berdasarkan sensor + mapping preset di logger.</small></div>
+        <div class="mb-3" id="{{ $mqttFormId }}-live-payload-wrapper" style="display:none"><label class="form-label text-muted"><i class="bx bx-broadcast me-1"></i>Current Sensor Data (Live)</label><pre class="form-control font-monospace bg-light" style="max-height:300px;overflow:auto;font-size:0.8rem;white-space:pre-wrap" id="{{ $mqttFormId }}-live-payload" readonly></pre></div>
         <div><label class="form-label">Sensor Code JSON Path</label><input name="sensor_code_path" class="form-control" value="{{ old('sensor_code_path', 'sensor_code') }}" placeholder="device.sensor_code"></div>
     </div>
 

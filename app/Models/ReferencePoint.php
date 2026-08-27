@@ -22,6 +22,12 @@ class ReferencePoint extends Model
         'longitude',
         'status',
         'notes',
+        'chainage',
+        'segment_name',
+        'corridor_code',
+        'distance_in_segment',
+        'bm_id',
+        'cfpe_id',
     ];
 
     public function project()

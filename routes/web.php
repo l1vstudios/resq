@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CanonicalDatabaseController;
+use App\Http\Controllers\CfpeController;
 use App\Http\Controllers\ClientFunctionConfigurationController;
 use App\Http\Controllers\ClientInboxController;
 use App\Http\Controllers\ClientPlatformOperationsController;
@@ -72,6 +73,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/mqtt-configurations/{configuration}', [MqttConfigurationController::class, 'destroy'])->name('mqtt-configurations.destroy');
     Route::get('/mqtt-configurations/status', [MqttConfigurationController::class, 'status'])->name('mqtt-configurations.status');
     Route::post('/mqtt-configurations/{configuration}/test', [MqttConfigurationController::class, 'test'])->name('mqtt-configurations.test');
+    Route::get('/mqtt-gateway/status', [MqttConfigurationController::class, 'gatewayStatus'])->name('mqtt-gateway.status');
+    Route::post('/mqtt-gateway/start', [MqttConfigurationController::class, 'gatewayStart'])->name('mqtt-gateway.start');
+    Route::post('/mqtt-gateway/stop', [MqttConfigurationController::class, 'gatewayStop'])->name('mqtt-gateway.stop');
+    Route::post('/mqtt-gateway/restart', [MqttConfigurationController::class, 'gatewayRestart'])->name('mqtt-gateway.restart');
     Route::post('/canonical-parameters', [CanonicalDatabaseController::class, 'storeParameter'])->name('canonical-parameters.store');
     Route::delete('/canonical-parameters/{parameter}', [CanonicalDatabaseController::class, 'destroyParameter'])->name('canonical-parameters.destroy');
     Route::post('/sensor-mapping-presets', [CanonicalDatabaseController::class, 'storePreset'])->name('sensor-mapping-presets.store');
@@ -125,6 +130,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/data-loggers', [DeviceSetupController::class, 'storeDataLogger'])->name('data-loggers.store');
     Route::post('/data-loggers/test-remote', [DeviceSetupController::class, 'testDataLoggerRemote'])->name('data-loggers.test-remote');
     Route::post('/data-loggers/gateway-mode', [DeviceSetupController::class, 'applyDataLoggerGatewayMode'])->name('data-loggers.gateway-mode');
+    Route::post('/data-loggers/node-red-mqtt/apply', [DeviceSetupController::class, 'applyNodeRedMqttConfig'])->name('data-loggers.node-red-mqtt.apply');
+    Route::post('/data-loggers/node-red-mqtt/test', [DeviceSetupController::class, 'testNodeRedMqtt'])->name('data-loggers.node-red-mqtt.test');
     Route::get('/connectivity', [RegisteredDataController::class, 'connectivity'])->name('connectivity.index');
     Route::post('/connectivity', [DeviceSetupController::class, 'storeConnectivity'])->name('connectivity.store');
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');
@@ -135,6 +142,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/command-test', [RegisteredDataController::class, 'commandTest'])->name('command-test.index');
     Route::delete('/device-setup/{type}/{id}', [DeviceSetupController::class, 'destroy'])->name('device-setup.destroy');
     Route::view('/admins', 'modules.admins.index')->name('admins.index');
+
+    // CFPE & Geospatial Workspace
+    Route::get('/cfpe', [CfpeController::class, 'index'])->name('cfpe.index');
+    Route::post('/cfpe/import-csv', [CfpeController::class, 'importCsv'])->name('cfpe.import-csv');
+    Route::post('/cfpe/import-gpkg', [CfpeController::class, 'importGpkg'])->name('cfpe.import-gpkg');
+    Route::post('/cfpe/calculate', [CfpeController::class, 'calculate'])->name('cfpe.calculate');
+    Route::get('/cfpe/routes/{route}/points', [CfpeController::class, 'routePoints'])->name('cfpe.route-points');
+    Route::get('/cfpe/map-data', [CfpeController::class, 'mapData'])->name('cfpe.map-data');
+    Route::get('/cfpe/workspace-data/{workspace}', [CfpeController::class, 'workspaceData'])->name('cfpe.workspace-data');
 });
 
 // customers route

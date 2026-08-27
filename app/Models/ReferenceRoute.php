@@ -18,10 +18,14 @@ class ReferenceRoute extends Model
         'path_coordinates',
         'status',
         'notes',
+        'total_length',
+        'corridor_code',
+        'segment_data',
     ];
 
     protected $casts = [
         'path_coordinates' => 'array',
+        'segment_data' => 'array',
     ];
 
     public function project()

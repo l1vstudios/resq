@@ -1,0 +1,10 @@
+Basemap Provider : OpenStreetMap
+CRS              : EPSG:4326
+
+Allowed / Initial Extent:
+West  : 112.783198121
+East  : 113.249208404
+South : -8.371469032
+North : -8.055529857
+
+

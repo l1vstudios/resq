@@ -1113,6 +1113,7 @@
         var warningLayer = L.layerGroup().addTo(map);
         var focusLayer = L.layerGroup().addTo(map);
         var measureLayer = L.layerGroup().addTo(map);
+        var spatialLayer = L.layerGroup().addTo(map);
         var measureMode = false;
         var measurePoints = [];
 
@@ -1385,7 +1386,8 @@
             'Efek Terrain 3D / Hillshade': hillshadeLayer,
             'Klaster': clusterLayer,
             'Sensor Pemantauan': sensorLayer,
-            'Stasiun Peringatan': warningLayer
+            'Stasiun Peringatan': warningLayer,
+            'Koridor & Route': spatialLayer
         }, {
             collapsed: false
         }).addTo(map);
@@ -1551,6 +1553,158 @@
 
         refreshMapData();
         setInterval(refreshMapData, 1000);
+
+        // --- Spatial Overlay (Routes, Corridors, Information Layers from CFPE) ---
+        var spatialLoaded = false;
+
+        function loadSpatialOverlay() {
+            if (spatialLoaded) return;
+            spatialLoaded = true;
+
+            fetch('/cfpe/map-data', {
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (!data) return;
+
+                // Draw corridors
+                (data.corridors || []).forEach(function (corridor) {
+                    if (!corridor.path_coordinates || !corridor.path_coordinates.length) return;
+                    var coords = corridor.path_coordinates;
+                    if (!Array.isArray(coords[0])) return;
+
+                    var lines = [];
+                    if (Array.isArray(coords[0][0])) {
+                        lines = coords;
+                    } else if (typeof coords[0][0] === 'number') {
+                        lines = [coords];
+                    }
+
+                    lines.forEach(function (line) {
+                        var latLngs = line.filter(function (c) { return Array.isArray(c) && c.length >= 2; })
+                            .map(function (c) { return [c[1], c[0]]; });
+                        if (latLngs.length >= 2) {
+                            L.polyline(latLngs, { color: '#0D47A1', weight: 3, opacity: 0.7 })
+                                .bindPopup('<strong>Corridor: ' + escapeHtml(corridor.name) + '</strong>')
+                                .addTo(spatialLayer);
+                        }
+                    });
+                });
+
+                // Draw CFPE routes
+                (data.routes || []).forEach(function (route) {
+                    if (!route.path_coordinates || !route.path_coordinates.length) return;
+                    if (route.route_type === 'monitoring_corridor') return; // skip, already drawn as corridor
+                    var coords = route.path_coordinates;
+                    if (!Array.isArray(coords[0])) return;
+
+                    var lines = [];
+                    if (Array.isArray(coords[0][0])) {
+                        lines = coords;
+                    } else if (typeof coords[0][0] === 'number') {
+                        lines = [coords];
+                    }
+
+                    lines.forEach(function (line) {
+                        var latLngs = line.filter(function (c) { return Array.isArray(c) && c.length >= 2; })
+                            .map(function (c) { return [c[1], c[0]]; });
+                        if (latLngs.length >= 2) {
+                            L.polyline(latLngs, { color: '#e74c3c', weight: 2, opacity: 0.8, dashArray: '6, 4' })
+                                .bindPopup('<strong>Route: ' + escapeHtml(route.name) + '</strong>')
+                                .addTo(spatialLayer);
+                        }
+                    });
+
+                    // BM points
+                    (route.points || []).forEach(function (p) {
+                        if (!p.latitude || !p.longitude) return;
+                        L.circleMarker([p.latitude, p.longitude], {
+                            radius: 4, fillColor: '#e74c3c', color: '#fff', weight: 1, fillOpacity: 0.8
+                        }).bindPopup('<strong>' + escapeHtml(p.point_code) + '</strong>' +
+                            (p.chainage ? '<br>Chainage: ' + p.chainage.toFixed(0) + ' m' : ''))
+                        .addTo(spatialLayer);
+                    });
+                });
+
+                // Draw information layers
+                (data.information_layers || []).forEach(function (layer) {
+                    if (!layer.layer_payload || !layer.layer_payload.features) return;
+                    var color = layer.style_color || '#4CAF50';
+                    var layerName = (layer.name || '').toLowerCase();
+
+                    try {
+                        L.geoJSON(layer.layer_payload, {
+                            style: function () {
+                                var weight = 2, fillOpacity = 0.1, dashArray = null;
+                                if (layerName.indexOf('contour') >= 0) { weight = 1; fillOpacity = 0; color = '#8D6E63'; dashArray = '2,2'; }
+                                else if (layerName.indexOf('batas') >= 0) { weight = 1.5; fillOpacity = 0.03; dashArray = '5,3'; }
+                                else if (layerName.indexOf('sungai') >= 0) { weight = 1.5; fillOpacity = 0.08; }
+                                else if (layerName.indexOf('perimeter') >= 0) { weight = 3; fillOpacity = 0.12; color = '#FF0000'; }
+                                else if (layerName.indexOf('permukiman') >= 0) { weight = 1; fillOpacity = 0.15; }
+                                return { color: color, weight: weight, opacity: 0.6, fillColor: color, fillOpacity: fillOpacity, dashArray: dashArray };
+                            },
+                            pointToLayer: function (feature, latlng) {
+                                var icon = '📍';
+                                if (layerName.indexOf('kesehatan') >= 0) icon = '🏥';
+                                else if (layerName.indexOf('pendidikan') >= 0) icon = '🏫';
+                                else if (layerName.indexOf('puncak') >= 0) icon = '🌋';
+                                return L.marker(latlng, {
+                                    icon: L.divIcon({ html: '<span style="font-size:14px">' + icon + '</span>', className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
+                                });
+                            },
+                            onEachFeature: function (feature, fl) {
+                                var props = feature.properties || {};
+                                fl.bindPopup('<strong>' + escapeHtml(layer.name) + '</strong>' + (props.NAMOBJ ? '<br>' + escapeHtml(props.NAMOBJ) : ''));
+                            }
+                        }).addTo(spatialLayer);
+                    } catch (e) {}
+                });
+
+                // Draw monitoring stations with tower icon
+                (data.monitoring_stations || []).forEach(function (station) {
+                    if (!station.latitude || !station.longitude) return;
+                    L.marker([station.latitude, station.longitude], {
+                        icon: L.divIcon({
+                            html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🗼</span>',
+                            className: '',
+                            iconSize: [26, 26],
+                            iconAnchor: [13, 13]
+                        })
+                    }).bindPopup(
+                        '<strong>📡 Monitoring Station</strong><br>' +
+                        escapeHtml(station.station_code) + '<br>' +
+                        escapeHtml(station.name) + '<br>' +
+                        '<span class="badge bg-info">' + escapeHtml(station.status || 'Active') + '</span>'
+                    ).addTo(spatialLayer);
+                });
+
+                // Draw warning stations with siren icon
+                (data.warning_stations || []).forEach(function (station) {
+                    if (!station.latitude || !station.longitude) return;
+                    L.marker([station.latitude, station.longitude], {
+                        icon: L.divIcon({
+                            html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🚨</span>',
+                            className: '',
+                            iconSize: [26, 26],
+                            iconAnchor: [13, 13]
+                        })
+                    }).bindPopup(
+                        '<strong>🚨 Warning Station</strong><br>' +
+                        escapeHtml(station.station_code) + '<br>' +
+                        escapeHtml(station.name) + '<br>' +
+                        '<span class="badge bg-danger">' + escapeHtml(station.status || 'Active') + '</span>'
+                    ).addTo(spatialLayer);
+                });
+            })
+            .catch(function () {});
+        }
+
+        // Load spatial data after a short delay
+        setTimeout(loadSpatialOverlay, 2000);
+
+        // Add spatial layer to layer control
+        map.on('overlayadd', function () {});
     });
 </script>
 @endsection

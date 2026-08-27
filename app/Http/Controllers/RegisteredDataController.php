@@ -9,6 +9,7 @@ use App\Models\DeviceCredential;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
 use App\Models\MstPrefix;
+use App\Models\MqttConfiguration;
 use App\Models\Project;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
@@ -116,8 +117,12 @@ class RegisteredDataController extends Controller
         $hasDataLoggerDiscoveries = Schema::hasTable('data_logger_discoveries');
         $hasConnectivity = Schema::hasTable('connectivity_configs');
         $hasCredentials = Schema::hasTable('device_credentials');
+        $hasMqttConfigurations = Schema::hasTable('mqtt_configurations');
 
         $dataLoggerRelations = ['monitoringStation'];
+        if ($hasMqttConfigurations) {
+            $dataLoggerRelations[] = 'nodeRedMqttConfiguration';
+        }
         if ($hasDataLoggerDiscoveries) {
             $dataLoggerRelations[] = 'discoveries';
         }
@@ -133,6 +138,9 @@ class RegisteredDataController extends Controller
             : collect();
         $credentialModels = $hasCredentials
             ? DeviceCredential::with('dataLogger')->latest()->get()
+            : collect();
+        $mqttConfigurationModels = $hasMqttConfigurations
+            ? MqttConfiguration::with('project')->orderBy('name')->get()
             : collect();
         $telemetryModels = Schema::hasTable('telemetry_readings')
             ? TelemetryReading::with(['sensor.monitoringStation', 'dataLogger'])->latest('received_at')->latest()->limit(100)->get()
@@ -235,6 +243,18 @@ class RegisteredDataController extends Controller
             'credentials' => $hasCredentials
                 ? $this->credentialsFromModels($credentialModels)
                 : $this->credentialsFromMonitoring($monitoring),
+            'mqttConfigurations' => $mqttConfigurationModels->map(fn (MqttConfiguration $config) => [
+                'db_id' => $config->id,
+                'project_id' => $config->project_id,
+                'project_code' => $config->project?->project_code,
+                'configuration_code' => $config->configuration_code,
+                'name' => $config->name,
+                'broker_url' => $config->broker_url,
+                'consumer_enabled' => $config->consumer_enabled,
+                'consumer_topic' => $config->consumer_topic,
+                'consumer_qos' => $config->consumer_qos,
+                'is_active' => $config->is_active,
+            ]),
             'telemetryReadings' => $this->telemetryFromModels($telemetryModels),
             'wsControllers' => $this->controllersFromWarnings($warnings),
         ];
@@ -256,9 +276,7 @@ class RegisteredDataController extends Controller
     {
         return collect($dataLoggers)->map(function (DataLogger $logger) {
             $latestDiscovery = $logger->relationLoaded('discoveries')
-                ? $logger->discoveries
-                    ->sortByDesc(fn (DataLoggerDiscovery $discovery) => optional($discovery->last_seen_at)->timestamp ?? 0)
-                    ->first()
+                ? $this->preferredDataLoggerDiscovery($logger->discoveries)
                 : null;
 
             return [
@@ -278,6 +296,17 @@ class RegisteredDataController extends Controller
                 'remote_last_tested_at' => optional($logger->remote_last_tested_at)->format('Y-m-d H:i:s'),
                 'remote_last_status' => $logger->remote_last_status,
                 'remote_last_message' => $logger->remote_last_message,
+                'node_red_mqtt_configuration_id' => $logger->node_red_mqtt_configuration_id,
+                'node_red_publish_topic' => $logger->node_red_publish_topic,
+                'node_red_service_name' => $logger->node_red_service_name,
+                'node_red_user_dir' => $logger->node_red_user_dir,
+                'node_red_environment_file' => $logger->node_red_environment_file,
+                'node_red_restart_command' => $logger->node_red_restart_command,
+                'node_red_last_applied_at' => optional($logger->node_red_last_applied_at)->format('Y-m-d H:i:s'),
+                'node_red_last_tested_at' => optional($logger->node_red_last_tested_at)->format('Y-m-d H:i:s'),
+                'node_red_last_status' => $logger->node_red_last_status,
+                'node_red_last_message' => $logger->node_red_last_message,
+                'node_red_mqtt_configuration_code' => $logger->nodeRedMqttConfiguration?->configuration_code,
                 'logger_status' => $logger->logger_status,
                 'metadata' => $this->dataLoggerMetadata($logger, $latestDiscovery),
             ];
@@ -319,6 +348,17 @@ class RegisteredDataController extends Controller
             'remote_last_tested_at' => optional($logger->remote_last_tested_at)->format('Y-m-d H:i:s'),
             'remote_last_status' => $logger->remote_last_status,
             'remote_last_message' => $logger->remote_last_message,
+            'node_red_mqtt_configuration_id' => $logger->node_red_mqtt_configuration_id,
+            'node_red_publish_topic' => $logger->node_red_publish_topic,
+            'node_red_service_name' => $logger->node_red_service_name,
+            'node_red_user_dir' => $logger->node_red_user_dir,
+            'node_red_environment_file' => $logger->node_red_environment_file,
+            'node_red_restart_command' => $logger->node_red_restart_command,
+            'node_red_last_applied_at' => optional($logger->node_red_last_applied_at)->format('Y-m-d H:i:s'),
+            'node_red_last_tested_at' => optional($logger->node_red_last_tested_at)->format('Y-m-d H:i:s'),
+            'node_red_last_status' => $logger->node_red_last_status,
+            'node_red_last_message' => $logger->node_red_last_message,
+            'node_red_mqtt_configuration_code' => $logger->nodeRedMqttConfiguration?->configuration_code,
             'detected_device_uid' => $detectedDeviceUid ?: $uniqueDeviceKey,
             'detected_device_uid_source' => $detectedDeviceUid ? 'reported_by_device' : 'fallback_unique_key',
             'detected_logger_code' => $latestDiscovery?->logger_code,
@@ -335,7 +375,7 @@ class RegisteredDataController extends Controller
 
     private function dataLoggerDiscoveriesFromModels($discoveries)
     {
-        return collect($discoveries)->map(fn (DataLoggerDiscovery $discovery) => [
+        return $this->visibleDataLoggerDiscoveries(collect($discoveries))->map(fn (DataLoggerDiscovery $discovery) => [
             'db_id' => $discovery->id,
             'matched_data_logger_id' => $discovery->matched_data_logger_id,
             'matched_logger_code' => $discovery->matchedDataLogger?->logger_code,
@@ -352,6 +392,59 @@ class RegisteredDataController extends Controller
             'last_seen_at' => optional($discovery->last_seen_at)->format('Y-m-d H:i:s'),
             'status' => $discovery->status,
         ]);
+    }
+
+    private function visibleDataLoggerDiscoveries($discoveries)
+    {
+        return collect($discoveries)
+            ->groupBy(function (DataLoggerDiscovery $discovery) {
+                return $discovery->matched_data_logger_id
+                    ?: $discovery->logger_code
+                    ?: $discovery->serial_number
+                    ?: $discovery->device_uid
+                    ?: $discovery->request_ip
+                    ?: $discovery->id;
+            })
+            ->map(fn ($group) => $this->preferredDataLoggerDiscovery($group))
+            ->filter()
+            ->sortByDesc(fn (DataLoggerDiscovery $discovery) => optional($discovery->last_seen_at)->timestamp ?? 0)
+            ->values();
+    }
+
+    private function preferredDataLoggerDiscovery($discoveries): ?DataLoggerDiscovery
+    {
+        return collect($discoveries)
+            ->sortByDesc(fn (DataLoggerDiscovery $discovery) => sprintf(
+                '%d|%d|%010d|%010d',
+                $this->isStrongGatewayDiscovery($discovery) ? 1 : 0,
+                $this->isLoopbackGatewayDiscovery($discovery) ? 0 : 1,
+                optional($discovery->last_seen_at)->timestamp ?? 0,
+                $discovery->id
+            ))
+            ->first();
+    }
+
+    private function isStrongGatewayDiscovery(DataLoggerDiscovery $discovery): bool
+    {
+        return collect([
+            $discovery->serial_number,
+            $discovery->logger_model,
+            $discovery->vendor,
+            $discovery->firmware_version,
+            $discovery->device_label,
+            $discovery->hostname,
+            ...($discovery->mac_addresses ?? []),
+        ])->filter(fn ($value) => trim((string) $value) !== '')
+            ->isNotEmpty();
+    }
+
+    private function isLoopbackGatewayDiscovery(DataLoggerDiscovery $discovery): bool
+    {
+        $requestIp = trim((string) $discovery->request_ip);
+        $deviceUid = trim((string) $discovery->device_uid);
+
+        return in_array($requestIp, ['127.0.0.1', '::1', 'localhost'], true)
+            || str_starts_with($deviceUid, 'rn-web-');
     }
 
     private function dataLoggersFromMonitoring($monitoringStations)
@@ -373,6 +466,17 @@ class RegisteredDataController extends Controller
                 'remote_last_tested_at' => null,
                 'remote_last_status' => null,
                 'remote_last_message' => null,
+                'node_red_mqtt_configuration_id' => null,
+                'node_red_publish_topic' => null,
+                'node_red_service_name' => null,
+                'node_red_user_dir' => null,
+                'node_red_environment_file' => null,
+                'node_red_restart_command' => null,
+                'node_red_last_applied_at' => null,
+                'node_red_last_tested_at' => null,
+                'node_red_last_status' => null,
+                'node_red_last_message' => null,
+                'node_red_mqtt_configuration_code' => null,
                 'logger_status' => $station['logger_status'],
             ])
             ->values();

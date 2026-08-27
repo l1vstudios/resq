@@ -1172,10 +1172,14 @@ class ProjectSetupController extends Controller
             ? SpatialInformationLayer::with(['project', 'workspace'])->whereIn('project_id', $accessibleProjectIds)->latest()->get()
             : collect();
         $referenceRouteModels = Schema::hasTable('reference_routes')
-            ? ReferenceRoute::with(['project', 'workspace'])->whereIn('project_id', $accessibleProjectIds)->latest()->get()
+            ? ReferenceRoute::with(['project', 'workspace'])
+                ->select(['id', 'project_id', 'workspace_id', 'route_code', 'name', 'route_type', 'status', 'notes', 'total_length', 'corridor_code', 'created_at', 'updated_at'])
+                ->whereIn('project_id', $accessibleProjectIds)->latest()->get()
             : collect();
         $corridorModels = Schema::hasTable('corridor_monitorings')
-            ? CorridorMonitoring::with(['project', 'workspace', 'referenceRoute'])->whereIn('project_id', $accessibleProjectIds)->latest()->get()
+            ? CorridorMonitoring::with(['project', 'workspace', 'referenceRoute' => fn ($q) => $q->select(['id', 'route_code', 'name'])])
+                ->select(['id', 'project_id', 'workspace_id', 'reference_route_id', 'corridor_code', 'name', 'status', 'status_metadata', 'notes', 'created_at', 'updated_at'])
+                ->whereIn('project_id', $accessibleProjectIds)->latest()->get()
             : collect();
         $referencePointModels = Schema::hasTable('reference_points')
             ? ReferencePoint::with(['project', 'workspace', 'corridor', 'referenceRoute'])->whereIn('project_id', $accessibleProjectIds)->latest()->get()
@@ -1719,6 +1723,7 @@ class ProjectSetupController extends Controller
             'firmware_version' => $logger->firmware_version,
             'device_label' => $logger->device_label,
             'logger_status' => $logger->logger_status,
+            'poll_interval_ms' => $logger->poll_interval_ms ?? 2000,
         ]);
     }
 
