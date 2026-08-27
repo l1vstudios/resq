@@ -3,11 +3,12 @@ require('dotenv').config({ quiet: true });
 const express = require('express');
 const mqtt = require('mqtt');
 const ModbusRTU = require('modbus-serial');
+const { MqttDatabaseRuntime } = require('./mqtt-runtime');
 
 const app = express();
 const port = Number(process.env.MODBUS_BACKEND_PORT || 3100);
 const allowedOrigin = corsOriginFromEnv(process.env.MODBUS_CORS_ORIGIN);
-const mqttAutostart = String(process.env.MQTT_AUTOSTART || '').toLowerCase() === 'true';
+const databaseMqttRuntime = new MqttDatabaseRuntime();
 
 let client = new ModbusRTU();
 let connection = null;
@@ -520,31 +521,6 @@ function mqttStatus() {
   };
 }
 
-function mqttCallbackFromEnv() {
-  const callbackUrl = process.env.MQTT_CALLBACK_URL
-    || process.env.LARAVEL_CALLBACK_URL
-    || (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/realtime-sensor-status` : null);
-
-  return {
-    url: callbackUrl,
-    token: process.env.MQTT_CALLBACK_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || '',
-  };
-}
-
-function mqttPayloadFromEnv() {
-  return {
-    brokerUrl: process.env.MQTT_BROKER_URL,
-    topic: process.env.MQTT_TOPIC || 'resq/telemetry/#',
-    username: process.env.MQTT_USERNAME || undefined,
-    password: process.env.MQTT_PASSWORD || undefined,
-    timeout: toInteger(process.env.MQTT_CONNECT_TIMEOUT_MS, 10000),
-    sensor: process.env.MQTT_SENSOR_CODE
-      ? { sensor_code: process.env.MQTT_SENSOR_CODE, code: process.env.MQTT_SENSOR_CODE }
-      : null,
-    callback: mqttCallbackFromEnv(),
-  };
-}
-
 function valueFromPayload(parsed) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return parsed;
@@ -882,6 +858,18 @@ app.get('/api/mqtt/status', (req, res) => {
   });
 });
 
+app.get('/api/mqtt/configurations/status', (req, res) => {
+  res.json({ ok: true, configurations: databaseMqttRuntime.statuses() });
+});
+
+app.post('/api/mqtt/configurations/:configuration/test', async (req, res, next) => {
+  try {
+    res.json(await databaseMqttRuntime.testPublish(req.params.configuration));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/mqtt/connect', (req, res, next) => {
   try {
     res.json({
@@ -924,15 +912,9 @@ app.use((error, req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Modbus/MQTT gateway listening on port ${port}`);
-
-  if (mqttAutostart) {
-    try {
-      startMqtt(mqttPayloadFromEnv());
-      console.log(`MQTT autostart subscribed to ${process.env.MQTT_TOPIC || 'resq/telemetry/#'}`);
-    } catch (error) {
-      stats.err += 1;
-      stats.lastError = error.message;
-      console.error(`MQTT autostart failed: ${error.message}`);
-    }
-  }
+  databaseMqttRuntime.start().catch((error) => {
+    stats.err += 1;
+    stats.lastError = error.message;
+    console.error(`MQTT database runtime failed: ${error.message}`);
+  });
 });

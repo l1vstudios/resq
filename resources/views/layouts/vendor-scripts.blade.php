@@ -57,6 +57,21 @@
 
         event.preventDefault();
 
+        var tabPane = form.closest('.tab-pane');
+        if (tabPane && window.bootstrap) {
+            var tabTrigger = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]')).find(function (trigger) {
+                return trigger.dataset.bsTarget === '#' + tabPane.id;
+            });
+            if (tabTrigger) {
+                bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+            }
+        }
+
+        var collapse = form.closest('.collapse');
+        if (collapse && window.bootstrap) {
+            bootstrap.Collapse.getOrCreateInstance(collapse, { toggle: false }).show();
+        }
+
         var cssEscape = window.CSS && CSS.escape
             ? CSS.escape
             : function (value) {
@@ -74,6 +89,26 @@
             var escapedName = cssEscape(name);
             var inputs = form.querySelectorAll('[name="' + escapedName + '"], [name="' + escapedName + '[]"]');
 
+            var checkboxInputs = Array.from(inputs).filter(function (input) {
+                return input.type === 'checkbox';
+            });
+            if (checkboxInputs.length) {
+                var checked = value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+                checkboxInputs.forEach(function (input) {
+                    if (input.name.endsWith('[]')) {
+                        input.checked = Array.isArray(value) && value.map(String).includes(input.value);
+                    } else {
+                        input.checked = checked;
+                    }
+                });
+                inputs.forEach(function (input) {
+                    if (input.type === 'hidden') {
+                        input.value = '0';
+                    }
+                });
+                return;
+            }
+
             inputs.forEach(function (input) {
                 if (input.type === 'checkbox') {
                     if (input.name.endsWith('[]')) {
@@ -89,17 +124,44 @@
                     return;
                 }
 
+                if (input.tagName === 'SELECT' && input.multiple && Array.isArray(value)) {
+                    var selectedValues = value.map(String);
+                    Array.from(input.options).forEach(function (option) {
+                        option.selected = selectedValues.includes(option.value);
+                    });
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    return;
+                }
+
                 input.value = value ?? '';
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             });
         });
 
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
         form.classList.add('border', 'border-primary', 'rounded', 'p-2');
+
+        setTimeout(function () {
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
 
         setTimeout(function () {
             form.classList.remove('border', 'border-primary', 'rounded', 'p-2');
         }, 1800);
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var openCollapse = document.querySelector('.tab-pane:not(.active) .collapse.show');
+        var tabPane = openCollapse ? openCollapse.closest('.tab-pane') : null;
+        if (!tabPane || !window.bootstrap) {
+            return;
+        }
+
+        var tabTrigger = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]')).find(function (trigger) {
+            return trigger.dataset.bsTarget === '#' + tabPane.id;
+        });
+        if (tabTrigger) {
+            bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+        }
     });
 </script>
 

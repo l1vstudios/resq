@@ -15,17 +15,21 @@ Untuk koneksi online tanpa LAN/RJ45, jalankan gateway MQTT di server yang bisa a
 npm run mqtt:gateway
 ```
 
-Contoh `.env`:
+Konfigurasi broker tidak lagi disimpan di `.env`. Buat konfigurasi dari menu
+**Configuration → MQTT Configuration**. Runtime Node hanya membutuhkan bootstrap
+database, callback Laravel, dan key enkripsi bersama:
 
 ```dotenv
 APP_URL=https://resq.example.com
 MQTT_CALLBACK_TOKEN=isi-token-rahasia
-MQTT_AUTOSTART=true
-MQTT_BROKER_URL=mqtts://broker.example.com:8883
-MQTT_TOPIC=resq/telemetry/#
-MQTT_USERNAME=
-MQTT_PASSWORD=
-MQTT_CALLBACK_URL=
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=resq
+DB_USERNAME=resq_runtime
+DB_PASSWORD=PASSWORD_DATABASE
+MQTT_CREDENTIAL_KEY=BASE64_32_BYTE_KEY
+MQTT_CALLBACK_URL=https://resq.example.com/api/mqtt/ingest
 ```
 
 Payload yang dikirim device ke topic MQTT:

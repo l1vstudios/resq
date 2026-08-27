@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeviceSetupController;
 use App\Http\Controllers\PublicTelemetryController;
 use App\Http\Controllers\WarningStationDomainController;
+use App\Http\Controllers\MqttConfigurationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,6 +24,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/realtime-sensor-status', [DeviceSetupController::class, 'updateRealtimeSensorStatus'])
     ->name('api.realtime-sensor-status');
+
+Route::post('/mqtt/ingest', [MqttConfigurationController::class, 'ingest'])
+    ->name('api.mqtt.ingest');
 
 Route::get('/rednode/config', [DeviceSetupController::class, 'rednodeConfig'])
     ->name('api.rednode.config');
