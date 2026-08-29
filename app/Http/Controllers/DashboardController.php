@@ -156,7 +156,7 @@ class DashboardController extends Controller
     {
         $provinceCoordinates = $this->provinceCoordinates();
 
-        return GeospatialWorkspace::with(['sensors'])->withCount(['sensors', 'warningStations'])
+        return GeospatialWorkspace::with(['project', 'sensors'])->withCount(['sensors', 'warningStations'])
             ->get()
             ->map(function (GeospatialWorkspace $workspace) use ($provinceCoordinates) {
                 $fallback = $provinceCoordinates[$workspace->province] ?? ['lat' => null, 'lng' => null];
@@ -175,6 +175,7 @@ class DashboardController extends Controller
                     'is_danger' => $this->isDangerStatus($workspace->status) || $hasDangerSensor,
                     'sensors' => $workspace->sensors_count,
                     'warnings' => $workspace->warning_stations_count,
+                    'impact_radius_meters' => $this->impactRadiusMeters($workspace->project),
                     'lat' => $lat ? (float) $lat : null,
                     'lng' => $lng ? (float) $lng : null,
                 ];
@@ -186,7 +187,7 @@ class DashboardController extends Controller
     private function mapSensors()
     {
         $provinceCoordinates = $this->provinceCoordinates();
-        $sensorModels = Sensor::with(['workspace', 'monitoringStation', 'warningStation'])->get();
+        $sensorModels = Sensor::with(['workspace.project', 'monitoringStation', 'warningStation'])->get();
         $sensorIds = $sensorModels->pluck('id');
 
         // Optimized: only fetch the latest reading per sensor using a subquery
@@ -246,6 +247,7 @@ class DashboardController extends Controller
                     'received_at' => optional($reading?->received_at ?? $sensor->last_seen_at)->toISOString(),
                     'threshold_exceeded' => $thresholdExceeded,
                     'is_danger' => $isDanger,
+                    'impact_radius_meters' => $this->impactRadiusMeters($workspace?->project),
                     'lat' => $lat ? (float) $lat : null,
                     'lng' => $lng ? (float) $lng : null,
                 ];
@@ -258,7 +260,7 @@ class DashboardController extends Controller
     {
         $provinceCoordinates = $this->provinceCoordinates();
 
-        return WarningStation::with(['workspace', 'sensors'])
+        return WarningStation::with(['workspace.project', 'sensors'])
             ->get()
             ->map(function (WarningStation $station) use ($provinceCoordinates) {
                 $workspace = $station->workspace;
@@ -298,12 +300,18 @@ class DashboardController extends Controller
                     'ack_response' => $station->ack_response,
                     'danger_sensors' => $dangerSensors,
                     'is_danger' => $dangerSensors->isNotEmpty(),
+                    'impact_radius_meters' => $this->impactRadiusMeters($workspace?->project),
                     'lat' => $lat ? (float) $lat : null,
                     'lng' => $lng ? (float) $lng : null,
                 ];
             })
             ->filter(fn ($item) => $item['lat'] !== null && $item['lng'] !== null)
             ->values();
+    }
+
+    private function impactRadiusMeters(?Project $project): int
+    {
+        return (int) round(($project?->impact_radius_km ?? 25) * 1000);
     }
 
     private function isDangerStatus(?string $status): bool
