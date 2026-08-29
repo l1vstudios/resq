@@ -247,6 +247,10 @@
                                 <label class="form-label">Project Date</label>
                                 <input type="date" name="project_date" class="form-control" value="{{ old('project_date') }}" @disabled(! $databaseReady)>
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Radius Area Terdampak (km)</label>
+                                <input type="number" name="impact_radius_km" class="form-control" value="{{ old('impact_radius_km', 25) }}" min="0.1" max="1000" step="0.1" required @disabled(! $databaseReady)>
+                            </div>
                             <input type="hidden" name="status" value="Active">
                             <button type="submit" class="btn btn-primary" @disabled(! $databaseReady)>
                                 <i class="bx bx-save me-1"></i> Save / Update Project
@@ -268,6 +272,7 @@
                                         <th>Name</th>
                                         <th>Owner</th>
                                         <th>Date</th>
+                                        <th>Radius Terdampak</th>
                                         <th>Status</th>
                                         <th></th>
                                     </tr>
@@ -279,6 +284,7 @@
                                             <td>{{ $item['name'] }}</td>
                                             <td>{{ $item['owner'] }}</td>
                                             <td>{{ $item['date'] }}</td>
+                                            <td>{{ number_format((float) $item['impact_radius_km'], 1) }} km</td>
                                             <td><span class="badge bg-success">{{ $item['status'] }}</span></td>
                                             <td class="text-end">
                                                 @isset($item['db_id'])
@@ -290,6 +296,7 @@
                                                                 'name' => $item['name'] ?? '',
                                                                 'owner' => $item['owner'] ?? '',
                                                                 'project_date' => $item['date'] ?? '',
+                                                                'impact_radius_km' => $item['impact_radius_km'] ?? 25,
                                                                 'status' => $item['status'] ?? 'Active',
                                                             ])) }}">Edit</button>
                                                         <form method="POST" action="{{ route('project-setup.destroy', ['type' => 'project', 'id' => $item['db_id']]) }}">
@@ -302,7 +309,7 @@
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="6" class="text-center text-muted">Belum ada project database.</td></tr>
+                                        <tr><td colspan="7" class="text-center text-muted">Belum ada project database.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>

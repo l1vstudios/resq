@@ -389,6 +389,7 @@ class ProjectSetupController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'owner' => ['nullable', 'string', 'max:255'],
             'project_date' => ['nullable', 'date'],
+            'impact_radius_km' => ['required', 'numeric', 'min:0.1', 'max:1000'],
             'status' => ['required', 'string', 'max:50'],
         ]);
 
@@ -1219,6 +1220,7 @@ class ProjectSetupController extends Controller
             'name' => $project->name,
             'owner' => $project->owner,
             'date' => $project->project_date,
+            'impact_radius_km' => $project->impact_radius_km,
             'status' => $project->status,
         ]);
 

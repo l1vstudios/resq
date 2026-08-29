@@ -1133,12 +1133,18 @@
             warningLayer.clearLayers();
             focusLayer.clearLayers();
 
+            function impactRadiusMeters(item) {
+                var radius = Number(item.impact_radius_meters);
+
+                return Number.isFinite(radius) && radius > 0 ? radius : 25000;
+            }
+
             clusters.forEach(function (cluster) {
                 var color = isDanger(cluster) ? '#f46a6a' : (statusColors[cluster.status] || '#34c38f');
                 var clusterDanger = isDanger(cluster);
 
                 L.circle([cluster.lat, cluster.lng], {
-                    radius: clusterDanger ? 90000 : 22000,
+                    radius: impactRadiusMeters(cluster),
                     color: color,
                     fillColor: color,
                     fillOpacity: clusterDanger ? 0.2 : 0.12,
@@ -1197,7 +1203,7 @@
 
                 if (sensorDanger) {
                     L.circle(displayPoint, {
-                        radius: 120000,
+                        radius: impactRadiusMeters(sensor),
                         color: '#f46a6a',
                         fillColor: '#f46a6a',
                         fillOpacity: 0.22,
@@ -1235,7 +1241,7 @@
 
                 if (stationDanger) {
                     L.circle([station.lat, station.lng], {
-                        radius: 150000,
+                        radius: impactRadiusMeters(station),
                         color: '#f46a6a',
                         fillColor: '#f46a6a',
                         fillOpacity: 0.24,

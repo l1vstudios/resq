@@ -17,7 +17,12 @@ class Project extends Model
         'owner',
         'client_id',
         'project_date',
+        'impact_radius_km',
         'status',
+    ];
+
+    protected $casts = [
+        'impact_radius_km' => 'float',
     ];
 
     public function workspaces()
