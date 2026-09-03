@@ -179,6 +179,17 @@ class PlatformOperationsUiTest extends TestCase
             ->assertSee('Short Time-Series Preview');
     }
 
+    public function test_platform_operations_layout_uses_absolute_asset_urls(): void
+    {
+        $operator = $this->operator();
+
+        $this->actingAs($operator)->get(route('platform-operations.integrity.index'))
+            ->assertOk()
+            ->assertSee('href="' . asset('build/css/bootstrap.min.css') . '"', false)
+            ->assertSee('href="' . asset('build/css/app.min.css') . '"', false)
+            ->assertSee('src="' . asset('build/js/app.js') . '"', false);
+    }
+
     public function test_shared_station_ui_switches_tabs_without_duplicate_station_pages(): void
     {
         $operator = $this->operator();

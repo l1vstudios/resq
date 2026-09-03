@@ -3,7 +3,7 @@
 @section('title') Corridor Monitoring @endsection
 
 @section('css')
-<link href="/build/libs/leaflet/leaflet.css" rel="stylesheet" type="text/css" />
+<link href="{{ asset('build/libs/leaflet/leaflet.css') }}" rel="stylesheet" type="text/css" />
 @include('modules.platform-operations.partials.styles')
 @endsection
 
@@ -154,6 +154,6 @@
 @endsection
 
 @section('script')
-<script src="/build/libs/leaflet/leaflet.js"></script>
+<script src="{{ asset('build/libs/leaflet/leaflet.js') }}"></script>
 @include('modules.platform-operations.partials.map-script', ['mapId' => 'ops-corridor-map', 'points' => $mapStations ?? [], 'lines' => $mapLines ?? [], 'mapStyle' => 'terrain3d'])
 @endsection

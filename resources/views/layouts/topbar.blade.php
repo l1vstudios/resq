@@ -99,21 +99,21 @@
                 <a href="{{ route('dashboard') }}" class="logo logo-dark">
                     <span class="logo-sm">
                         <span class="topbar-logo-mobile">
-                            <img src="/build/images/logomobile.png" alt="RESQ">
+                            <img src="{{ asset('build/images/logomobile.png') }}" alt="RESQ">
                         </span>
                     </span>
                     <span class="logo-lg">
-                        <img src="/build/images/logos44.png" alt="RESQ">
+                        <img src="{{ asset('build/images/logos44.png') }}" alt="RESQ">
                     </span>
                 </a>
                 <a href="{{ route('dashboard') }}" class="logo logo-light">
                     <span class="logo-sm">
                         <span class="topbar-logo-mobile">
-                            <img src="/build/images/logomobile.png" alt="RESQ">
+                            <img src="{{ asset('build/images/logomobile.png') }}" alt="RESQ">
                         </span>
                     </span>
                     <span class="logo-lg">
-                        <img src="/build/images/logos44.png" alt="RESQ">
+                        <img src="{{ asset('build/images/logos44.png') }}" alt="RESQ">
                     </span>
                 </a>
             </div>
