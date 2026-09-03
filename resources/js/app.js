@@ -256,11 +256,11 @@ File: Main Js File
             $("#dark-mode-switch").prop("checked", false);
             $("#rtl-mode-switch").prop("checked", false);
             $("#dark-rtl-mode-switch").prop("checked", false);
-            if($("#bootstrap-style").attr('href') != 'build/css/bootstrap.min.css')
-                $("#bootstrap-style").attr('href', 'build/css/bootstrap.min.css');
+            if($("#bootstrap-style").attr('href') != '/build/css/bootstrap.min.css')
+                $("#bootstrap-style").attr('href', '/build/css/bootstrap.min.css');
             $('html').attr('data-bs-theme', 'light');
-            if($("#app-style").attr('href') != 'build/css/app.min.css')
-            $("#app-style").attr('href', 'build/css/app.min.css');
+            if($("#app-style").attr('href') != '/build/css/app.min.css')
+            $("#app-style").attr('href', '/build/css/app.min.css');
             sessionStorage.setItem("is_visited", "light-mode-switch");
         } else if ($("#dark-mode-switch").prop("checked") == true && id === "dark-mode-switch") {
             $("html").removeAttr("dir");
@@ -268,19 +268,19 @@ File: Main Js File
             $("#rtl-mode-switch").prop("checked", false);
             $("#dark-rtl-mode-switch").prop("checked", false);
             $('html').attr('data-bs-theme', 'dark');
-            if($("#bootstrap-style").attr('href') != 'build/css/bootstrap.min.css')
-                $("#bootstrap-style").attr('href', 'build/css/bootstrap.min.css');
-            if($("#app-style").attr('href') != 'build/css/app.min.css')
-                $("#app-style").attr('href', 'build/css/app.min.css');
+            if($("#bootstrap-style").attr('href') != '/build/css/bootstrap.min.css')
+                $("#bootstrap-style").attr('href', '/build/css/bootstrap.min.css');
+            if($("#app-style").attr('href') != '/build/css/app.min.css')
+                $("#app-style").attr('href', '/build/css/app.min.css');
             sessionStorage.setItem("is_visited", "dark-mode-switch");
         } else if ($("#rtl-mode-switch").prop("checked") == true && id === "rtl-mode-switch") {
             $("#light-mode-switch").prop("checked", false);
             $("#dark-mode-switch").prop("checked", false);
             $("#dark-rtl-mode-switch").prop("checked", false);
-            if($("#bootstrap-style").attr('href') != 'build/css/bootstrap-rtl.min.css')
-                $("#bootstrap-style").attr('href', 'build/css/bootstrap-rtl.min.css');
-            if($("#app-style").attr('href') != 'build/css/app-rtl.min.css')
-                $("#app-style").attr('href', 'build/css/app-rtl.min.css');
+            if($("#bootstrap-style").attr('href') != '/build/css/bootstrap-rtl.min.css')
+                $("#bootstrap-style").attr('href', '/build/css/bootstrap-rtl.min.css');
+            if($("#app-style").attr('href') != '/build/css/app-rtl.min.css')
+                $("#app-style").attr('href', '/build/css/app-rtl.min.css');
             $("html").attr("dir", 'rtl');
             $('html').attr('data-bs-theme', 'light');
             sessionStorage.setItem("is_visited", "rtl-mode-switch");
@@ -289,10 +289,10 @@ File: Main Js File
             $("#light-mode-switch").prop("checked", false);
             $("#rtl-mode-switch").prop("checked", false);
             $("#dark-mode-switch").prop("checked", false);
-            if($("#bootstrap-style").attr('href') != 'build/css/bootstrap-rtl.min.css')
-                $("#bootstrap-style").attr('href', 'build/css/bootstrap-rtl.min.css');
-            if($("#app-style").attr('href') != 'build/css/app-rtl.min.css')
-                $("#app-style").attr('href', 'build/css/app-rtl.min.css');
+            if($("#bootstrap-style").attr('href') != '/build/css/bootstrap-rtl.min.css')
+                $("#bootstrap-style").attr('href', '/build/css/bootstrap-rtl.min.css');
+            if($("#app-style").attr('href') != '/build/css/app-rtl.min.css')
+                $("#app-style").attr('href', '/build/css/app-rtl.min.css');
             $("html").attr("dir", 'rtl');
             $('html').attr('data-bs-theme', 'dark');
             sessionStorage.setItem("is_visited", "dark-rtl-mode-switch");
