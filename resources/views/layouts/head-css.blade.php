@@ -1,9 +1,9 @@
 <!-- Bootstrap Css -->
-<link href="https://dev.sentinelplatform.id/build/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css" />
+<link href="{{ asset('build/css/bootstrap.min.css') }}" id="bootstrap-style" rel="stylesheet" type="text/css" />
 <!-- Icons Css -->
-<link href="https://dev.sentinelplatform.id/build/css/icons.min.css" rel="stylesheet" type="text/css" />
+<link href="{{ asset('build/css/icons.min.css') }}" rel="stylesheet" type="text/css" />
 <!-- App Css-->
-<link href="https://dev.sentinelplatform.id/build/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" />
+<link href="{{ asset('build/css/app.min.css') }}" id="app-style" rel="stylesheet" type="text/css" />
 
 @if(app()->environment('local'))
     @php
@@ -30,4 +30,4 @@
 @yield('css')
 
 <!-- App js -->
-<script src="https://dev.sentinelplatform.id/build/js/plugin.js"></script>
+<script src="{{ asset('build/js/plugin.js') }}"></script>

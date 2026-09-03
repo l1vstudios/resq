@@ -185,9 +185,9 @@ class PlatformOperationsUiTest extends TestCase
 
         $this->actingAs($operator)->get(route('platform-operations.integrity.index'))
             ->assertOk()
-            ->assertSee('href="https://dev.sentinelplatform.id/build/css/bootstrap.min.css"', false)
-            ->assertSee('href="https://dev.sentinelplatform.id/build/css/app.min.css"', false)
-            ->assertSee('src="https://dev.sentinelplatform.id/build/js/app.js"', false);
+            ->assertSee('href="' . asset('build/css/bootstrap.min.css') . '"', false)
+            ->assertSee('href="' . asset('build/css/app.min.css') . '"', false)
+            ->assertSee('src="' . asset('build/js/app.js') . '"', false);
     }
 
     public function test_shared_station_ui_switches_tabs_without_duplicate_station_pages(): void

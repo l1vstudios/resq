@@ -1,9 +1,9 @@
 <!-- JAVASCRIPT -->
-<script src="https://dev.sentinelplatform.id/build/libs/jquery/jquery.min.js"></script>
-<script src="https://dev.sentinelplatform.id/build/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="https://dev.sentinelplatform.id/build/libs/metismenu/metisMenu.min.js"></script>
-<script src="https://dev.sentinelplatform.id/build/libs/simplebar/simplebar.min.js"></script>
-<script src="https://dev.sentinelplatform.id/build/libs/node-waves/waves.min.js"></script>
+<script src="{{ asset('build/libs/jquery/jquery.min.js') }}"></script>
+<script src="{{ asset('build/libs/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ asset('build/libs/metismenu/metisMenu.min.js') }}"></script>
+<script src="{{ asset('build/libs/simplebar/simplebar.min.js') }}"></script>
+<script src="{{ asset('build/libs/node-waves/waves.min.js') }}"></script>
 <script>
     $('#change-password').on('submit',function(event){
         event.preventDefault();
@@ -168,6 +168,6 @@
 @yield('script')
 
 <!-- App js -->
-<script src="https://dev.sentinelplatform.id/build/js/app.js"></script>
+<script src="{{ asset('build/js/app.js') }}"></script>
 
 @yield('script-bottom')
