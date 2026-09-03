@@ -30,4 +30,4 @@
 @yield('css')
 
 <!-- App js -->
-<script src="{{ asset('build/js/plugin.js') }}"></script>
+<script src="{{ asset('build/js/plugin.js') }}?v={{ filemtime(public_path('build/js/plugin.js')) }}"></script>

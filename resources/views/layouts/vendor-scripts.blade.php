@@ -168,6 +168,6 @@
 @yield('script')
 
 <!-- App js -->
-<script src="{{ asset('build/js/app.js') }}"></script>
+<script src="{{ asset('build/js/app.js') }}?v={{ filemtime(public_path('build/js/app.js')) }}"></script>
 
 @yield('script-bottom')
