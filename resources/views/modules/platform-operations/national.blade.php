@@ -3,7 +3,7 @@
 @section('title') Platform Operations @endsection
 
 @section('css')
-<link href="{{ asset('build/libs/leaflet/leaflet.css') }}" rel="stylesheet" type="text/css" />
+<link href="https://dev.sentinelplatform.id/build/libs/leaflet/leaflet.css" rel="stylesheet" type="text/css" />
 @include('modules.platform-operations.partials.styles')
 @endsection
 
@@ -121,6 +121,6 @@
 @endsection
 
 @section('script')
-<script src="{{ asset('build/libs/leaflet/leaflet.js') }}"></script>
+<script src="https://dev.sentinelplatform.id/build/libs/leaflet/leaflet.js"></script>
 @include('modules.platform-operations.partials.map-script', ['mapId' => 'ops-national-map', 'points' => $mapProjects ?? [], 'lines' => $mapLines ?? [], 'mapStyle' => 'terrain3d'])
 @endsection
