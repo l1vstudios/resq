@@ -5,6 +5,7 @@
 <script src="{{ asset('build/libs/simplebar/simplebar.min.js') }}"></script>
 <script src="{{ asset('build/libs/node-waves/waves.min.js') }}"></script>
 <script>
+    if (window.jQuery) {
     $('#change-password').on('submit',function(event){
         event.preventDefault();
         var Id = $('#data_id').val();
@@ -42,6 +43,7 @@
             }
         });
     });
+    }
 </script>
 <script>
     document.addEventListener('click', function (event) {

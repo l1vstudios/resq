@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Sensor;
 use App\Models\SentinelNotification;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,6 +29,18 @@ class AppServiceProvider extends ServiceProvider
     public function boot()
     {
         Schema::defaultStringLength(191);
+
+        $appUrl = (string) config('app.url');
+        $forceHttps = filter_var(env('FORCE_HTTPS', false), FILTER_VALIDATE_BOOLEAN)
+            || str_starts_with($appUrl, 'https://');
+
+        if (str_starts_with($appUrl, 'https://')) {
+            URL::forceRootUrl(rtrim($appUrl, '/'));
+        }
+
+        if ($forceHttps) {
+            URL::forceScheme('https');
+        }
 
         View::composer('layouts.topbar', function ($view) {
             $alerts = collect();
