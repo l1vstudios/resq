@@ -141,6 +141,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/telemetry', [DeviceSetupController::class, 'storeTelemetry'])->name('telemetry.store');
     Route::get('/command-test', [RegisteredDataController::class, 'commandTest'])->name('command-test.index');
     Route::delete('/device-setup/{type}/{id}', [DeviceSetupController::class, 'destroy'])->name('device-setup.destroy');
+    Route::view('/production-setup-guide', 'modules.production-guide.index')->name('production-guide.index');
     Route::view('/admins', 'modules.admins.index')->name('admins.index');
 
     // CFPE & Geospatial Workspace

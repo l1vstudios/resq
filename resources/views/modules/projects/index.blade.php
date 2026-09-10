@@ -1375,6 +1375,78 @@
     });
 
     (function () {
+        const storageKey = 'resq.projectSetup.activeTab';
+        const tabs = Array.from(document.querySelectorAll('[data-bs-toggle="tab"][data-bs-target]'));
+
+        function tabForTarget(target) {
+            return tabs.find((tab) => tab.getAttribute('data-bs-target') === target);
+        }
+
+        function validTarget(target) {
+            return typeof target === 'string' && target.startsWith('#') && tabForTarget(target);
+        }
+
+        function currentTarget() {
+            return document.querySelector('[data-bs-toggle="tab"].active')?.getAttribute('data-bs-target')
+                || '#project-tab-pane';
+        }
+
+        function storeTarget(target) {
+            if (!validTarget(target)) {
+                return;
+            }
+
+            localStorage.setItem(storageKey, target);
+        }
+
+        function showTarget(target) {
+            const tab = validTarget(target) ? tabForTarget(target) : null;
+            if (!tab) {
+                return;
+            }
+
+            if (window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(tab).show();
+                return;
+            }
+
+            tabs.forEach((item) => {
+                const pane = document.querySelector(item.getAttribute('data-bs-target'));
+                const active = item === tab;
+                item.classList.toggle('active', active);
+                pane?.classList.toggle('show', active);
+                pane?.classList.toggle('active', active);
+            });
+        }
+
+        const initialTarget = validTarget(window.location.hash)
+            ? window.location.hash
+            : localStorage.getItem(storageKey);
+
+        showTarget(initialTarget);
+
+        tabs.forEach((tab) => {
+            tab.addEventListener('shown.bs.tab', function (event) {
+                const target = event.target.getAttribute('data-bs-target');
+                storeTarget(target);
+                if (validTarget(target)) {
+                    history.replaceState(null, '', target);
+                }
+            });
+
+            tab.addEventListener('click', function () {
+                storeTarget(tab.getAttribute('data-bs-target'));
+            });
+        });
+
+        document.querySelectorAll('.tab-content form').forEach((form) => {
+            form.addEventListener('submit', function () {
+                storeTarget(currentTarget());
+            });
+        });
+    })();
+
+    (function () {
         const source = document.getElementById('sensor-input-source');
         const workspace = document.querySelector('#sensor-form [name="workspace_id"]');
         const loggerWrap = document.getElementById('sensor-data-logger-wrap');

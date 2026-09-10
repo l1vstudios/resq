@@ -107,39 +107,35 @@
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('platform-operations.*') ? 'mm-active' : '' }}">
-                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ request()->routeIs('platform-operations.*') ? 'true' : 'false' }}">
-                        <i class="bx bx-radar"></i>
-                        <span>Platform Operations</span>
-                    </a>
-                    <ul class="sub-menu {{ request()->routeIs('platform-operations.*') ? 'mm-show' : '' }}" aria-expanded="{{ request()->routeIs('platform-operations.*') ? 'true' : 'false' }}">
-                        <li>
-                            <a href="{{ route('platform-operations.index') }}" class="{{ request()->routeIs('platform-operations.index') || request()->routeIs('platform-operations.projects.*') || request()->routeIs('platform-operations.corridors.*') || (request()->routeIs('platform-operations.stations.show') && in_array(request()->query('tab'), [null, 'state'], true)) ? 'active' : '' }}">
-                                Operational State
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('platform-operations.integrity.index') }}" class="{{ request()->routeIs('platform-operations.integrity.*') || (request()->routeIs('platform-operations.stations.show') && request()->query('tab') === 'integrity') ? 'active' : '' }}">
-                                Operational Integrity
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('platform-operations.administrative.index') }}" class="{{ request()->routeIs('platform-operations.administrative.*') || (request()->routeIs('platform-operations.stations.show') && request()->query('tab') === 'administrative') ? 'active' : '' }}">
-                                Administrative Monitoring
-                            </a>
-                        </li>
-                    </ul>
-                </li>
+                {{-- Platform Operations hidden from sidebar --}}
 
-                <li class="mm-active">
-                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
+                @php
+                    $configurationMenuActive = request()->routeIs('projects.*')
+                        || request()->routeIs('project-configuration')
+                        || request()->routeIs('project-*')
+                        || request()->routeIs('cfpe.*')
+                        || request()->routeIs('canonical-database.*')
+                        || request()->routeIs('canonical-mapping.*')
+                        || request()->routeIs('data-loggers.*');
+                    $registeredMenuActive = request()->routeIs('clusters.*')
+                        || request()->routeIs('monitoring-stations.*')
+                        || request()->routeIs('warning-stations.*');
+                @endphp
+
+                <li class="{{ $configurationMenuActive ? 'mm-active' : '' }}">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $configurationMenuActive ? 'true' : 'false' }}">
                         <i class="bx bx-cog"></i>
                         <span>Configuration</span>
                     </a>
-                    <ul class="sub-menu mm-show" aria-expanded="true">
+                    <ul class="sub-menu {{ $configurationMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $configurationMenuActive ? 'true' : 'false' }}">
                         <li class="{{ request()->routeIs('projects.index') ? 'mm-active' : '' }}">
                             <a href="{{ route('projects.index') }}" class="{{ request()->routeIs('projects.index') ? 'active' : '' }}">
                                 Project Setup
+                            </a>
+                        </li>
+                        <li class="{{ request()->routeIs('cfpe.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('cfpe.index') }}" class="{{ request()->routeIs('cfpe.*') ? 'active' : '' }}">
+                                CFPE Corridor
                             </a>
                         </li>
                         <li class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'mm-active' : '' }}">
@@ -155,12 +151,12 @@
                     </ul>
                 </li>
 
-                <li class="mm-active">
-                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="true">
+                <li class="{{ $registeredMenuActive ? 'mm-active' : '' }}">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $registeredMenuActive ? 'true' : 'false' }}">
                         <i class="bx bx-list-check"></i>
-                        <span>Registered</span>
+                        <span>List Data</span>
                     </a>
-                    <ul class="sub-menu mm-show" aria-expanded="true">
+                    <ul class="sub-menu {{ $registeredMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $registeredMenuActive ? 'true' : 'false' }}">
                         <li>
                             <a href="{{ route('clusters.index') }}" class="{{ request()->routeIs('clusters.*') ? 'active' : '' }}">
                                 Geospatial Workspace
@@ -174,11 +170,6 @@
                         <li>
                             <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
                                 Warning Station
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('cfpe.index') }}" class="{{ request()->routeIs('cfpe.*') ? 'active' : '' }}">
-                                CFPE Corridor
                             </a>
                         </li>
                     </ul>
@@ -200,7 +191,7 @@
                         <i class="bx bx-cog"></i>
                         <span>Modbus Configuration</span>
                     </a>
-                </li>
+	                </li>
                 --}}
 
                 <li class="{{ request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : '' }}">
@@ -237,7 +228,14 @@
                         <span>Command Test</span>
                     </a>
                 </li>
-                --}}
+	                --}}
+
+                <li class="{{ request()->routeIs('production-guide.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('production-guide.index') }}" class="waves-effect {{ request()->routeIs('production-guide.*') ? 'active' : '' }}">
+                        <i class="bx bx-book-open"></i>
+                        <span>Panduan Production</span>
+                    </a>
+                </li>
 
                 <li class="menu-title">Administration</li>
 

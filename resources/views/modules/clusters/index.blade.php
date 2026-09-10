@@ -4,7 +4,7 @@
 
 @section('content')
 @component('components.breadcrumb')
-@slot('li_1') Registered @endslot
+@slot('li_1') List Data @endslot
 @slot('title') Geospatial Workspace @endslot
 @endcomponent
 

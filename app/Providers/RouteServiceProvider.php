@@ -62,6 +62,11 @@ class RouteServiceProvider extends ServiceProvider
                 return Limit::perMinute(1200)->by('rednode:' . $request->ip());
             }
 
+            if ($request->is('api/mqtt/ingest')) {
+                return Limit::perMinute((int) env('MQTT_INGEST_RATE_LIMIT_PER_MINUTE', 6000))
+                    ->by('mqtt-ingest:' . $request->ip());
+            }
+
             return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
         });
     }
