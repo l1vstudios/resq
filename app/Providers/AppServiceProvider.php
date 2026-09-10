@@ -28,65 +28,172 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Default String Length
+        |--------------------------------------------------------------------------
+        */
         Schema::defaultStringLength(191);
 
-        $appUrl = (string) config('app.url');
-        $forceHttps = filter_var(env('FORCE_HTTPS', false), FILTER_VALIDATE_BOOLEAN)
-            || str_starts_with($appUrl, 'https://');
+        /*
+        |--------------------------------------------------------------------------
+        | Force Application URL
+        |--------------------------------------------------------------------------
+        |
+        | Semua url(), asset(), route(), dan URL Laravel akan mengikuti APP_URL
+        | yang ada di .env.
+        |
+        */
 
-        if (str_starts_with($appUrl, 'https://')) {
-            URL::forceRootUrl(rtrim($appUrl, '/'));
+        $appUrl = rtrim((string) config('app.url'), '/');
+
+        if (!empty($appUrl)) {
+            URL::forceRootUrl($appUrl);
         }
 
-        if ($forceHttps) {
+        /*
+        |--------------------------------------------------------------------------
+        | Force HTTPS
+        |--------------------------------------------------------------------------
+        */
+
+        $forceHttps = filter_var(
+            env('FORCE_HTTPS', false),
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        if (
+            $forceHttps ||
+            str_starts_with($appUrl, 'https://')
+        ) {
             URL::forceScheme('https');
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Topbar View Composer
+        |--------------------------------------------------------------------------
+        */
+
         View::composer('layouts.topbar', function ($view) {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Default Values
+            |--------------------------------------------------------------------------
+            */
+
             $alerts = collect();
             $inboxNotifications = collect();
             $inboxUnreadCount = 0;
 
+            /*
+            |--------------------------------------------------------------------------
+            | Sensor Alert Notifications
+            |--------------------------------------------------------------------------
+            */
+
             if (Schema::hasTable('sensors')) {
-                $alerts = Sensor::with(['workspace', 'monitoringStation', 'warningStation'])
+
+                $alerts = Sensor::with([
+                        'workspace',
+                        'monitoringStation',
+                        'warningStation',
+                    ])
                     ->where(function ($query) {
-                        $query->where('alert_level', 'Awas')
+                        $query
+                            ->where('alert_level', 'Awas')
                             ->orWhere('status', 'Awas');
                     })
                     ->latest('last_seen_at')
                     ->limit(10)
                     ->get()
-                    ->map(fn (Sensor $sensor) => [
-                        'sensor_id' => $sensor->sensor_code,
-                        'type' => $sensor->type,
-                        'parameter' => $sensor->parameter,
-                        'value' => $sensor->value,
-                        'threshold' => $sensor->threshold,
-                        'alert_level' => $sensor->alert_level,
-                        'status' => $sensor->status,
-                        'province' => $sensor->workspace?->province,
-                        'city' => $sensor->workspace?->city,
-                        'station' => $sensor->monitoringStation?->station_code,
-                        'warning_station' => $sensor->warningStation?->station_code,
-                        'last_seen' => optional($sensor->last_seen_at)->diffForHumans() ?? '-',
-                    ]);
+                    ->map(function (Sensor $sensor) {
+
+                        return [
+                            'sensor_id' => $sensor->sensor_code,
+                            'type' => $sensor->type,
+                            'parameter' => $sensor->parameter,
+                            'value' => $sensor->value,
+                            'threshold' => $sensor->threshold,
+
+                            'alert_level' => $sensor->alert_level,
+                            'status' => $sensor->status,
+
+                            'province' => $sensor->workspace?->province,
+                            'city' => $sensor->workspace?->city,
+
+                            'station' =>
+                                $sensor->monitoringStation?->station_code,
+
+                            'warning_station' =>
+                                $sensor->warningStation?->station_code,
+
+                            'last_seen' =>
+                                optional($sensor->last_seen_at)
+                                    ->diffForHumans() ?? '-',
+                        ];
+                    });
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Logged In User
+            |--------------------------------------------------------------------------
+            */
+
             $user = auth()->user();
-            if ($user && $user->isClientUser() && Schema::hasTable('sentinel_notifications')) {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Sentinel Inbox Notifications
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                $user &&
+                method_exists($user, 'isClientUser') &&
+                $user->isClientUser() &&
+                Schema::hasTable('sentinel_notifications')
+            ) {
+
                 $baseQuery = SentinelNotification::query()
                     ->where('client_id', $user->client_id)
                     ->where(function ($query) use ($user) {
-                        $query->whereNull('user_id')->orWhere('user_id', $user->id);
+
+                        $query
+                            ->whereNull('user_id')
+                            ->orWhere('user_id', $user->id);
                     });
 
-                $inboxUnreadCount = (clone $baseQuery)->whereNull('read_at')->count();
+                /*
+                |--------------------------------------------------------------------------
+                | Unread Count
+                |--------------------------------------------------------------------------
+                */
+
+                $inboxUnreadCount = (clone $baseQuery)
+                    ->whereNull('read_at')
+                    ->count();
+
+                /*
+                |--------------------------------------------------------------------------
+                | Latest Notifications
+                |--------------------------------------------------------------------------
+                */
+
                 $inboxNotifications = $baseQuery
                     ->latest('occurred_at')
-                    ->latest()
+                    ->latest('id')
                     ->limit(5)
                     ->get();
             }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Send Data To Topbar
+            |--------------------------------------------------------------------------
+            */
 
             $view->with([
                 'alertNotifications' => $alerts,
