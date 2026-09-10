@@ -319,16 +319,24 @@ return new class extends Migration
             return $this->columnMetadata[$table];
         }
 
-        $driver = DB::getDriverName();
-        $rows = DB::table('information_schema.COLUMNS')
-            ->select(['COLUMN_NAME', 'DATA_TYPE'])
-            ->where('TABLE_NAME', $table)
-            ->when($driver === 'pgsql', fn ($query) => $query->where('TABLE_SCHEMA', 'public'))
-            ->when($driver === 'mysql', fn ($query) => $query->where('TABLE_SCHEMA', DB::getDatabaseName()))
-            ->get();
+        if (DB::getDriverName() === 'pgsql') {
+            $rows = DB::select(<<<'SQL'
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                    AND table_name = ?
+            SQL, [$table]);
+        } else {
+            $rows = DB::select(<<<'SQL'
+                SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = ?
+            SQL, [$table]);
+        }
 
-        return $this->columnMetadata[$table] = $rows
-            ->mapWithKeys(fn ($column): array => [$column->column_name ?? $column->COLUMN_NAME => $column->data_type ?? $column->DATA_TYPE])
+        return $this->columnMetadata[$table] = collect($rows)
+            ->mapWithKeys(fn ($column): array => [$column->column_name => $column->data_type])
             ->all();
     }
 
@@ -372,11 +380,14 @@ return new class extends Migration
 
     private function syncPostgresSequence(string $table): void
     {
-        $column = DB::table('information_schema.COLUMNS')
-            ->where('TABLE_SCHEMA', 'public')
-            ->where('TABLE_NAME', $table)
-            ->where('COLUMN_DEFAULT', 'like', 'nextval(%')
-            ->value('COLUMN_NAME');
+        $column = DB::selectOne(<<<'SQL'
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+                AND table_name = ?
+                AND column_default LIKE 'nextval(%'
+            LIMIT 1
+        SQL, [$table])?->column_name;
 
         if (! $column) {
             return;
