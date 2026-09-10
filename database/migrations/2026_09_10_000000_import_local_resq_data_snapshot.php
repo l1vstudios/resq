@@ -36,6 +36,7 @@ return new class extends Migration
         $stagingDir = null;
 
         try {
+            $this->expandPostgresStringColumnsForSnapshot($path, $tables);
             $this->clearTables($tables);
             $stagingDir = $this->stageRows($handle, $tables);
             $orderedTables = $this->orderTablesByDependencies($tables);
@@ -101,6 +102,93 @@ return new class extends Migration
         } finally {
             Schema::enableForeignKeyConstraints();
         }
+    }
+
+    private function expandPostgresStringColumnsForSnapshot(string $snapshotPath, array $tables): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $limits = $this->postgresStringColumnLimits($tables);
+        if ($limits === []) {
+            return;
+        }
+
+        $needsText = [];
+        $handle = gzopen($snapshotPath, 'rb');
+        if (! $handle) {
+            throw new RuntimeException("Unable to inspect local data snapshot: {$snapshotPath}");
+        }
+
+        try {
+            $this->readManifest($handle);
+
+            while (! gzeof($handle)) {
+                $line = trim((string) gzgets($handle));
+                if ($line === '') {
+                    continue;
+                }
+
+                $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+                if (($record['type'] ?? null) !== 'row') {
+                    continue;
+                }
+
+                $table = $record['table'];
+                if (! isset($limits[$table])) {
+                    continue;
+                }
+
+                foreach ($limits[$table] as $column => $limit) {
+                    $value = $record['data'][$column] ?? null;
+                    if ($value === null) {
+                        continue;
+                    }
+
+                    if ($this->stringLength((string) $value) > $limit) {
+                        $needsText[$table][$column] = true;
+                    }
+                }
+            }
+        } finally {
+            gzclose($handle);
+        }
+
+        foreach ($needsText as $table => $columns) {
+            foreach (array_keys($columns) as $column) {
+                DB::statement(
+                    'ALTER TABLE ' . $this->quoteIdentifier($table)
+                    . ' ALTER COLUMN ' . $this->quoteIdentifier($column)
+                    . ' TYPE text'
+                );
+            }
+        }
+    }
+
+    private function postgresStringColumnLimits(array $tables): array
+    {
+        $placeholders = implode(', ', array_fill(0, count($tables), '?'));
+        $rows = DB::select(<<<SQL
+            SELECT table_name, column_name, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+                AND table_name IN ({$placeholders})
+                AND data_type IN ('character varying', 'character')
+                AND character_maximum_length IS NOT NULL
+        SQL, $tables);
+
+        $limits = [];
+        foreach ($rows as $row) {
+            $limits[$row->table_name][$row->column_name] = (int) $row->character_maximum_length;
+        }
+
+        return $limits;
+    }
+
+    private function stringLength(string $value): int
+    {
+        return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
     }
 
     private function stageRows($handle, array $tables): string
