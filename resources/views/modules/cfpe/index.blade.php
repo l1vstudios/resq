@@ -446,7 +446,8 @@
         let projectsData = @json($projects);
         let selectedPoints = [];
         let calculationResults = [];
-        let hiddenLegendKeys = new Set();
+        let latestMapData = null;
+        let visibleLegendKeys = new Set();
 
         // --- DOM Elements ---
         const $project = document.getElementById('cfpe-project');
@@ -590,16 +591,18 @@
             return category + ':' + String(id || '').toLowerCase();
         }
 
-        function setLegendLayerVisibility(item, visible) {
-            if (!item || !item.layerRef || !item.parentLayer) return;
+        function renderMapLayers(data, shouldLockBounds) {
+            if (!data) return;
 
-            if (visible) {
-                if (!item.parentLayer.hasLayer(item.layerRef)) {
-                    item.parentLayer.addLayer(item.layerRef);
-                }
-            } else if (item.parentLayer.hasLayer(item.layerRef)) {
-                item.parentLayer.removeLayer(item.layerRef);
+            var legendItems = [];
+            legendItems = legendItems.concat(renderCorridors(data.corridors || []));
+            legendItems = legendItems.concat(renderInformationLayers(data.information_layers || []));
+            legendItems = legendItems.concat(renderRoutePolylines(data.routes || []));
+            renderStations(data.monitoring_stations || [], data.warning_stations || [], data.sensors || []);
+            if (shouldLockBounds) {
+                lockMapToData(data);
             }
+            buildLegend(legendItems);
         }
 
         function referencePointPopup(point, route) {
@@ -1193,13 +1196,8 @@
             .then(handleResponse)
             .then(function (data) {
                 console.log('Map data loaded:', (data.corridors||[]).length, 'corridors,', (data.routes||[]).length, 'routes,', (data.information_layers||[]).length, 'layers');
-                var legendItems = [];
-                legendItems = legendItems.concat(renderCorridors(data.corridors || []));
-                legendItems = legendItems.concat(renderInformationLayers(data.information_layers || []));
-                legendItems = legendItems.concat(renderRoutePolylines(data.routes || []));
-                renderStations(data.monitoring_stations || [], data.warning_stations || [], data.sensors || []);
-                lockMapToData(data);
-                buildLegend(legendItems);
+                latestMapData = data;
+                renderMapLayers(data, true);
                 buildRouteList(data.routes || []);
                 buildGpkgList(data.corridors || [], data.information_layers || []);
             })
@@ -1224,7 +1222,7 @@
                 var swatch = item.type === 'line'
                     ? '<span class="cfpe-legend-color-line" style="background:' + item.color + '"></span>'
                     : '<span class="cfpe-legend-color" style="background:' + item.color + ';height:10px;width:10px;border-radius:2px;opacity:0.6"></span>';
-                var isVisible = !hiddenLegendKeys.has(item.key);
+                var isVisible = visibleLegendKeys.has(item.key);
                 var checked = isVisible ? 'checked' : '';
                 var hiddenClass = isVisible ? '' : ' is-hidden';
                 return '<div class="cfpe-legend-item' + hiddenClass + '" data-legend-idx="' + idx + '">' +
@@ -1243,16 +1241,12 @@
                     if (!item) return;
 
                     if (this.checked) {
-                        hiddenLegendKeys.delete(item.key);
+                        visibleLegendKeys.add(item.key);
                     } else {
-                        hiddenLegendKeys.add(item.key);
+                        visibleLegendKeys.delete(item.key);
                     }
 
-                    setLegendLayerVisibility(item, this.checked);
-                    var legendRow = this.closest('.cfpe-legend-item');
-                    if (legendRow) {
-                        legendRow.classList.toggle('is-hidden', !this.checked);
-                    }
+                    renderMapLayers(latestMapData, false);
                 });
             });
 
@@ -1320,7 +1314,7 @@
                 }
 
                 if (drawn) {
-                    if (!hiddenLegendKeys.has(legendKey)) {
+                    if (visibleLegendKeys.has(legendKey)) {
                         drawnLayer.addTo(corridorLayer);
                     }
                     legendItems.push({
@@ -1413,7 +1407,7 @@
                             featureLayer.bindPopup(popup);
                         }
                     });
-                    if (!hiddenLegendKeys.has(legendKey)) {
+                    if (visibleLegendKeys.has(legendKey)) {
                         geoJsonLayer.addTo(infoLayerGroup);
                     }
 
@@ -1480,7 +1474,7 @@
                     }
                 }
 
-                if (drawnRouteLayer.getLayers().length && (route.route_type !== 'cfpe_corridor' || !hiddenLegendKeys.has(legendKey))) {
+                if (drawnRouteLayer.getLayers().length && (route.route_type !== 'cfpe_corridor' || visibleLegendKeys.has(legendKey))) {
                     drawnRouteLayer.addTo(markersLayer);
                 }
 
