@@ -448,6 +448,7 @@
         let calculationResults = [];
         let latestMapData = null;
         let visibleLegendKeys = new Set();
+        let legendVisibilityInitialized = false;
 
         // --- DOM Elements ---
         const $project = document.getElementById('cfpe-project');
@@ -1197,6 +1198,10 @@
             .then(function (data) {
                 console.log('Map data loaded:', (data.corridors||[]).length, 'corridors,', (data.routes||[]).length, 'routes,', (data.information_layers||[]).length, 'layers');
                 latestMapData = data;
+                if (!legendVisibilityInitialized) {
+                    visibleLegendKeys.clear();
+                    legendVisibilityInitialized = true;
+                }
                 renderMapLayers(data, true);
                 buildRouteList(data.routes || []);
                 buildGpkgList(data.corridors || [], data.information_layers || []);
@@ -1223,15 +1228,19 @@
                     ? '<span class="cfpe-legend-color-line" style="background:' + item.color + '"></span>'
                     : '<span class="cfpe-legend-color" style="background:' + item.color + ';height:10px;width:10px;border-radius:2px;opacity:0.6"></span>';
                 var isVisible = visibleLegendKeys.has(item.key);
-                var checked = isVisible ? 'checked' : '';
                 var hiddenClass = isVisible ? '' : ' is-hidden';
                 return '<div class="cfpe-legend-item' + hiddenClass + '" data-legend-idx="' + idx + '">' +
-                    '<input class="form-check-input cfpe-legend-toggle" type="checkbox" data-legend-toggle="' + idx + '" ' + checked + '>' +
+                    '<input class="form-check-input cfpe-legend-toggle" type="checkbox" autocomplete="off" data-legend-toggle="' + idx + '">' +
                     swatch + prefix + '<span>' + escapeHtml(item.label) + '</span>' +
                 '</div>';
             }).join('');
 
             container.querySelectorAll('[data-legend-toggle]').forEach(function (input) {
+                var initialIdx = parseInt(input.dataset.legendToggle);
+                var initialItem = items[initialIdx];
+                input.defaultChecked = false;
+                input.checked = !!(initialItem && visibleLegendKeys.has(initialItem.key));
+
                 input.addEventListener('click', function (event) {
                     event.stopPropagation();
                 });
