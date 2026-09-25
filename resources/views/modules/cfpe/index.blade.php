@@ -594,6 +594,9 @@
 
         function renderMapLayers(data, shouldLockBounds) {
             if (!data) return;
+            if (map) {
+                map.closePopup();
+            }
 
             var legendItems = [];
             legendItems = legendItems.concat(renderCorridors(data.corridors || []));
@@ -1451,6 +1454,7 @@
                 var color = routeColors[idx % routeColors.length];
                 var coords = route.path_coordinates;
                 var legendKey = makeLegendKey('route', route.id || route.route_code || route.name || idx);
+                var isRouteVisible = visibleLegendKeys.has(legendKey);
                 var drawnRouteLayer = L.featureGroup();
 
                 // Skip if coords is just [lng, lat] (a single point, not drawable)
@@ -1483,7 +1487,7 @@
                     }
                 }
 
-                if (drawnRouteLayer.getLayers().length && (route.route_type !== 'cfpe_corridor' || visibleLegendKeys.has(legendKey))) {
+                if (drawnRouteLayer.getLayers().length && isRouteVisible) {
                     drawnRouteLayer.addTo(markersLayer);
                 }
 
@@ -1504,7 +1508,7 @@
                 }
 
                 // Add BM markers
-                if (route.points) {
+                if (isRouteVisible && route.points) {
                     route.points.forEach(function (point) {
                         if (!point.latitude || !point.longitude) return;
                         var marker = L.marker([point.latitude, point.longitude], {
