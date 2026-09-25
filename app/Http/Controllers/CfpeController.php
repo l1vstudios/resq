@@ -371,7 +371,7 @@ class CfpeController extends Controller
 
         return $items
             ->groupBy(fn ($item) => $this->presetLookupKey($item->manufacturer, $item->device_model))
-            ->map(function ($rows) {
+            ->map(function ($rows) use ($hasPresetItemProtocol) {
                 $first = $rows->first();
 
                 return [
