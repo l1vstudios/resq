@@ -35,6 +35,19 @@
             align-items: center;
             gap: 0.35rem;
             font-size: 0.8rem;
+            cursor: pointer;
+            padding: 3px 6px;
+            border-radius: 4px;
+            transition: background .2s, opacity .2s;
+        }
+        .cfpe-legend-item:hover {
+            background: rgba(0, 0, 0, 0.08);
+        }
+        .cfpe-legend-toggle {
+            margin: 0 2px 0 0;
+        }
+        .cfpe-legend-item.is-hidden {
+            opacity: 0.48;
         }
         .cfpe-legend-color {
             width: 24px;
@@ -412,6 +425,8 @@
 
         // --- Constants ---
         const ROUTE_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+        const CFPE_MIN_ZOOM = 12;
+        const CFPE_MAX_ZOOM = 16;
         const MAP_BOUNDS = {
             south: -8.371469032,
             north: -8.055529857,
@@ -431,6 +446,7 @@
         let projectsData = @json($projects);
         let selectedPoints = [];
         let calculationResults = [];
+        let hiddenLegendKeys = new Set();
 
         // --- DOM Elements ---
         const $project = document.getElementById('cfpe-project');
@@ -453,8 +469,8 @@
             map = L.map('cfpe-map', {
                 zoomControl: true,
                 scrollWheelZoom: true,
-                minZoom: 10,
-                maxZoom: 16,
+                minZoom: CFPE_MIN_ZOOM,
+                maxZoom: CFPE_MAX_ZOOM,
                 maxBounds: INITIAL_MAP_BOUNDS,
                 maxBoundsViscosity: 0.9
             });
@@ -462,19 +478,19 @@
             // Terrain base layer (OpenTopoMap with contour lines)
             L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> & <a href="https://opentopomap.org">OpenTopoMap</a>',
-                minZoom: 10,
-                maxZoom: 16
+                minZoom: CFPE_MIN_ZOOM,
+                maxZoom: CFPE_MAX_ZOOM
             }).addTo(map);
 
             // Hillshade overlay for 3D depth effect
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
-                minZoom: 10,
-                maxZoom: 16,
+                minZoom: CFPE_MIN_ZOOM,
+                maxZoom: CFPE_MAX_ZOOM,
                 opacity: 0.34,
                 attribution: 'Hillshade &copy; Esri'
             }).addTo(map);
 
-            map.fitBounds(INITIAL_MAP_BOUNDS, { maxZoom: 13 });
+            map.fitBounds(INITIAL_MAP_BOUNDS, { maxZoom: CFPE_MIN_ZOOM });
 
             markersLayer = L.layerGroup().addTo(map);
             polylinesLayer = L.layerGroup().addTo(map);
@@ -570,6 +586,22 @@
                 (sensor.status || sensor.alert_level ? '<br>Status: ' + escapeHtml([sensor.status, sensor.alert_level].filter(Boolean).join(' / ')) : '');
         }
 
+        function makeLegendKey(category, id) {
+            return category + ':' + String(id || '').toLowerCase();
+        }
+
+        function setLegendLayerVisibility(item, visible) {
+            if (!item || !item.layerRef || !item.parentLayer) return;
+
+            if (visible) {
+                if (!item.parentLayer.hasLayer(item.layerRef)) {
+                    item.parentLayer.addLayer(item.layerRef);
+                }
+            } else if (item.parentLayer.hasLayer(item.layerRef)) {
+                item.parentLayer.removeLayer(item.layerRef);
+            }
+        }
+
         function referencePointPopup(point, route) {
             return '<strong>' + escapeHtml(point.point_code || '-') + '</strong>' +
                 (point.name ? '<br>' + escapeHtml(point.name) : '') +
@@ -644,7 +676,7 @@
             var bounds = L.latLngBounds(valid);
             var padded = bounds.pad(0.35);
             map.setMaxBounds(padded);
-            map.fitBounds(bounds, { padding: [42, 42], maxZoom: 14 });
+            map.fitBounds(bounds, { padding: [42, 42], maxZoom: CFPE_MIN_ZOOM });
         }
 
         function lockMapToData(data) {
@@ -1178,7 +1210,11 @@
 
         function buildLegend(items) {
             var container = document.getElementById('cfpe-legend');
-            if (!container || !items.length) return;
+            if (!container) return;
+            if (!items.length) {
+                container.innerHTML = '<small class="text-muted">Legend will appear after data is loaded...</small>';
+                return;
+            }
             container.innerHTML = items.map(function (item, idx) {
                 var prefix = '';
                 if (item.category === 'corridor') prefix = '<span class="badge bg-primary me-1" style="font-size:9px">CORRIDOR</span>';
@@ -1188,10 +1224,38 @@
                 var swatch = item.type === 'line'
                     ? '<span class="cfpe-legend-color-line" style="background:' + item.color + '"></span>'
                     : '<span class="cfpe-legend-color" style="background:' + item.color + ';height:10px;width:10px;border-radius:2px;opacity:0.6"></span>';
-                return '<div class="cfpe-legend-item" data-legend-idx="' + idx + '" style="cursor:pointer;padding:3px 6px;border-radius:4px;transition:background .2s" onmouseover="this.style.background=\'rgba(0,0,0,0.08)\'" onmouseout="this.style.background=\'transparent\'">' + swatch + prefix + '<span>' + escapeHtml(item.label) + '</span></div>';
+                var isVisible = !hiddenLegendKeys.has(item.key);
+                var checked = isVisible ? 'checked' : '';
+                var hiddenClass = isVisible ? '' : ' is-hidden';
+                return '<div class="cfpe-legend-item' + hiddenClass + '" data-legend-idx="' + idx + '">' +
+                    '<input class="form-check-input cfpe-legend-toggle" type="checkbox" data-legend-toggle="' + idx + '" ' + checked + '>' +
+                    swatch + prefix + '<span>' + escapeHtml(item.label) + '</span>' +
+                '</div>';
             }).join('');
 
-            // Click handler for legend items
+            container.querySelectorAll('[data-legend-toggle]').forEach(function (input) {
+                input.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                });
+                input.addEventListener('change', function () {
+                    var idx = parseInt(this.dataset.legendToggle);
+                    var item = items[idx];
+                    if (!item) return;
+
+                    if (this.checked) {
+                        hiddenLegendKeys.delete(item.key);
+                    } else {
+                        hiddenLegendKeys.add(item.key);
+                    }
+
+                    setLegendLayerVisibility(item, this.checked);
+                    var legendRow = this.closest('.cfpe-legend-item');
+                    if (legendRow) {
+                        legendRow.classList.toggle('is-hidden', !this.checked);
+                    }
+                });
+            });
+
             container.querySelectorAll('[data-legend-idx]').forEach(function (el) {
                 el.addEventListener('click', function () {
                     var idx = parseInt(this.dataset.legendIdx);
@@ -1220,7 +1284,8 @@
                 var color = corridorColors[idx % corridorColors.length];
                 var coords = corridor.path_coordinates;
                 var drawn = false;
-                var drawnLayer = null;
+                var legendKey = makeLegendKey('corridor', corridor.id || corridor.corridor_code || corridor.name || idx);
+                var drawnLayer = L.featureGroup();
 
                 // Detect format: [[[lng,lat],...]] (multi-line) or [[lng,lat],...] (single line) or [lng,lat] (point)
                 if (!Array.isArray(coords[0])) return; // skip if just numbers [lng, lat]
@@ -1234,9 +1299,9 @@
                             return [c[1], c[0]];
                         }).filter(Boolean);
                         if (latLngs.length >= 2) {
-                            drawnLayer = L.polyline(latLngs, { color: color, weight: 4, opacity: 0.8 })
+                            L.polyline(latLngs, { color: color, weight: 4, opacity: 0.8 })
                                 .bindPopup('<strong>' + escapeHtml(corridor.name) + '</strong><br>Code: ' + escapeHtml(corridor.corridor_code))
-                                .addTo(corridorLayer);
+                                .addTo(drawnLayer);
                             drawn = true;
                         }
                     });
@@ -1247,15 +1312,29 @@
                         return [c[1], c[0]];
                     }).filter(Boolean);
                     if (latLngs.length >= 2) {
-                        drawnLayer = L.polyline(latLngs, { color: color, weight: 4, opacity: 0.8 })
+                        L.polyline(latLngs, { color: color, weight: 4, opacity: 0.8 })
                             .bindPopup('<strong>' + escapeHtml(corridor.name) + '</strong><br>Code: ' + escapeHtml(corridor.corridor_code))
-                            .addTo(corridorLayer);
+                            .addTo(drawnLayer);
                         drawn = true;
                     }
                 }
 
                 if (drawn) {
-                    legendItems.push({ type: 'line', color: color, label: corridor.name || corridor.corridor_code, category: 'corridor', bounds: drawnLayer ? drawnLayer.getBounds() : null, layerRef: drawnLayer, originalWeight: 4, originalOpacity: 0.8 });
+                    if (!hiddenLegendKeys.has(legendKey)) {
+                        drawnLayer.addTo(corridorLayer);
+                    }
+                    legendItems.push({
+                        key: legendKey,
+                        type: 'line',
+                        color: color,
+                        label: corridor.name || corridor.corridor_code,
+                        category: 'corridor',
+                        bounds: drawnLayer.getBounds(),
+                        layerRef: drawnLayer,
+                        parentLayer: corridorLayer,
+                        originalWeight: 4,
+                        originalOpacity: 0.8
+                    });
                 }
             });
             return legendItems;
@@ -1269,6 +1348,7 @@
                 if (!layer.layer_payload || !layer.layer_payload.features) return;
                 var color = layer.style_color || '#4CAF50';
                 var layerName = (layer.name || '').toLowerCase();
+                var legendKey = makeLegendKey('layer', layer.id || layer.layer_code || layer.name);
 
                 // Determine icon/style per layer type
                 var icon = null;
@@ -1333,11 +1413,24 @@
                             featureLayer.bindPopup(popup);
                         }
                     });
-                    geoJsonLayer.addTo(infoLayerGroup);
+                    if (!hiddenLegendKeys.has(legendKey)) {
+                        geoJsonLayer.addTo(infoLayerGroup);
+                    }
 
                     var legendLabel = layer.name;
                     if (icon) legendLabel = icon + ' ' + layer.name;
-                    legendItems.push({ type: layer.layer_type || 'polygon', color: color, label: legendLabel, category: 'layer', bounds: geoJsonLayer.getBounds(), layerRef: geoJsonLayer, originalWeight: 2, originalOpacity: 0.7 });
+                    legendItems.push({
+                        key: legendKey,
+                        type: layer.layer_type || 'polygon',
+                        color: color,
+                        label: legendLabel,
+                        category: 'layer',
+                        bounds: geoJsonLayer.getBounds(),
+                        layerRef: geoJsonLayer,
+                        parentLayer: infoLayerGroup,
+                        originalWeight: 2,
+                        originalOpacity: 0.7
+                    });
                 } catch (e) {
                     console.warn('Failed to render layer:', layer.name, e);
                 }
@@ -1354,7 +1447,8 @@
                 if (!route.path_coordinates || !route.path_coordinates.length) return;
                 var color = routeColors[idx % routeColors.length];
                 var coords = route.path_coordinates;
-                var drawnRouteLayer = null;
+                var legendKey = makeLegendKey('route', route.id || route.route_code || route.name || idx);
+                var drawnRouteLayer = L.featureGroup();
 
                 // Skip if coords is just [lng, lat] (a single point, not drawable)
                 if (!Array.isArray(coords[0])) return;
@@ -1368,9 +1462,9 @@
                             return [c[1], c[0]];
                         }).filter(Boolean);
                         if (latLngs.length >= 2) {
-                            drawnRouteLayer = L.polyline(latLngs, { color: color, weight: 3, opacity: 0.9, dashArray: route.route_type === 'cfpe_corridor' ? null : '5, 5' })
+                            L.polyline(latLngs, { color: color, weight: 3, opacity: 0.9, dashArray: route.route_type === 'cfpe_corridor' ? null : '5, 5' })
                                 .bindPopup('<strong>' + escapeHtml(route.name) + '</strong>')
-                                .addTo(markersLayer);
+                                .addTo(drawnRouteLayer);
                         }
                     });
                 } else if (typeof coords[0][0] === 'number') {
@@ -1380,15 +1474,30 @@
                         return [c[1], c[0]];
                     }).filter(Boolean);
                     if (latLngs.length >= 2) {
-                        drawnRouteLayer = L.polyline(latLngs, { color: color, weight: 3, opacity: 0.9, dashArray: route.route_type === 'cfpe_corridor' ? null : '5, 5' })
+                        L.polyline(latLngs, { color: color, weight: 3, opacity: 0.9, dashArray: route.route_type === 'cfpe_corridor' ? null : '5, 5' })
                             .bindPopup('<strong>' + escapeHtml(route.name) + '</strong>')
-                            .addTo(markersLayer);
+                            .addTo(drawnRouteLayer);
                     }
+                }
+
+                if (drawnRouteLayer.getLayers().length && (route.route_type !== 'cfpe_corridor' || !hiddenLegendKeys.has(legendKey))) {
+                    drawnRouteLayer.addTo(markersLayer);
                 }
 
                 // Add to legend (only CFPE routes, skip monitoring_corridor since those are in corridorLayer)
                 if (route.route_type === 'cfpe_corridor') {
-                    legendItems.push({ type: 'line', color: color, label: route.name || route.route_code, category: 'route', bounds: drawnRouteLayer ? drawnRouteLayer.getBounds() : null, layerRef: drawnRouteLayer, originalWeight: 3, originalOpacity: 0.9 });
+                    legendItems.push({
+                        key: legendKey,
+                        type: 'line',
+                        color: color,
+                        label: route.name || route.route_code,
+                        category: 'route',
+                        bounds: drawnRouteLayer.getLayers().length ? drawnRouteLayer.getBounds() : null,
+                        layerRef: drawnRouteLayer,
+                        parentLayer: markersLayer,
+                        originalWeight: 3,
+                        originalOpacity: 0.9
+                    });
                 }
 
                 // Add BM markers
