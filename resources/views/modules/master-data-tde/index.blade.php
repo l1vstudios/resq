@@ -58,9 +58,11 @@
                         <span class="tde-dropzone-icon mb-3"><i class="bx bx-cloud-upload"></i></span>
                         <h5 class="font-size-15 mb-1">Drag &amp; drop file Excel</h5>
                         <p class="text-muted mb-3">Format .xlsx atau .xls</p>
-                        <button type="button" class="btn btn-outline-primary">
+                        <input type="file" id="tde-excel-file" class="d-none" accept=".xlsx,.xls">
+                        <button type="button" class="btn btn-outline-primary" id="tde-browse-file">
                             <i class="bx bx-file-find me-1"></i> Browse File
                         </button>
+                        <div class="text-muted mt-2" id="tde-selected-file">Belum ada file dipilih.</div>
                     </div>
                 </div>
                 <button type="button" class="btn btn-primary">
@@ -98,25 +100,9 @@
                             </tr>
                         </thead>
                         <tbody id="tde-grid-body">
-                            @foreach ([
-                                ['TDE-001', 'Baseline Evakuasi Padang', 'Padang', 'Evakuasi', 'Draft', '25 Sep 2026'],
-                                ['TDE-002', 'Titik Dampak Sungai Utara', 'Agam', 'Hidromet', 'Ready', '24 Sep 2026'],
-                                ['TDE-003', 'Area Paparan Pesisir', 'Pariaman', 'Tsunami', 'Review', '23 Sep 2026'],
-                            ] as $row)
-                                <tr>
-                                    <td class="fw-semibold">{{ $row[0] }}</td>
-                                    <td>{{ $row[1] }}</td>
-                                    <td>{{ $row[2] }}</td>
-                                    <td>{{ $row[3] }}</td>
-                                    <td><span class="badge bg-primary-subtle text-primary">{{ $row[4] }}</span></td>
-                                    <td class="text-muted">{{ $row[5] }}</td>
-                                    <td class="text-end">
-                                        <button type="button" class="btn btn-outline-danger btn-sm" data-tde-delete data-tde-code="{{ $row[0] }}">
-                                            <i class="bx bx-trash me-1"></i> Hapus
-                                        </button>
-                                    </td>
-                                </tr>
-                            @endforeach
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Belum ada master data TDE.</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -129,6 +115,20 @@
 @section('script')
 <script src="{{ URL::asset('build/libs/sweetalert2/sweetalert2.min.js') }}"></script>
 <script>
+    var browseButton = document.getElementById('tde-browse-file');
+    var fileInput = document.getElementById('tde-excel-file');
+    var selectedFile = document.getElementById('tde-selected-file');
+
+    browseButton?.addEventListener('click', function () {
+        fileInput?.click();
+    });
+
+    fileInput?.addEventListener('change', function () {
+        selectedFile.textContent = this.files && this.files.length
+            ? this.files[0].name
+            : 'Belum ada file dipilih.';
+    });
+
     document.addEventListener('click', function (event) {
         var button = event.target.closest('[data-tde-delete]');
         if (!button) {
