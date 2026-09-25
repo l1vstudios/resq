@@ -655,6 +655,8 @@
                             <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
                             <div class="mb-3"><label class="form-label">Station Type</label><input name="station_type" class="form-control" value="environmental_monitoring" required @disabled(! $databaseReady)></div>
                             <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" @disabled(! $databaseReady)></div>
+                            <input type="hidden" name="latitude">
+                            <input type="hidden" name="longitude">
                             <div class="row">
                                 <div class="col-md-6 mb-3"><label class="form-label">Logger ID</label><input name="logger_id" class="form-control" @disabled(! $databaseReady)></div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Connectivity</label><select name="connectivity_status" class="form-select" @disabled(! $databaseReady)><option>Online</option><option>Offline</option></select></div>
@@ -693,6 +695,8 @@
                                                                 'name' => $station['name'] ?? '',
                                                                 'station_type' => $station['station_type'] ?? 'environmental_monitoring',
                                                                 'coordinate' => $station['coordinate'] ?? '',
+                                                                'latitude' => $station['latitude'] ?? '',
+                                                                'longitude' => $station['longitude'] ?? '',
                                                                 'logger_id' => $station['logger_id'] ?? '',
                                                                 'connectivity_status' => $station['connectivity_status'] ?? 'Online',
                                                                 'logger_status' => $station['logger_status'] ?? 'Active',
@@ -732,6 +736,8 @@
                                 <div class="col-md-6 mb-3"><label class="form-label">Controller ID</label><input name="controller_id" class="form-control" @disabled(! $databaseReady)></div>
                             </div>
                             <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" @disabled(! $databaseReady)></div>
+                            <input type="hidden" name="latitude">
+                            <input type="hidden" name="longitude">
                             <div class="mb-3"><label class="form-label">Controller Model</label><input name="controller_model" class="form-control" @disabled(! $databaseReady)></div>
                             <div class="mb-3"><label class="form-label">Vendor</label><input name="controller_vendor" class="form-control" @disabled(! $databaseReady)></div>
                             <div class="mb-3">
@@ -772,6 +778,8 @@
                                                                 'zone_id' => $station['zone_id'] ?? '',
                                                                 'controller_id' => $station['controller_id'] ?? '',
                                                                 'coordinate' => $station['coordinate'] ?? '',
+                                                                'latitude' => $station['latitude'] ?? '',
+                                                                'longitude' => $station['longitude'] ?? '',
                                                                 'controller_model' => $station['controller_model'] ?? '',
                                                                 'controller_vendor' => $station['controller_vendor'] ?? '',
                                                                 'output_devices' => $station['output_devices'] ?? [],
@@ -958,9 +966,12 @@
                                 </div>
                             </div>
                             <div class="row">
-                                <div class="col-md-6 mb-3"><label class="form-label">Parameter</label><input name="parameter" class="form-control" @disabled(! $databaseReady)></div>
+                                <div class="col-md-6 mb-3"><label class="form-label">Sensor Name / Parameter</label><input name="parameter" class="form-control" placeholder="Rain Gauge Utara / rainfall" @disabled(! $databaseReady)></div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Unit</label><input name="unit" class="form-control" @disabled(! $databaseReady)></div>
                             </div>
+                            <input type="hidden" name="coordinate">
+                            <input type="hidden" name="latitude">
+                            <input type="hidden" name="longitude">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Sentinel Parameter Mapping</label>
@@ -1128,6 +1139,9 @@
                                                                 'type' => $sensor['type'] ?? 'soil_moisture',
                                                                 'data_type' => $sensor['data_type'] ?? 'uint16',
                                                                 'parameter' => $sensor['parameter'] ?? '',
+                                                                'coordinate' => $sensor['coordinate'] ?? '',
+                                                                'latitude' => $sensor['latitude'] ?? '',
+                                                                'longitude' => $sensor['longitude'] ?? '',
                                                                 'weather_parameters' => $sensor['weather_parameters'] ?? [],
                                                                 'canonical_parameter_id' => $sensor['canonical_parameter_db_id'] ?? '',
                                                                 'source_parameter' => $sensor['source_parameter'] ?? '',

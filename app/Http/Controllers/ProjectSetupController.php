@@ -708,6 +708,9 @@ class ProjectSetupController extends Controller
             'parameter' => ['nullable', 'string', 'max:255'],
             'weather_parameters' => ['nullable', 'array'],
             'weather_parameters.*' => ['string', 'max:255'],
+            'coordinate' => ['nullable', 'string', 'max:255'],
+            'latitude' => ['nullable', 'numeric'],
+            'longitude' => ['nullable', 'numeric'],
             'canonical_parameter_id' => ['nullable', 'exists:canonical_parameters,id'],
             'mapping_profile_code' => ['nullable', 'string', 'max:255'],
             'source_parameter' => ['nullable', 'string', 'max:255'],
@@ -745,6 +748,7 @@ class ProjectSetupController extends Controller
         $data['weather_parameters'] = $data['type'] === 'weather_station'
             ? $this->weatherParametersForSensor((int) $data['quantity'], $data['weather_parameters'] ?? [], $data['parameter'] ?? null)
             : null;
+        $data = $this->applyParsedCoordinate($data);
 
         $workspace = GeospatialWorkspace::findOrFail($data['workspace_id']);
         $this->assertBelongsToWorkspace(MonitoringStation::class, $data['monitoring_station_id'], $workspace->id);
@@ -1320,6 +1324,9 @@ class ProjectSetupController extends Controller
             'type' => $sensor->type,
             'parameter' => $sensor->parameter,
             'weather_parameters' => $sensor->weather_parameters ?? [],
+            'coordinate' => $sensor->coordinate,
+            'latitude' => $sensor->latitude,
+            'longitude' => $sensor->longitude,
             'canonical_parameter_db_id' => $sensor->mappingProfile?->canonical_parameter_id,
             'source_parameter' => $sensor->mappingProfile?->source_parameter,
             'source_unit' => $sensor->mappingProfile?->source_unit,
@@ -1555,7 +1562,7 @@ class ProjectSetupController extends Controller
                 ])->values()->all()
                 : [],
             'monitoringStations' => Schema::hasTable('monitoring_stations')
-                ? MonitoringStation::whereIn('project_id', $projectIds)->orderBy('station_code')->get()->map(fn (MonitoringStation $station) => [
+                ? MonitoringStation::with('warningStations')->whereIn('project_id', $projectIds)->orderBy('station_code')->get()->map(fn (MonitoringStation $station) => [
                     'id' => $station->id,
                     'project_id' => $station->project_id,
                     'workspace_id' => $station->workspace_id,
@@ -1563,25 +1570,51 @@ class ProjectSetupController extends Controller
                     'station_code' => $station->station_code,
                     'name' => $station->name,
                     'station_type' => $station->station_type,
+                    'logger_id' => $station->logger_id,
+                    'logger_status' => $station->logger_status,
+                    'registration_status' => $station->registration_status ?? 'registered',
                     'latitude' => $station->latitude,
                     'longitude' => $station->longitude,
                     'coordinate' => $station->coordinate,
                     'status' => $station->status,
                     'connectivity_status' => $station->connectivity_status,
+                    'warning_stations' => $station->warningStations->map(fn (WarningStation $warningStation) => [
+                        'id' => $warningStation->id,
+                        'station_code' => $warningStation->station_code,
+                        'name' => $warningStation->name,
+                        'zone_id' => $warningStation->zone_id,
+                        'status' => $warningStation->status,
+                        'controller_status' => $warningStation->controller_status,
+                    ])->values()->all(),
                 ])->values()->all()
                 : [],
             'warningStations' => Schema::hasTable('warning_stations')
-                ? WarningStation::whereIn('project_id', $projectIds)->orderBy('station_code')->get()->map(fn (WarningStation $station) => [
+                ? WarningStation::with('sensors')->whereIn('project_id', $projectIds)->orderBy('station_code')->get()->map(fn (WarningStation $station) => [
                     'id' => $station->id,
                     'project_id' => $station->project_id,
                     'workspace_id' => $station->workspace_id,
+                    'monitoring_station_id' => $station->monitoring_station_id,
                     'station_code' => $station->station_code,
                     'name' => $station->name,
+                    'zone_id' => $station->zone_id,
+                    'controller_id' => $station->controller_id,
+                    'controller_model' => $station->controller_model,
+                    'controller_vendor' => $station->controller_vendor,
+                    'output_devices' => $station->output_devices ?? [],
                     'latitude' => $station->latitude,
                     'longitude' => $station->longitude,
                     'coordinate' => $station->coordinate,
                     'status' => $station->status,
                     'controller_status' => $station->controller_status,
+                    'sensors' => $station->sensors->map(fn (Sensor $sensor) => [
+                        'id' => $sensor->id,
+                        'sensor_code' => $sensor->sensor_code,
+                        'name' => $sensor->parameter ?: $sensor->sensor_code,
+                        'type' => $sensor->type,
+                        'parameter' => $sensor->parameter,
+                        'status' => $sensor->status,
+                        'alert_level' => $sensor->alert_level,
+                    ])->values()->all(),
                 ])->values()->all()
                 : [],
             'sensors' => Schema::hasTable('sensors')
@@ -1606,17 +1639,33 @@ class ProjectSetupController extends Controller
                             'monitoring_station_id' => $sensor->monitoring_station_id,
                             'warning_station_id' => $sensor->warning_station_id,
                             'data_logger_id' => $sensor->data_logger_id,
+                            'input_source' => $sensor->input_source ?? 'data_logger',
+                            'mqtt_configuration_id' => $sensor->mqtt_configuration_id,
+                            'mst_prefix_id' => $sensor->mst_prefix_id,
                             'station_code' => $sensor->monitoringStation?->station_code
                                 ?? $sensor->warningStation?->station_code,
                             'logger_code' => $sensor->dataLogger?->logger_code,
                             'sensor_code' => $sensor->sensor_code,
                             'name' => $sensor->sensor_code,
+                            'slave_id' => $sensor->slave_id,
+                            'address' => $sensor->address,
+                            'function_code' => $sensor->function_code ?? 'FC03',
+                            'quantity' => $sensor->quantity ?? 1,
+                            'poll_interval_ms' => $sensor->poll_interval_ms ?? 1000,
                             'type' => $sensor->type,
                             'parameter' => $sensor->parameter,
+                            'coordinate' => $sensor->coordinate,
                             'latitude' => $latitude,
                             'longitude' => $longitude,
+                            'data_type' => $sensor->data_type,
+                            'scale_factor' => $sensor->scale_factor,
+                            'offset' => $sensor->offset,
+                            'unit' => $sensor->unit,
+                            'threshold' => $sensor->threshold,
+                            'reading_method' => $sensor->reading_method,
                             'status' => $sensor->status,
                             'alert_level' => $sensor->alert_level,
+                            'rule' => $sensor->rule,
                         ];
                     })
                     ->values()
@@ -1648,6 +1697,13 @@ class ProjectSetupController extends Controller
         $baseLongitude = $sensor->monitoringStation?->longitude
             ?? $sensor->warningStation?->longitude
             ?? $sensor->workspace?->longitude;
+
+        if ($sensor->latitude !== null && $sensor->longitude !== null) {
+            return [
+                round((float) $sensor->latitude, 6),
+                round((float) $sensor->longitude, 6),
+            ];
+        }
 
         if ($baseLatitude === null || $baseLongitude === null) {
             return [null, null];

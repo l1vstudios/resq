@@ -132,6 +132,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/data-loggers/gateway-mode', [DeviceSetupController::class, 'applyDataLoggerGatewayMode'])->name('data-loggers.gateway-mode');
     Route::post('/data-loggers/node-red-mqtt/apply', [DeviceSetupController::class, 'applyNodeRedMqttConfig'])->name('data-loggers.node-red-mqtt.apply');
     Route::post('/data-loggers/node-red-mqtt/test', [DeviceSetupController::class, 'testNodeRedMqtt'])->name('data-loggers.node-red-mqtt.test');
+    Route::view('/master-data-tde', 'modules.master-data-tde.index')->name('master-data-tde.index');
     Route::get('/connectivity', [RegisteredDataController::class, 'connectivity'])->name('connectivity.index');
     Route::post('/connectivity', [DeviceSetupController::class, 'storeConnectivity'])->name('connectivity.store');
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');

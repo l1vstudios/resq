@@ -116,6 +116,7 @@
                         || request()->routeIs('cfpe.*')
                         || request()->routeIs('canonical-database.*')
                         || request()->routeIs('canonical-mapping.*')
+                        || request()->routeIs('master-data-tde.*')
                         || request()->routeIs('data-loggers.*');
                     $registeredMenuActive = request()->routeIs('clusters.*')
                         || request()->routeIs('monitoring-stations.*')
@@ -146,6 +147,11 @@
                         <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('data-loggers.index') }}" class="{{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
                                 Data Loggers
+                            </a>
+                        </li>
+                        <li class="{{ request()->routeIs('master-data-tde.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('master-data-tde.index') }}" class="{{ request()->routeIs('master-data-tde.*') ? 'active' : '' }}">
+                                Master Data TDE
                             </a>
                         </li>
                     </ul>
