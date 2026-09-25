@@ -418,6 +418,10 @@
             west: 112.783198121,
             east: 113.249208404
         };
+        const INITIAL_MAP_BOUNDS = L.latLngBounds(
+            [MAP_BOUNDS.south, MAP_BOUNDS.west],
+            [MAP_BOUNDS.north, MAP_BOUNDS.east]
+        );
         const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content
             || '{{ csrf_token() }}';
 
@@ -448,27 +452,29 @@
         function initMap() {
             map = L.map('cfpe-map', {
                 zoomControl: true,
-                scrollWheelZoom: true
+                scrollWheelZoom: true,
+                minZoom: 10,
+                maxZoom: 16,
+                maxBounds: INITIAL_MAP_BOUNDS,
+                maxBoundsViscosity: 0.9
             });
 
             // Terrain base layer (OpenTopoMap with contour lines)
             L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> & <a href="https://opentopomap.org">OpenTopoMap</a>',
-                maxZoom: 17
+                minZoom: 10,
+                maxZoom: 16
             }).addTo(map);
 
             // Hillshade overlay for 3D depth effect
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
+                minZoom: 10,
                 maxZoom: 16,
                 opacity: 0.34,
                 attribution: 'Hillshade &copy; Esri'
             }).addTo(map);
 
-            const bounds = L.latLngBounds(
-                [MAP_BOUNDS.south, MAP_BOUNDS.west],
-                [MAP_BOUNDS.north, MAP_BOUNDS.east]
-            );
-            map.fitBounds(bounds);
+            map.fitBounds(INITIAL_MAP_BOUNDS, { maxZoom: 13 });
 
             markersLayer = L.layerGroup().addTo(map);
             polylinesLayer = L.layerGroup().addTo(map);
@@ -489,39 +495,193 @@
             setTimeout(loadMapData, 300);
         }
 
+        function cfpeDivIcon(color, size) {
+            var markerSize = size || 18;
+            return L.divIcon({
+                className: 'leaflet-div-icon-transparent',
+                iconSize: [markerSize, markerSize],
+                iconAnchor: [markerSize / 2, markerSize / 2],
+                html: '<span style="display:block;width:' + markerSize + 'px;height:' + markerSize + 'px;border-radius:999px;background:' + color + ';border:3px solid #fff;box-shadow:0 8px 18px rgba(15,35,60,.24);"></span>'
+            });
+        }
+
+        function relationRows(items, emptyText, formatter) {
+            var rows = (items || []).map(formatter).filter(Boolean);
+            if (!rows.length) {
+                return '<div class="text-muted" style="font-size:12px;">' + escapeHtml(emptyText) + '</div>';
+            }
+            return '<div style="display:grid;gap:6px;margin-top:6px;">' + rows.join('') + '</div>';
+        }
+
+        function relationItem(title, subtitle, status) {
+            return '<div style="border-top:1px solid #e8eef5;padding-top:6px;">' +
+                '<div style="font-weight:700;color:#263238;">' + escapeHtml(title || '-') + '</div>' +
+                '<div style="font-size:12px;color:#65758b;">' + escapeHtml(subtitle || '-') + '</div>' +
+                (status ? '<div style="font-size:12px;color:#2563eb;">' + escapeHtml(status) + '</div>' : '') +
+            '</div>';
+        }
+
+        function monitoringStationPopup(station) {
+            return '<strong>Monitoring Station</strong><br>' +
+                '<code>' + escapeHtml(station.station_code || '-') + '</code><br>' +
+                escapeHtml(station.name || '-') +
+                '<div style="margin-top:8px;font-weight:700;color:#071f49;">Warning Station Terikat</div>' +
+                relationRows(station.warning_stations, 'Belum ada warning station terikat.', function (warning) {
+                    return relationItem(
+                        [warning.station_code, warning.name].filter(Boolean).join(' - '),
+                        warning.zone_id ? 'Zone: ' + warning.zone_id : 'Warning Station',
+                        [warning.status, warning.controller_status].filter(Boolean).join(' / ')
+                    );
+                });
+        }
+
+        function warningStationPopup(station) {
+            var topology = relationRows(station.data_loggers, 'Belum ada data logger dan sensor terikat.', function (logger) {
+                var sensors = relationRows(logger.sensors, 'Belum ada sensor pada data logger ini.', function (sensor) {
+                    return relationItem(
+                        [sensor.sensor_code, sensor.name].filter(Boolean).join(' - '),
+                        [sensor.type, sensor.parameter].filter(Boolean).join(' / '),
+                        [sensor.status, sensor.alert_level].filter(Boolean).join(' / ')
+                    );
+                });
+
+                return '<div style="border-top:1px solid #dce7f3;padding-top:7px;">' +
+                    '<div style="font-weight:800;color:#071f49;">Data Logger: ' + escapeHtml(logger.logger_code || '-') + '</div>' +
+                    (logger.logger_status ? '<div style="font-size:12px;color:#65758b;">Status: ' + escapeHtml(logger.logger_status) + '</div>' : '') +
+                    '<div style="margin-left:10px;">' + sensors + '</div>' +
+                '</div>';
+            });
+
+            return '<strong>Warning Station</strong><br>' +
+                '<code>' + escapeHtml(station.station_code || '-') + '</code><br>' +
+                escapeHtml(station.name || '-') +
+                '<div style="margin-top:8px;font-weight:700;color:#071f49;">Topologi Data Logger & Sensor</div>' +
+                topology;
+        }
+
+        function referencePointPopup(point, route) {
+            return '<strong>' + escapeHtml(point.point_code || '-') + '</strong>' +
+                (point.name ? '<br>' + escapeHtml(point.name) : '') +
+                (point.bm_id ? '<br>BM: ' + escapeHtml(point.bm_id) : '') +
+                (point.chainage != null ? '<br>Chainage: ' + formatNumber(point.chainage) + ' m' : '') +
+                (point.segment_name ? '<br>Segment: ' + escapeHtml(point.segment_name) : '') +
+                (route ? '<br>Route: ' + escapeHtml(route.route_code || route.name || '-') : '');
+        }
+
+        function saveMapPoint(type, id, latLng, onSaved) {
+            if (!id) return;
+            fetch('/cfpe/map-point', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': CSRF_TOKEN
+                },
+                body: JSON.stringify({
+                    type: type,
+                    id: id,
+                    latitude: latLng.lat,
+                    longitude: latLng.lng
+                })
+            })
+            .then(handleResponse)
+            .then(function (data) {
+                if (typeof onSaved === 'function') {
+                    onSaved(data);
+                }
+            })
+            .catch(function (err) {
+                showError('Gagal menyimpan koordinat: ' + err.message);
+            });
+        }
+
+        function bindDraggablePoint(marker, type, item, popupBuilder) {
+            marker.on('dragend', function () {
+                var latLng = marker.getLatLng();
+                item.latitude = latLng.lat;
+                item.longitude = latLng.lng;
+                saveMapPoint(type, item.id, latLng, function () {
+                    if (typeof popupBuilder === 'function') {
+                        marker.bindPopup(popupBuilder(item));
+                    }
+                });
+            });
+            return marker;
+        }
+
+        function appendPathCoordinates(coords, points) {
+            if (!Array.isArray(coords) || !coords.length) return;
+            if (Array.isArray(coords[0]) && typeof coords[0][0] === 'number') {
+                coords.forEach(function (c) {
+                    if (Array.isArray(c) && c.length >= 2) points.push([c[1], c[0]]);
+                });
+                return;
+            }
+            coords.forEach(function (child) {
+                appendPathCoordinates(child, points);
+            });
+        }
+
+        function lockMapToPoints(points) {
+            var valid = (points || []).filter(function (point) {
+                return Array.isArray(point) && isFinite(point[0]) && isFinite(point[1]);
+            });
+            if (!valid.length) {
+                map.setMaxBounds(INITIAL_MAP_BOUNDS);
+                return;
+            }
+            var bounds = L.latLngBounds(valid);
+            var padded = bounds.pad(0.35);
+            map.setMaxBounds(padded);
+            map.fitBounds(bounds, { padding: [42, 42], maxZoom: 14 });
+        }
+
+        function lockMapToData(data) {
+            var points = [];
+            (data.routes || []).forEach(function (route) {
+                appendPathCoordinates(route.path_coordinates, points);
+                (route.points || []).forEach(function (point) {
+                    if (point.latitude && point.longitude) points.push([point.latitude, point.longitude]);
+                });
+            });
+            (data.corridors || []).forEach(function (corridor) {
+                appendPathCoordinates(corridor.path_coordinates, points);
+            });
+            (data.monitoring_stations || []).concat(data.warning_stations || []).forEach(function (station) {
+                if (station.latitude && station.longitude) points.push([station.latitude, station.longitude]);
+            });
+            lockMapToPoints(points);
+        }
+
         function renderStations(monitoringStations, warningStations) {
             // Monitoring stations - tower icon
             monitoringStations.forEach(function (station) {
                 if (!station.latitude || !station.longitude) return;
-                L.marker([station.latitude, station.longitude], {
+                var marker = L.marker([station.latitude, station.longitude], {
+                    draggable: true,
                     icon: L.divIcon({
                         html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🗼</span>',
                         className: 'leaflet-div-icon-transparent',
                         iconSize: [26, 26],
                         iconAnchor: [13, 26]
                     })
-                }).bindPopup(
-                    '<strong>📡 Monitoring Station</strong><br>' +
-                    '<code>' + escapeHtml(station.station_code) + '</code><br>' +
-                    escapeHtml(station.name)
-                ).addTo(corridorLayer);
+                }).bindPopup(monitoringStationPopup(station)).addTo(corridorLayer);
+                bindDraggablePoint(marker, 'monitoring_station', station, monitoringStationPopup);
             });
 
             // Warning stations - siren icon
             warningStations.forEach(function (station) {
                 if (!station.latitude || !station.longitude) return;
-                L.marker([station.latitude, station.longitude], {
+                var marker = L.marker([station.latitude, station.longitude], {
+                    draggable: true,
                     icon: L.divIcon({
                         html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🚨</span>',
                         className: 'leaflet-div-icon-transparent',
                         iconSize: [26, 26],
                         iconAnchor: [13, 26]
                     })
-                }).bindPopup(
-                    '<strong>🚨 Warning Station</strong><br>' +
-                    '<code>' + escapeHtml(station.station_code) + '</code><br>' +
-                    escapeHtml(station.name)
-                ).addTo(corridorLayer);
+                }).bindPopup(warningStationPopup(station)).addTo(corridorLayer);
+                bindDraggablePoint(marker, 'warning_station', station, warningStationPopup);
             });
         }
 
@@ -763,27 +923,19 @@
             });
 
             validPoints.forEach(function (point) {
-                const marker = L.circleMarker([point.latitude, point.longitude], {
-                    radius: 7,
-                    fillColor: '#e74c3c',
-                    color: '#fff',
-                    weight: 2,
-                    fillOpacity: 0.9
+                const marker = L.marker([point.latitude, point.longitude], {
+                    draggable: true,
+                    icon: cfpeDivIcon('#e74c3c', 17)
                 }).addTo(markersLayer);
 
-                marker.bindPopup(
-                    '<strong>' + escapeHtml(point.point_code || '') + '</strong><br>' +
-                    'BM ID: ' + escapeHtml(point.bm_id || '-') + '<br>' +
-                    'Chainage: ' + (point.chainage != null ? point.chainage.toFixed(2) + ' m' : '-') + '<br>' +
-                    'Segment: ' + escapeHtml(point.segment_name || '-')
-                );
+                marker.bindPopup(referencePointPopup(point));
+                bindDraggablePoint(marker, 'reference_point', point, referencePointPopup);
             });
 
             if (validPoints.length > 0) {
-                const bounds = L.latLngBounds(validPoints.map(function (p) {
+                lockMapToPoints(validPoints.map(function (p) {
                     return [p.latitude, p.longitude];
                 }));
-                map.fitBounds(bounds, { padding: [40, 40] });
             }
         }
 
@@ -990,6 +1142,7 @@
                 legendItems = legendItems.concat(renderInformationLayers(data.information_layers || []));
                 legendItems = legendItems.concat(renderRoutePolylines(data.routes || []));
                 renderStations(data.monitoring_stations || [], data.warning_stations || []);
+                lockMapToData(data);
                 buildLegend(legendItems);
                 buildRouteList(data.routes || []);
                 buildGpkgList(data.corridors || [], data.information_layers || []);
@@ -1218,18 +1371,13 @@
                 if (route.points) {
                     route.points.forEach(function (point) {
                         if (!point.latitude || !point.longitude) return;
-                        L.circleMarker([point.latitude, point.longitude], {
-                            radius: 5,
-                            fillColor: color,
-                            color: '#333',
-                            weight: 1,
-                            fillOpacity: 0.8
-                        }).bindPopup(
-                            '<strong>' + escapeHtml(point.point_code) + '</strong>' +
-                            (point.bm_id ? '<br>BM: ' + escapeHtml(point.bm_id) : '') +
-                            (point.chainage ? '<br>Chainage: ' + formatNumber(point.chainage) + ' m' : '') +
-                            (point.segment_name ? '<br>Segment: ' + escapeHtml(point.segment_name) : '')
-                        ).addTo(markersLayer);
+                        var marker = L.marker([point.latitude, point.longitude], {
+                            draggable: true,
+                            icon: cfpeDivIcon(color, 13)
+                        }).bindPopup(referencePointPopup(point, route)).addTo(markersLayer);
+                        bindDraggablePoint(marker, 'reference_point', point, function (updatedPoint) {
+                            return referencePointPopup(updatedPoint, route);
+                        });
                     });
                 }
             });

@@ -150,6 +150,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cfpe/import-csv', [CfpeController::class, 'importCsv'])->name('cfpe.import-csv');
     Route::post('/cfpe/import-gpkg', [CfpeController::class, 'importGpkg'])->name('cfpe.import-gpkg');
     Route::post('/cfpe/calculate', [CfpeController::class, 'calculate'])->name('cfpe.calculate');
+    Route::post('/cfpe/map-point', [CfpeController::class, 'updateMapPoint'])->name('cfpe.map-point.update');
     Route::get('/cfpe/routes/{route}/points', [CfpeController::class, 'routePoints'])->name('cfpe.route-points');
     Route::get('/cfpe/map-data', [CfpeController::class, 'mapData'])->name('cfpe.map-data');
     Route::get('/cfpe/workspace-data/{workspace}', [CfpeController::class, 'workspaceData'])->name('cfpe.workspace-data');

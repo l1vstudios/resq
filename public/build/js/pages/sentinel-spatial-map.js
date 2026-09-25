@@ -267,18 +267,26 @@
 
     function warningPopup(station) {
         var title = station.station_code || station.name || 'Warning Station';
-        var relation = relationRows(station.sensors, 'Belum ada sensor terikat.', function (sensor) {
-            return relationItem(
-                [sensor.sensor_code, sensor.name].filter(Boolean).join(' - '),
-                [sensor.type, sensor.parameter].filter(Boolean).join(' / '),
-                [sensor.status, sensor.alert_level].filter(Boolean).join(' / ')
-            );
+        var topology = relationRows(station.data_loggers, 'Belum ada data logger dan sensor terikat.', function (logger) {
+            var sensors = relationRows(logger.sensors, 'Belum ada sensor pada data logger ini.', function (sensor) {
+                return relationItem(
+                    [sensor.sensor_code, sensor.name].filter(Boolean).join(' - '),
+                    [sensor.type, sensor.parameter].filter(Boolean).join(' / '),
+                    [sensor.status, sensor.alert_level].filter(Boolean).join(' / ')
+                );
+            });
+
+            return '<div style="border-top:1px solid #dce7f3;padding-top:7px;">' +
+                '<div style="font-weight:800;color:#071f49;">Data Logger: ' + escapeHtml(logger.logger_code || '-') + '</div>' +
+                (logger.logger_status ? '<div style="font-size:12px;color:#65758b;">Status: ' + escapeHtml(logger.logger_status) + '</div>' : '') +
+                '<div style="margin-left:10px;">' + sensors + '</div>' +
+            '</div>';
         });
 
         return '<strong>' + escapeHtml(title) + '</strong>' +
             '<br><span>' + escapeHtml(station.name || station.status || '-') + '</span>' +
-            '<div style="margin-top:8px;font-weight:700;color:#071f49;">Sensor Terikat</div>' +
-            relation;
+            '<div style="margin-top:8px;font-weight:700;color:#071f49;">Topologi Data Logger & Sensor</div>' +
+            topology;
     }
 
     function formFieldsForStation(type, resource, point) {

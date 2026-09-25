@@ -7,8 +7,10 @@ use App\Models\Project;
 use App\Models\ReferenceRoute;
 use App\Models\ReferencePoint;
 use App\Models\GeospatialWorkspace;
+use App\Models\MonitoringStation;
 use App\Models\SpatialInformationLayer;
 use App\Models\StationFunctionConfiguration;
+use App\Models\WarningStation;
 use App\Services\CfpeRouteImportService;
 use App\Services\CfpeCalculationService;
 use App\Services\GpkgImportService;
@@ -132,6 +134,36 @@ class CfpeController extends Controller
         return response()->json(['points' => $points]);
     }
 
+    public function updateMapPoint(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'in:reference_point,monitoring_station,warning_station'],
+            'id' => ['required', 'integer'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $model = match ($data['type']) {
+            'reference_point' => ReferencePoint::findOrFail($data['id']),
+            'monitoring_station' => MonitoringStation::findOrFail($data['id']),
+            'warning_station' => WarningStation::findOrFail($data['id']),
+        };
+
+        $coordinate = sprintf('%.7F, %.7F', (float) $data['latitude'], (float) $data['longitude']);
+        $model->forceFill([
+            'coordinate' => $coordinate,
+            'latitude' => $data['latitude'],
+            'longitude' => $data['longitude'],
+        ])->save();
+
+        return response()->json([
+            'success' => true,
+            'coordinate' => $coordinate,
+            'latitude' => (float) $model->latitude,
+            'longitude' => (float) $model->longitude,
+        ]);
+    }
+
     // GET /cfpe/map-data - get all spatial data for the map
     public function mapData(Request $request): JsonResponse
     {
@@ -164,8 +196,10 @@ class CfpeController extends Controller
                 ->filter(fn ($p) => $p->latitude && $p->longitude)
                 ->map(fn (ReferencePoint $p) => [
                     'id' => $p->id,
+                    'reference_route_id' => $p->reference_route_id,
                     'point_code' => $p->point_code,
                     'bm_id' => $p->bm_id,
+                    'name' => $p->name,
                     'chainage' => $p->chainage ? (float) $p->chainage : null,
                     'latitude' => (float) $p->latitude,
                     'longitude' => (float) $p->longitude,
@@ -192,7 +226,8 @@ class CfpeController extends Controller
         ]);
 
         // Monitoring & Warning Stations
-        $monitoringStations = \App\Models\MonitoringStation::whereNotNull('latitude')
+        $monitoringStations = MonitoringStation::with('warningStations')
+            ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->when($workspaceId, fn ($q) => $q->where('workspace_id', $workspaceId))
             ->when($projectId && !$workspaceId, fn ($q) => $q->where('project_id', $projectId))
@@ -204,9 +239,18 @@ class CfpeController extends Controller
                 'latitude' => (float) $s->latitude,
                 'longitude' => (float) $s->longitude,
                 'status' => $s->status,
+                'warning_stations' => $s->warningStations->map(fn (WarningStation $warningStation) => [
+                    'id' => $warningStation->id,
+                    'station_code' => $warningStation->station_code,
+                    'name' => $warningStation->name,
+                    'zone_id' => $warningStation->zone_id,
+                    'status' => $warningStation->status,
+                    'controller_status' => $warningStation->controller_status,
+                ])->values(),
             ]);
 
-        $warningStations = \App\Models\WarningStation::whereNotNull('latitude')
+        $warningStations = WarningStation::with('sensors.dataLogger')
+            ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->when($workspaceId, fn ($q) => $q->where('workspace_id', $workspaceId))
             ->when($projectId && !$workspaceId, fn ($q) => $q->where('project_id', $projectId))
@@ -218,6 +262,31 @@ class CfpeController extends Controller
                 'latitude' => (float) $s->latitude,
                 'longitude' => (float) $s->longitude,
                 'status' => $s->status,
+                'data_loggers' => $s->sensors
+                    ->groupBy(fn ($sensor) => $sensor->dataLogger?->logger_code ?: 'Tanpa Data Logger')
+                    ->map(fn ($sensors, string $loggerCode) => [
+                        'logger_code' => $loggerCode,
+                        'logger_status' => $sensors->first()?->dataLogger?->logger_status,
+                        'sensors' => $sensors->map(fn ($sensor) => [
+                            'id' => $sensor->id,
+                            'sensor_code' => $sensor->sensor_code,
+                            'name' => $sensor->parameter ?: $sensor->sensor_code,
+                            'type' => $sensor->type,
+                            'parameter' => $sensor->parameter,
+                            'status' => $sensor->status,
+                            'alert_level' => $sensor->alert_level,
+                        ])->values(),
+                    ])
+                    ->values(),
+                'sensors' => $s->sensors->map(fn ($sensor) => [
+                    'id' => $sensor->id,
+                    'sensor_code' => $sensor->sensor_code,
+                    'name' => $sensor->parameter ?: $sensor->sensor_code,
+                    'type' => $sensor->type,
+                    'parameter' => $sensor->parameter,
+                    'status' => $sensor->status,
+                    'alert_level' => $sensor->alert_level,
+                ])->values(),
             ]);
 
         return response()->json([

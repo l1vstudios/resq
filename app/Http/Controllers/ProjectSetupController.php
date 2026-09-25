@@ -1589,7 +1589,7 @@ class ProjectSetupController extends Controller
                 ])->values()->all()
                 : [],
             'warningStations' => Schema::hasTable('warning_stations')
-                ? WarningStation::with('sensors')->whereIn('project_id', $projectIds)->orderBy('station_code')->get()->map(fn (WarningStation $station) => [
+                ? WarningStation::with('sensors.dataLogger')->whereIn('project_id', $projectIds)->orderBy('station_code')->get()->map(fn (WarningStation $station) => [
                     'id' => $station->id,
                     'project_id' => $station->project_id,
                     'workspace_id' => $station->workspace_id,
@@ -1606,6 +1606,23 @@ class ProjectSetupController extends Controller
                     'coordinate' => $station->coordinate,
                     'status' => $station->status,
                     'controller_status' => $station->controller_status,
+                    'data_loggers' => $station->sensors
+                        ->groupBy(fn (Sensor $sensor) => $sensor->dataLogger?->logger_code ?: 'Tanpa Data Logger')
+                        ->map(fn ($sensors, string $loggerCode) => [
+                            'logger_code' => $loggerCode,
+                            'logger_status' => $sensors->first()?->dataLogger?->logger_status,
+                            'sensors' => $sensors->map(fn (Sensor $sensor) => [
+                                'id' => $sensor->id,
+                                'sensor_code' => $sensor->sensor_code,
+                                'name' => $sensor->parameter ?: $sensor->sensor_code,
+                                'type' => $sensor->type,
+                                'parameter' => $sensor->parameter,
+                                'status' => $sensor->status,
+                                'alert_level' => $sensor->alert_level,
+                            ])->values()->all(),
+                        ])
+                        ->values()
+                        ->all(),
                     'sensors' => $station->sensors->map(fn (Sensor $sensor) => [
                         'id' => $sensor->id,
                         'sensor_code' => $sensor->sensor_code,
