@@ -251,7 +251,7 @@ class CfpeController extends Controller
                 ])->values(),
             ]);
 
-        $warningStations = WarningStation::with('sensors.dataLogger')
+        $warningStations = WarningStation::with(['sensors.dataLogger', 'sensors.mappingProfiles.canonicalParameter'])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->when($workspaceId, fn ($q) => $q->where('workspace_id', $workspaceId))
@@ -269,6 +269,10 @@ class CfpeController extends Controller
                     ->map(fn ($sensors, string $loggerCode) => [
                         'logger_code' => $loggerCode,
                         'logger_status' => $sensors->first()?->dataLogger?->logger_status,
+                        'active_presets' => $sensors
+                            ->flatMap(fn ($sensor) => $this->activePresetsForSensor($sensor))
+                            ->unique(fn (array $preset) => ($preset['device_model'] ?? '') . '|' . ($preset['profile_code'] ?? ''))
+                            ->values(),
                         'sensors' => $sensors->map(fn ($sensor) => [
                             'id' => $sensor->id,
                             'sensor_code' => $sensor->sensor_code,
@@ -277,6 +281,7 @@ class CfpeController extends Controller
                             'parameter' => $sensor->parameter,
                             'status' => $sensor->status,
                             'alert_level' => $sensor->alert_level,
+                            'active_presets' => $this->activePresetsForSensor($sensor),
                         ])->values(),
                     ])
                     ->values(),
@@ -288,6 +293,7 @@ class CfpeController extends Controller
                     'parameter' => $sensor->parameter,
                     'status' => $sensor->status,
                     'alert_level' => $sensor->alert_level,
+                    'active_presets' => $this->activePresetsForSensor($sensor),
                 ])->values(),
             ]);
 
@@ -327,6 +333,23 @@ class CfpeController extends Controller
             'warning_stations' => $warningStations,
             'sensors' => $sensors,
         ]);
+    }
+
+    private function activePresetsForSensor(Sensor $sensor): array
+    {
+        return $sensor->mappingProfiles
+            ->filter(fn ($profile) => strtolower((string) $profile->status) === 'active')
+            ->map(fn ($profile) => [
+                'profile_code' => $profile->profile_code,
+                'manufacturer' => $profile->manufacturer,
+                'device_model' => $profile->device_model,
+                'communication_path' => $profile->communication_path,
+                'source_parameter' => $profile->source_parameter,
+                'canonical_parameter' => $profile->canonicalParameter?->field_identity,
+                'status' => $profile->status,
+            ])
+            ->values()
+            ->all();
     }
 
     private function sensorMapCoordinate(Sensor $sensor, int $index): array

@@ -531,12 +531,28 @@
             return '<div style="display:grid;gap:6px;margin-top:6px;">' + rows.join('') + '</div>';
         }
 
-        function relationItem(title, subtitle, status) {
+        function relationItem(title, subtitle, status, details) {
             return '<div style="border-top:1px solid #e8eef5;padding-top:6px;">' +
                 '<div style="font-weight:700;color:#263238;">' + escapeHtml(title || '-') + '</div>' +
                 '<div style="font-size:12px;color:#65758b;">' + escapeHtml(subtitle || '-') + '</div>' +
                 (status ? '<div style="font-size:12px;color:#2563eb;">' + escapeHtml(status) + '</div>' : '') +
+                (details ? '<div style="font-size:12px;color:#475569;margin-top:3px;">' + details + '</div>' : '') +
             '</div>';
+        }
+
+        function activePresetText(presets) {
+            var rows = (presets || []).map(function (preset) {
+                return [
+                    preset.device_model || preset.profile_code || 'Preset',
+                    preset.canonical_parameter || preset.source_parameter
+                ].filter(Boolean).join(' - ');
+            }).filter(Boolean);
+
+            if (!rows.length) {
+                return '';
+            }
+
+            return '<span style="font-weight:700;color:#071f49;">Preset aktif:</span> ' + escapeHtml(rows.join(', '));
         }
 
         function monitoringStationPopup(station) {
@@ -559,13 +575,15 @@
                     return relationItem(
                         [sensor.sensor_code, sensor.name].filter(Boolean).join(' - '),
                         [sensor.type, sensor.parameter].filter(Boolean).join(' / '),
-                        [sensor.status, sensor.alert_level].filter(Boolean).join(' / ')
+                        [sensor.status, sensor.alert_level].filter(Boolean).join(' / '),
+                        activePresetText(sensor.active_presets)
                     );
                 });
 
                 return '<div style="border-top:1px solid #dce7f3;padding-top:7px;">' +
                     '<div style="font-weight:800;color:#071f49;">Data Logger: ' + escapeHtml(logger.logger_code || '-') + '</div>' +
                     (logger.logger_status ? '<div style="font-size:12px;color:#65758b;">Status: ' + escapeHtml(logger.logger_status) + '</div>' : '') +
+                    (activePresetText(logger.active_presets) ? '<div style="font-size:12px;color:#475569;margin-top:2px;">' + activePresetText(logger.active_presets) + '</div>' : '') +
                     '<div style="margin-left:10px;">' + sensors + '</div>' +
                 '</div>';
             });
