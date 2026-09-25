@@ -541,18 +541,39 @@
         }
 
         function activePresetText(presets) {
-            var rows = (presets || []).map(function (preset) {
-                return [
-                    preset.device_model || preset.profile_code || 'Preset',
-                    preset.canonical_parameter || preset.source_parameter
-                ].filter(Boolean).join(' - ');
-            }).filter(Boolean);
+            var rows = (presets || []).filter(function (preset) {
+                return preset && (preset.label || preset.device_model || preset.key);
+            });
 
             if (!rows.length) {
                 return '';
             }
 
-            return '<span style="font-weight:700;color:#071f49;">Preset aktif:</span> ' + escapeHtml(rows.join(', '));
+            var names = rows.map(function (preset) {
+                return preset.label || preset.device_model || preset.key || 'Preset';
+            });
+
+            var details = rows.map(function (preset) {
+                var parameters = (preset.parameters || []).map(function (parameter) {
+                    return '<li>' + escapeHtml([
+                        parameter.name || parameter.source_parameter,
+                        parameter.source_unit,
+                        parameter.function_code ? 'FC: ' + parameter.function_code : null,
+                        parameter.register_offset !== null && parameter.register_offset !== undefined ? 'Reg: ' + parameter.register_offset : null
+                    ].filter(Boolean).join(' / ')) + '</li>';
+                }).join('');
+
+                return '<div style="margin-top:5px;">' +
+                    '<div style="font-weight:700;color:#263238;">' + escapeHtml(preset.label || preset.device_model || preset.key || 'Preset') + '</div>' +
+                    (parameters ? '<ul style="margin:4px 0 0 16px;padding:0;">' + parameters + '</ul>' : '<div class="text-muted">Isi preset belum tersedia.</div>') +
+                '</div>';
+            }).join('');
+
+            return '<span style="font-weight:700;color:#071f49;">Preset aktif:</span> ' + escapeHtml(names.join(', ')) +
+                '<details style="display:inline-block;margin-left:6px;vertical-align:middle;">' +
+                    '<summary style="display:inline-block;cursor:pointer;font-size:11px;padding:1px 6px;border:1px solid #b8c5d6;border-radius:4px;color:#2563eb;background:#f8fbff;">Detail</summary>' +
+                    '<div style="margin-top:6px;min-width:220px;">' + details + '</div>' +
+                '</details>';
         }
 
         function monitoringStationPopup(station) {
@@ -572,18 +593,20 @@
         function warningStationPopup(station) {
             var topology = relationRows(station.data_loggers, 'Belum ada data logger dan sensor terikat.', function (logger) {
                 var sensors = relationRows(logger.sensors, 'Belum ada sensor pada data logger ini.', function (sensor) {
+                    var sensorPreset = activePresetText(sensor.active_presets);
                     return relationItem(
                         [sensor.sensor_code, sensor.name].filter(Boolean).join(' - '),
                         [sensor.type, sensor.parameter].filter(Boolean).join(' / '),
                         [sensor.status, sensor.alert_level].filter(Boolean).join(' / '),
-                        activePresetText(sensor.active_presets)
+                        sensorPreset
                     );
                 });
+                var loggerPreset = activePresetText(logger.active_presets);
 
                 return '<div style="border-top:1px solid #dce7f3;padding-top:7px;">' +
                     '<div style="font-weight:800;color:#071f49;">Data Logger: ' + escapeHtml(logger.logger_code || '-') + '</div>' +
                     (logger.logger_status ? '<div style="font-size:12px;color:#65758b;">Status: ' + escapeHtml(logger.logger_status) + '</div>' : '') +
-                    (activePresetText(logger.active_presets) ? '<div style="font-size:12px;color:#475569;margin-top:2px;">' + activePresetText(logger.active_presets) + '</div>' : '') +
+                    (loggerPreset ? '<div style="font-size:12px;color:#475569;margin-top:2px;">' + loggerPreset + '</div>' : '') +
                     '<div style="margin-left:10px;">' + sensors + '</div>' +
                 '</div>';
             });

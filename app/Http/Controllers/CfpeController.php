@@ -17,6 +17,8 @@ use App\Services\CfpeCalculationService;
 use App\Services\GpkgImportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class CfpeController extends Controller
@@ -251,6 +253,8 @@ class CfpeController extends Controller
                 ])->values(),
             ]);
 
+        $presetLookup = $this->activePresetLookup();
+
         $warningStations = WarningStation::with(['sensors.dataLogger', 'sensors.mappingProfiles.canonicalParameter'])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
@@ -270,8 +274,8 @@ class CfpeController extends Controller
                         'logger_code' => $loggerCode,
                         'logger_status' => $sensors->first()?->dataLogger?->logger_status,
                         'active_presets' => $sensors
-                            ->flatMap(fn ($sensor) => $this->activePresetsForSensor($sensor))
-                            ->unique(fn (array $preset) => ($preset['device_model'] ?? '') . '|' . ($preset['profile_code'] ?? ''))
+                            ->flatMap(fn ($sensor) => $this->activePresetsForSensor($sensor, $presetLookup))
+                            ->unique(fn (array $preset) => $preset['key'])
                             ->values(),
                         'sensors' => $sensors->map(fn ($sensor) => [
                             'id' => $sensor->id,
@@ -281,7 +285,7 @@ class CfpeController extends Controller
                             'parameter' => $sensor->parameter,
                             'status' => $sensor->status,
                             'alert_level' => $sensor->alert_level,
-                            'active_presets' => $this->activePresetsForSensor($sensor),
+                            'active_presets' => $this->activePresetsForSensor($sensor, $presetLookup),
                         ])->values(),
                     ])
                     ->values(),
@@ -293,7 +297,7 @@ class CfpeController extends Controller
                     'parameter' => $sensor->parameter,
                     'status' => $sensor->status,
                     'alert_level' => $sensor->alert_level,
-                    'active_presets' => $this->activePresetsForSensor($sensor),
+                    'active_presets' => $this->activePresetsForSensor($sensor, $presetLookup),
                 ])->values(),
             ]);
 
@@ -335,21 +339,91 @@ class CfpeController extends Controller
         ]);
     }
 
-    private function activePresetsForSensor(Sensor $sensor): array
+    private function activePresetLookup(): array
+    {
+        if (! Schema::hasTable('sensor_mapping_presets') || ! Schema::hasTable('sensor_mapping_preset_items')) {
+            return [];
+        }
+
+        $hasPresetItemProtocol = Schema::hasColumn('sensor_mapping_preset_items', 'function_code');
+        $columns = [
+            'sensor_mapping_presets.preset_key',
+            'sensor_mapping_presets.label',
+            'sensor_mapping_presets.manufacturer',
+            'sensor_mapping_presets.device_model',
+            'sensor_mapping_preset_items.source_parameter',
+            'sensor_mapping_preset_items.source_unit',
+            'sensor_mapping_preset_items.register_offset',
+            'canonical_parameters.field_identity',
+        ];
+
+        if ($hasPresetItemProtocol) {
+            $columns[] = 'sensor_mapping_preset_items.function_code';
+        }
+
+        $items = DB::table('sensor_mapping_preset_items')
+            ->join('sensor_mapping_presets', 'sensor_mapping_presets.id', '=', 'sensor_mapping_preset_items.sensor_mapping_preset_id')
+            ->leftJoin('canonical_parameters', 'canonical_parameters.id', '=', 'sensor_mapping_preset_items.canonical_parameter_id')
+            ->where('sensor_mapping_presets.status', 'active')
+            ->orderBy('sensor_mapping_preset_items.sort_order')
+            ->orderBy('sensor_mapping_preset_items.register_offset')
+            ->get($columns);
+
+        return $items
+            ->groupBy(fn ($item) => $this->presetLookupKey($item->manufacturer, $item->device_model))
+            ->map(function ($rows) {
+                $first = $rows->first();
+
+                return [
+                    'key' => $first->preset_key,
+                    'label' => $first->label,
+                    'manufacturer' => $first->manufacturer,
+                    'device_model' => $first->device_model,
+                    'parameters' => $rows->map(fn ($item) => [
+                        'name' => $item->field_identity ?: $item->source_parameter,
+                        'source_parameter' => $item->source_parameter,
+                        'source_unit' => $item->source_unit,
+                        'register_offset' => $item->register_offset,
+                        'function_code' => $hasPresetItemProtocol ? $item->function_code : null,
+                    ])->values()->all(),
+                ];
+            })
+            ->all();
+    }
+
+    private function activePresetsForSensor(Sensor $sensor, array $presetLookup): array
     {
         return $sensor->mappingProfiles
             ->filter(fn ($profile) => strtolower((string) $profile->status) === 'active')
-            ->map(fn ($profile) => [
-                'profile_code' => $profile->profile_code,
-                'manufacturer' => $profile->manufacturer,
-                'device_model' => $profile->device_model,
-                'communication_path' => $profile->communication_path,
-                'source_parameter' => $profile->source_parameter,
-                'canonical_parameter' => $profile->canonicalParameter?->field_identity,
-                'status' => $profile->status,
-            ])
+            ->groupBy(fn ($profile) => $this->presetLookupKey($profile->manufacturer, $profile->device_model ?: $profile->profile_code))
+            ->map(function ($profiles, string $key) use ($presetLookup) {
+                $first = $profiles->first();
+                $matchedPreset = $presetLookup[$this->presetLookupKey($first->manufacturer, $first->device_model)] ?? null;
+
+                return [
+                    'key' => $matchedPreset['key'] ?? $key,
+                    'label' => $matchedPreset['label'] ?? trim(collect([$first->manufacturer, $first->device_model ?: $first->profile_code])->filter()->join(' ')),
+                    'manufacturer' => $matchedPreset['manufacturer'] ?? $first->manufacturer,
+                    'device_model' => $matchedPreset['device_model'] ?? $first->device_model,
+                    'parameters' => $matchedPreset['parameters'] ?? $profiles
+                        ->map(fn ($profile) => [
+                            'name' => $profile->canonicalParameter?->field_identity ?: $profile->source_parameter,
+                            'source_parameter' => $profile->source_parameter,
+                            'source_unit' => $profile->source_unit,
+                            'register_offset' => $profile->register_address,
+                            'function_code' => $profile->function_code,
+                        ])
+                        ->values()
+                        ->all(),
+                ];
+            })
             ->values()
             ->all();
+    }
+
+    private function presetLookupKey(?string $manufacturer, ?string $deviceModel): string
+    {
+        return strtolower(trim(($manufacturer ?: '-') . '|' . ($deviceModel ?: '-')));
     }
 
     private function sensorMapCoordinate(Sensor $sensor, int $index): array
