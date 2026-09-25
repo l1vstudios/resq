@@ -8,6 +8,7 @@ use App\Models\ReferenceRoute;
 use App\Models\ReferencePoint;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
+use App\Models\Sensor;
 use App\Models\SpatialInformationLayer;
 use App\Models\StationFunctionConfiguration;
 use App\Models\WarningStation;
@@ -137,7 +138,7 @@ class CfpeController extends Controller
     public function updateMapPoint(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'in:reference_point,monitoring_station,warning_station'],
+            'type' => ['required', 'in:reference_point,monitoring_station,warning_station,sensor'],
             'id' => ['required', 'integer'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
@@ -147,6 +148,7 @@ class CfpeController extends Controller
             'reference_point' => ReferencePoint::findOrFail($data['id']),
             'monitoring_station' => MonitoringStation::findOrFail($data['id']),
             'warning_station' => WarningStation::findOrFail($data['id']),
+            'sensor' => Sensor::findOrFail($data['id']),
         };
 
         $coordinate = sprintf('%.7F, %.7F', (float) $data['latitude'], (float) $data['longitude']);
@@ -289,13 +291,68 @@ class CfpeController extends Controller
                 ])->values(),
             ]);
 
+        $sensors = Sensor::with(['monitoringStation', 'warningStation', 'dataLogger'])
+            ->when($workspaceId, fn ($q) => $q->where('workspace_id', $workspaceId))
+            ->when($projectId && !$workspaceId, fn ($q) => $q->whereHas('workspace', fn ($workspace) => $workspace->where('project_id', $projectId)))
+            ->get()
+            ->map(function (Sensor $sensor, int $index) {
+                [$latitude, $longitude] = $this->sensorMapCoordinate($sensor, $index);
+
+                return [
+                    'id' => $sensor->id,
+                    'sensor_code' => $sensor->sensor_code,
+                    'name' => $sensor->parameter ?: $sensor->sensor_code,
+                    'type' => $sensor->type,
+                    'parameter' => $sensor->parameter,
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'status' => $sensor->status,
+                    'alert_level' => $sensor->alert_level,
+                    'monitoring_station_id' => $sensor->monitoring_station_id,
+                    'monitoring_station_code' => $sensor->monitoringStation?->station_code,
+                    'warning_station_id' => $sensor->warning_station_id,
+                    'warning_station_code' => $sensor->warningStation?->station_code,
+                    'data_logger_id' => $sensor->data_logger_id,
+                    'data_logger_code' => $sensor->dataLogger?->logger_code,
+                ];
+            })
+            ->filter(fn (array $sensor) => $sensor['latitude'] !== null && $sensor['longitude'] !== null)
+            ->values();
+
         return response()->json([
             'routes' => $routes,
             'corridors' => $corridors,
             'information_layers' => $layers,
             'monitoring_stations' => $monitoringStations,
             'warning_stations' => $warningStations,
+            'sensors' => $sensors,
         ]);
+    }
+
+    private function sensorMapCoordinate(Sensor $sensor, int $index): array
+    {
+        if ($sensor->latitude !== null && $sensor->longitude !== null) {
+            return [(float) $sensor->latitude, (float) $sensor->longitude];
+        }
+
+        $baseLatitude = $sensor->warningStation?->latitude
+            ?? $sensor->monitoringStation?->latitude
+            ?? $sensor->workspace?->latitude;
+        $baseLongitude = $sensor->warningStation?->longitude
+            ?? $sensor->monitoringStation?->longitude
+            ?? $sensor->workspace?->longitude;
+
+        if ($baseLatitude === null || $baseLongitude === null) {
+            return [null, null];
+        }
+
+        $angle = deg2rad(($index % 8) * 45);
+        $distance = 0.0010 + (floor($index / 8) * 0.0005);
+
+        return [
+            round((float) $baseLatitude + (cos($angle) * $distance), 7),
+            round((float) $baseLongitude + (sin($angle) * $distance), 7),
+        ];
     }
 
     // GET /cfpe/workspace-data/{workspace} - get all spatial data for specific workspace

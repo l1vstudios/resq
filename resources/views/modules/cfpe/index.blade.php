@@ -559,6 +559,17 @@
                 topology;
         }
 
+        function sensorPopup(sensor) {
+            return '<strong>Sensor</strong><br>' +
+                '<code>' + escapeHtml(sensor.sensor_code || '-') + '</code><br>' +
+                escapeHtml(sensor.name || sensor.parameter || '-') +
+                (sensor.type ? '<br>Type: ' + escapeHtml(sensor.type) : '') +
+                (sensor.data_logger_code ? '<br>Data Logger: ' + escapeHtml(sensor.data_logger_code) : '') +
+                (sensor.warning_station_code ? '<br>Warning Station: ' + escapeHtml(sensor.warning_station_code) : '') +
+                (sensor.monitoring_station_code ? '<br>Monitoring Station: ' + escapeHtml(sensor.monitoring_station_code) : '') +
+                (sensor.status || sensor.alert_level ? '<br>Status: ' + escapeHtml([sensor.status, sensor.alert_level].filter(Boolean).join(' / ')) : '');
+        }
+
         function referencePointPopup(point, route) {
             return '<strong>' + escapeHtml(point.point_code || '-') + '</strong>' +
                 (point.name ? '<br>' + escapeHtml(point.name) : '') +
@@ -650,10 +661,13 @@
             (data.monitoring_stations || []).concat(data.warning_stations || []).forEach(function (station) {
                 if (station.latitude && station.longitude) points.push([station.latitude, station.longitude]);
             });
+            (data.sensors || []).forEach(function (sensor) {
+                if (sensor.latitude && sensor.longitude) points.push([sensor.latitude, sensor.longitude]);
+            });
             lockMapToPoints(points);
         }
 
-        function renderStations(monitoringStations, warningStations) {
+        function renderStations(monitoringStations, warningStations, sensors) {
             // Monitoring stations - tower icon
             monitoringStations.forEach(function (station) {
                 if (!station.latitude || !station.longitude) return;
@@ -682,6 +696,16 @@
                     })
                 }).bindPopup(warningStationPopup(station)).addTo(corridorLayer);
                 bindDraggablePoint(marker, 'warning_station', station, warningStationPopup);
+            });
+
+            // Sensors - small purple nodes
+            (sensors || []).forEach(function (sensor) {
+                if (!sensor.latitude || !sensor.longitude) return;
+                var marker = L.marker([sensor.latitude, sensor.longitude], {
+                    draggable: true,
+                    icon: cfpeDivIcon('#7c3aed', 14)
+                }).bindPopup(sensorPopup(sensor)).addTo(corridorLayer);
+                bindDraggablePoint(marker, 'sensor', sensor, sensorPopup);
             });
         }
 
@@ -1141,7 +1165,7 @@
                 legendItems = legendItems.concat(renderCorridors(data.corridors || []));
                 legendItems = legendItems.concat(renderInformationLayers(data.information_layers || []));
                 legendItems = legendItems.concat(renderRoutePolylines(data.routes || []));
-                renderStations(data.monitoring_stations || [], data.warning_stations || []);
+                renderStations(data.monitoring_stations || [], data.warning_stations || [], data.sensors || []);
                 lockMapToData(data);
                 buildLegend(legendItems);
                 buildRouteList(data.routes || []);
