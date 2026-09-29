@@ -5,9 +5,49 @@
 @section('css')
 @include('modules.platform-operations.partials.styles')
 <style>
+    .tde-page-header {
+        background: #fff;
+        border: 1px solid var(--emp-line);
+        border-left: 5px solid var(--emp-teal);
+        border-radius: 8px;
+        margin-bottom: 14px;
+        padding: 18px 20px;
+    }
+
+    .tde-page-header-row {
+        align-items: flex-start;
+        display: flex;
+        gap: 14px;
+        justify-content: space-between;
+    }
+
+    .tde-page-title {
+        color: var(--emp-navy);
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 1.2;
+        margin: 0;
+    }
+
+    .tde-page-subtitle {
+        color: var(--emp-muted);
+        font-size: 13px;
+        margin: 6px 0 0;
+        max-width: 720px;
+    }
+
+    .tde-header-meta {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+
     .tde-forecast-grid {
         display: grid;
-        gap: 14px;
+        gap: 12px;
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
@@ -15,8 +55,8 @@
         background: #fff;
         border: 1px solid var(--emp-line);
         border-radius: 8px;
-        min-height: 136px;
-        padding: 16px;
+        min-height: 118px;
+        padding: 14px;
     }
 
     .tde-forecast-card .label {
@@ -30,7 +70,7 @@
 
     .tde-forecast-card .value {
         color: var(--emp-navy);
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 900;
         line-height: 1.15;
         overflow-wrap: anywhere;
@@ -69,7 +109,7 @@
         background: #f8fbfe;
         border: 1px solid var(--emp-line);
         border-radius: 8px;
-        min-height: 78px;
+        min-height: 74px;
         padding: 10px;
         text-align: center;
     }
@@ -102,8 +142,23 @@
         align-items: center;
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 14px;
         justify-content: space-between;
+    }
+
+    .tde-section-card .card-body {
+        padding: 18px;
+    }
+
+    .tde-diagnosis-box {
+        background: #f8fbfe;
+        border: 1px solid var(--emp-line);
+        border-radius: 8px;
+        color: var(--emp-ink);
+        font-weight: 800;
+        line-height: 1.35;
+        min-height: 44px;
+        padding: 10px 12px;
     }
 
     @media (max-width: 1199px) {
@@ -113,6 +168,8 @@
     @media (max-width: 575px) {
         .tde-forecast-grid { grid-template-columns: 1fr; }
         .tde-pattern { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .tde-page-header-row { display: block; }
+        .tde-header-meta { justify-content: flex-start; margin-top: 12px; }
     }
 </style>
 @endsection
@@ -148,17 +205,18 @@
 @endphp
 
 <div class="emp-ui">
-@include('modules.platform-operations.partials.page-hero', [
-    'eyebrow' => 'Trend Diagnosis Evaluator',
-    'title' => 'TDE Forecast',
-    'subtitle' => 'Panel diagnosis tren atmosfer lokal dari data time-series station dan Matrix TDE.',
-    'steps' => [
-        ['label' => 'Station', 'icon' => 'bx bx-station', 'active' => true],
-        ['label' => 'Current Condition', 'icon' => 'bx bx-cloud'],
-        ['label' => 'Trend Pattern', 'icon' => 'bx bx-line-chart'],
-        ['label' => 'Matrix Diagnosis', 'icon' => 'bx bx-grid-alt'],
-    ],
-])
+<div class="tde-page-header">
+    <div class="tde-page-header-row">
+        <div>
+            <h1 class="tde-page-title">TDE Forecast</h1>
+            <p class="tde-page-subtitle">Panel diagnosis tren atmosfer lokal dari time-series station dan Matrix TDE.</p>
+        </div>
+        <div class="tde-header-meta">
+            <span class="tde-pill tde-pill-info"><i class="bx bx-station"></i>{{ $selectedStation?->station_code ?? 'No station' }}</span>
+            <span class="tde-pill {{ $matrixClass }}"><i class="bx bx-grid-alt"></i>{{ \Illuminate\Support\Str::headline($matrixStatus) }}</span>
+        </div>
+    </div>
+</div>
 
 <div class="card ops-context-switcher">
     <div class="card-body">
@@ -216,7 +274,7 @@
 
     <div class="row">
         <div class="col-xl-5">
-            <div class="card">
+            <div class="card tde-section-card">
                 <div class="card-body">
                     <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
                         <div>
@@ -240,7 +298,7 @@
             </div>
         </div>
         <div class="col-xl-7">
-            <div class="card">
+            <div class="card tde-section-card">
                 <div class="card-body">
                     <h4 class="card-title mb-3">Trend Parameter</h4>
                     <div class="table-responsive">
@@ -283,10 +341,10 @@
 
     <div class="row">
         <div class="col-xl-6">
-            <div class="card">
+            <div class="card tde-section-card">
                 <div class="card-body">
                     <h4 class="card-title mb-3">Diagnosis Detail</h4>
-                    <div class="ops-readonly-field mb-2">{{ $forecastSummary }}</div>
+                    <div class="tde-diagnosis-box mb-2">{{ $forecastSummary }}</div>
                     <div class="text-muted">{{ $forecastBasis }}</div>
                     @if($matrixMatch)
                         <div class="mt-3">
@@ -300,7 +358,7 @@
             </div>
         </div>
         <div class="col-xl-6">
-            <div class="card">
+            <div class="card tde-section-card">
                 <div class="card-body">
                     <h4 class="card-title mb-3">Evaluasi</h4>
                     <div class="row g-3">
