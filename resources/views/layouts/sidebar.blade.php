@@ -124,6 +124,7 @@
                         || request()->routeIs('canonical-database.*')
                         || request()->routeIs('canonical-mapping.*')
                         || request()->routeIs('master-data-tde.*')
+                        || request()->routeIs('asset-management.*')
                         || request()->routeIs('data-loggers.*');
                     $registeredMenuActive = request()->routeIs('clusters.*')
                         || request()->routeIs('monitoring-stations.*')
@@ -154,6 +155,11 @@
                         <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('data-loggers.index') }}" class="{{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
                                 Data Loggers
+                            </a>
+                        </li>
+                        <li class="{{ request()->routeIs('asset-management.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('asset-management.index') }}" class="{{ request()->routeIs('asset-management.*') ? 'active' : '' }}">
+                                Manajemen Assets
                             </a>
                         </li>
                         <li class="{{ request()->routeIs('master-data-tde.*') ? 'mm-active' : '' }}">

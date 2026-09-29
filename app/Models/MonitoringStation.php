@@ -75,6 +75,11 @@ class MonitoringStation extends Model
         return $this->hasMany(DataLogger::class);
     }
 
+    public function assetDevices()
+    {
+        return $this->hasMany(AssetDevice::class);
+    }
+
     public function spatialReferences()
     {
         return $this->hasMany(StationSpatialReference::class);

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CanonicalDatabaseController;
+use App\Http\Controllers\AssetManagementController;
 use App\Http\Controllers\CfpeController;
 use App\Http\Controllers\ClientFunctionConfigurationController;
 use App\Http\Controllers\ClientInboxController;
@@ -135,6 +136,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/data-loggers/gateway-mode', [DeviceSetupController::class, 'applyDataLoggerGatewayMode'])->name('data-loggers.gateway-mode');
     Route::post('/data-loggers/node-red-mqtt/apply', [DeviceSetupController::class, 'applyNodeRedMqttConfig'])->name('data-loggers.node-red-mqtt.apply');
     Route::post('/data-loggers/node-red-mqtt/test', [DeviceSetupController::class, 'testNodeRedMqtt'])->name('data-loggers.node-red-mqtt.test');
+    Route::get('/asset-management', [AssetManagementController::class, 'index'])->name('asset-management.index');
+    Route::post('/asset-management', [AssetManagementController::class, 'store'])->name('asset-management.store');
+    Route::post('/asset-management/quick-scan', [AssetManagementController::class, 'quickScan'])->name('asset-management.quick-scan');
+    Route::post('/asset-management/{asset}/scan', [AssetManagementController::class, 'scan'])->name('asset-management.scan');
+    Route::delete('/asset-management/{asset}', [AssetManagementController::class, 'destroy'])->name('asset-management.destroy');
     Route::get('/master-data-tde', [TdeMatrixController::class, 'index'])->name('master-data-tde.index');
     Route::post('/master-data-tde/import', [TdeMatrixController::class, 'store'])->name('master-data-tde.import');
     Route::get('/master-data-tde/template', [TdeMatrixController::class, 'template'])->name('master-data-tde.template');

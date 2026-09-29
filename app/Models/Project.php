@@ -30,6 +30,11 @@ class Project extends Model
         return $this->hasMany(MonitoringStation::class);
     }
 
+    public function assetDevices()
+    {
+        return $this->hasMany(AssetDevice::class);
+    }
+
     public function warningStations()
     {
         return $this->hasMany(WarningStation::class);
