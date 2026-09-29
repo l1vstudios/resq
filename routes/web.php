@@ -17,6 +17,7 @@ use App\Http\Controllers\PlatformOperationsController;
 use App\Http\Controllers\ProjectSetupController;
 use App\Http\Controllers\RegisteredDataController;
 use App\Http\Controllers\SentinelRuntimeController;
+use App\Http\Controllers\TdeForecastController;
 use App\Http\Controllers\TdeMatrixController;
 use App\Http\Controllers\WarningStationDomainController;
 use Illuminate\Support\Facades\Auth;
@@ -39,6 +40,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/tde-forecast', [TdeForecastController::class, 'index'])->name('tde-forecast.index');
     Route::get('/dashboard/map-data', [DashboardController::class, 'mapData'])->name('dashboard.map-data');
     Route::get('/monitoring', [ProjectSetupController::class, 'monitoring'])->name('monitoring.index');
     Route::get('/platform-operations', [PlatformOperationsController::class, 'index'])->name('platform-operations.index');

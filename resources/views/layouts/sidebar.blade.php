@@ -55,6 +55,13 @@
                     </a>
                 </li>
 
+                <li class="{{ request()->routeIs('tde-forecast.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('tde-forecast.index') }}" class="waves-effect {{ request()->routeIs('tde-forecast.*') ? 'active' : '' }}">
+                        <i class="bx bx-cloud-lightning"></i>
+                        <span>TDE Forecast</span>
+                    </a>
+                </li>
+
                 @if($sidebarIsClient)
                     <li class="{{ request()->routeIs('client-operations.*') ? 'mm-active' : '' }}">
                         <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ request()->routeIs('client-operations.*') ? 'true' : 'false' }}">

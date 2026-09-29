@@ -143,6 +143,7 @@ class TdeMatrixImportService
                 'basis' => $assoc['basis'] ?? null,
                 'confidence' => $assoc['confidence'] ?? null,
                 'output_code' => $assoc['output_code'] ?? null,
+                ...$this->extraColumns($assoc),
             ];
         }
 
@@ -397,6 +398,14 @@ class TdeMatrixImportService
             'gt', 'greater', 'naik', 'meningkat', 'melebar', '+' => '>',
             default => $symbol,
         };
+    }
+
+    private function extraColumns(array $row): array
+    {
+        return collect($row)
+            ->except([...self::PARAMETERS, 'type', 'summary', 'basis', 'confidence', 'output_code'])
+            ->filter(fn ($value) => trim((string) $value) !== '')
+            ->all();
     }
 
     private function expectedPatterns(): array
