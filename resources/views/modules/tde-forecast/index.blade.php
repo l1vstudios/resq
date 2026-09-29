@@ -161,12 +161,61 @@
         padding: 10px 12px;
     }
 
+    .tde-empty-panel {
+        background: #fff;
+        border: 1px solid var(--emp-line);
+        border-radius: 8px;
+        padding: 22px;
+    }
+
+    .tde-empty-title {
+        color: var(--emp-navy);
+        font-size: 18px;
+        font-weight: 900;
+        margin-bottom: 6px;
+    }
+
+    .tde-empty-copy {
+        color: var(--emp-muted);
+        font-size: 14px;
+        margin-bottom: 16px;
+        max-width: 820px;
+    }
+
+    .tde-empty-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .tde-empty-item {
+        background: #f8fbfe;
+        border: 1px solid var(--emp-line);
+        border-radius: 8px;
+        min-height: 74px;
+        padding: 12px;
+    }
+
+    .tde-empty-item strong {
+        color: var(--emp-navy);
+        display: block;
+        font-size: 15px;
+        margin-bottom: 4px;
+    }
+
+    .tde-empty-item span {
+        color: var(--emp-muted);
+        font-size: 13px;
+    }
+
     @media (max-width: 1199px) {
         .tde-forecast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .tde-empty-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 575px) {
         .tde-forecast-grid { grid-template-columns: 1fr; }
+        .tde-empty-grid { grid-template-columns: 1fr; }
         .tde-pattern { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .tde-page-header-row { display: block; }
         .tde-header-meta { justify-content: flex-start; margin-top: 12px; }
@@ -198,6 +247,12 @@
     $window = $output['window'] ?? [];
     $matrixStatus = $diagnosis['matrix_status'] ?? 'matrix_not_configured';
     $matrixVersion = $diagnosis['matrix_version'] ?? null;
+    $executionState = $tde['execution_state'] ?? null;
+    $isInsufficient = in_array($executionState, ['insufficient_data', 'partial'], true) || str_contains((string) ($pattern['key'] ?? ''), '?');
+    $missingParameters = collect($diagnosis['missing_parameters'] ?? [])->filter()->values();
+    $displayForecastSummary = $isInsufficient ? 'Belum siap' : $forecastSummary;
+    $displayForecastBasis = $isInsufficient ? 'TDE membutuhkan minimal dua sampel untuk parameter AT, RH, DP, DPS, dan AP dalam window evaluasi.' : $forecastBasis;
+    $displayEstimatedTime = $isInsufficient ? 'Belum tersedia' : $estimatedTime;
     $conditionState = $condition['state'] ?? 'UNKNOWN';
     $conditionClass = $conditionState === 'BASAH' ? 'tde-pill-wet' : ($conditionState === 'KERING' ? 'tde-pill-dry' : 'tde-pill-warning');
     $matrixClass = $matrixStatus === 'matched' ? 'tde-pill-dry' : ($matrixStatus === 'matrix_not_matched' ? 'tde-pill-error' : 'tde-pill-warning');
@@ -212,7 +267,7 @@
             <p class="tde-page-subtitle">Panel diagnosis tren atmosfer lokal dari time-series station dan Matrix TDE.</p>
         </div>
         <div class="tde-header-meta">
-            <span class="tde-pill tde-pill-info"><i class="bx bx-station"></i>{{ $selectedStation?->station_code ?? 'No station' }}</span>
+            <span class="tde-pill tde-pill-info"><i class="bx bx-station"></i>{{ $selectedStation?->station_code ?? 'Belum ada station' }}</span>
             <span class="tde-pill {{ $matrixClass }}"><i class="bx bx-grid-alt"></i>{{ \Illuminate\Support\Str::headline($matrixStatus) }}</span>
         </div>
     </div>
@@ -223,7 +278,7 @@
         <div class="tde-station-strip">
             <div>
                 <h4 class="card-title mb-1">Monitoring Station</h4>
-                <div class="text-muted small">{{ $selectedStation?->project?->project_code ?? '-' }} / {{ $selectedStation?->corridor?->corridor_code ?? 'No corridor' }}</div>
+                <div class="text-muted small">{{ $selectedStation?->project?->project_code ?? '-' }} / {{ $selectedStation?->corridor?->corridor_code ?? 'Corridor belum dipilih' }}</div>
             </div>
             <form method="GET" action="{{ route('tde-forecast.index') }}" class="d-flex flex-wrap gap-2 align-items-end">
                 <div>
@@ -257,21 +312,45 @@
         </div>
         <div class="tde-forecast-card">
             <div class="label">Proyeksi Kondisi</div>
-            <div class="value">{{ $forecastSummary }}</div>
-            <div class="note">{{ $forecastType }}</div>
+            <div class="value">{{ $displayForecastSummary }}</div>
+            <div class="note">{{ $isInsufficient ? 'Menunggu data time-series' : $forecastType }}</div>
         </div>
         <div class="tde-forecast-card">
             <div class="label">Perkiraan Waktu</div>
-            <div class="value">{{ $estimatedTime }}</div>
+            <div class="value">{{ $displayEstimatedTime }}</div>
             <div class="note">Waktu evaluasi {{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('Y-m-d H:i') : '-' }}</div>
         </div>
         <div class="tde-forecast-card">
             <div class="label">Matrix TDE</div>
             <div><span class="tde-pill {{ $matrixClass }}"><i class="bx bx-grid-alt"></i>{{ \Illuminate\Support\Str::headline($matrixStatus) }}</span></div>
-            <div class="note">{{ $matrixVersion ? ($matrixVersion['matrix_code'].' / '.$matrixVersion['name']) : 'No matrix selected' }}</div>
+            <div class="note">{{ $matrixVersion ? ($matrixVersion['matrix_code'].' / '.$matrixVersion['name']) : 'Matrix belum dipilih' }}</div>
         </div>
     </div>
 
+    @if($isInsufficient)
+        <div class="tde-empty-panel mb-3">
+            <div class="tde-empty-title">Data TDE belum cukup untuk diagnosis</div>
+            <div class="tde-empty-copy">{{ $displayForecastBasis }}</div>
+            <div class="tde-empty-grid">
+                <div class="tde-empty-item">
+                    <strong>{{ $window['reading_count'] ?? 0 }} readings</strong>
+                    <span>Data yang terbaca di window saat ini</span>
+                </div>
+                <div class="tde-empty-item">
+                    <strong>{{ $window['minutes'] ?? '-' }} menit</strong>
+                    <span>Window evaluasi aktif</span>
+                </div>
+                <div class="tde-empty-item">
+                    <strong>{{ $missingParameters->isNotEmpty() ? $missingParameters->implode(', ') : 'AT, RH, DP, DPS, AP' }}</strong>
+                    <span>Parameter yang belum memenuhi syarat</span>
+                </div>
+                <div class="tde-empty-item">
+                    <strong>{{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('Y-m-d H:i') : '-' }}</strong>
+                    <span>Waktu evaluasi terakhir</span>
+                </div>
+            </div>
+        </div>
+    @else
     <div class="row">
         <div class="col-xl-5">
             <div class="card tde-section-card">
@@ -293,7 +372,7 @@
                             </div>
                         @endforeach
                     </div>
-                    <div class="text-muted small mt-3">{{ $forecastBasis }}</div>
+                    <div class="text-muted small mt-3">{{ $displayForecastBasis }}</div>
                 </div>
             </div>
         </div>
@@ -344,8 +423,8 @@
             <div class="card tde-section-card">
                 <div class="card-body">
                     <h4 class="card-title mb-3">Diagnosis Detail</h4>
-                    <div class="tde-diagnosis-box mb-2">{{ $forecastSummary }}</div>
-                    <div class="text-muted">{{ $forecastBasis }}</div>
+                    <div class="tde-diagnosis-box mb-2">{{ $displayForecastSummary }}</div>
+                    <div class="text-muted">{{ $displayForecastBasis }}</div>
                     @if($matrixMatch)
                         <div class="mt-3">
                             <span class="tde-pill tde-pill-dry">{{ $matrixMatch['output_code'] ?? 'MATRIX_MATCH' }}</span>
@@ -383,6 +462,7 @@
             </div>
         </div>
     </div>
+    @endif
 @endif
 </div>
 @endsection
