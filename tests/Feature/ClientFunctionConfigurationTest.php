@@ -106,7 +106,8 @@ class ClientFunctionConfigurationTest extends TestCase
 
         $this->assertSame('Moving Average', $configuration->reading_method);
         $this->assertSame(['value' => 6, 'unit' => 'hours'], $configuration->configuration['data_window']);
-        $this->assertContains('analytical_matrix', $configuration->configuration['system_internals_locked']);
+        $this->assertNull($configuration->configuration['tde_matrix_version_id']);
+        $this->assertContains('derived_data_processing', $configuration->configuration['system_internals_locked']);
         $this->assertNotEmpty($configuration->unresolved_analytical_rules);
     }
 

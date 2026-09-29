@@ -7,6 +7,7 @@ use App\Models\MonitoringStation;
 use App\Models\ReferencePoint;
 use App\Models\ReferenceRoute;
 use App\Models\StationFunctionConfiguration;
+use App\Models\TdeMatrixVersion;
 use Illuminate\Support\Collection;
 
 class ClientFunctionConfigurationService
@@ -65,6 +66,7 @@ class ClientFunctionConfigurationService
                 ])
                 ->values()
                 ->all() ?? [],
+            'tde_matrix_versions' => $this->tdeMatrixVersions($station),
         ];
     }
 
@@ -99,6 +101,9 @@ class ClientFunctionConfigurationService
 
         $projectId = $station->project_id ?: $station->workspace?->project_id;
         abort_unless($projectId, 403);
+        if ($function === StationFunctionConfiguration::FUNCTION_TDE && ! empty($data['tde_matrix_version_id'])) {
+            abort_unless($this->tdeMatrixAvailable($station, (int) $data['tde_matrix_version_id']), 403);
+        }
 
         $configuration = match ($function) {
             StationFunctionConfiguration::FUNCTION_TDE => $this->tdeConfiguration($data),
@@ -162,9 +167,9 @@ class ClientFunctionConfigurationService
                 'value' => (int) $data['data_window_value'],
                 'unit' => $data['data_window_unit'],
             ],
-            'client_configurable' => ['data_window'],
+            'tde_matrix_version_id' => $this->nullableInt($data['tde_matrix_version_id'] ?? null),
+            'client_configurable' => ['data_window', 'tde_matrix_version_id'],
             'system_internals_locked' => [
-                'analytical_matrix',
                 'derived_data_processing',
                 'system_level_threshold',
             ],
@@ -216,5 +221,42 @@ class ClientFunctionConfigurationService
     private function nullableFloat(mixed $value): ?float
     {
         return $value === null || $value === '' ? null : (float) $value;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        return $value === null || $value === '' ? null : (int) $value;
+    }
+
+    private function tdeMatrixVersions(MonitoringStation $station): array
+    {
+        $projectId = $station->project_id ?: $station->workspace?->project_id;
+
+        return TdeMatrixVersion::query()
+            ->where('status', 'active')
+            ->where(function ($query) use ($projectId) {
+                $query->whereNull('project_id');
+
+                if ($projectId) {
+                    $query->orWhere('project_id', $projectId);
+                }
+            })
+            ->orderBy('matrix_code')
+            ->get()
+            ->map(fn (TdeMatrixVersion $matrix) => [
+                'id' => $matrix->id,
+                'matrix_code' => $matrix->matrix_code,
+                'name' => $matrix->name,
+                'version_label' => $matrix->version_label,
+                'scope' => $matrix->project_id ? 'project' : 'global',
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function tdeMatrixAvailable(MonitoringStation $station, int $matrixId): bool
+    {
+        return collect($this->tdeMatrixVersions($station))
+            ->contains(fn (array $matrix) => (int) $matrix['id'] === $matrixId);
     }
 }

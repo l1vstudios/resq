@@ -10,6 +10,7 @@ use App\Models\HydrometWdamConfig;
 use App\Models\MonitoringStation;
 use App\Models\Project;
 use App\Models\Sensor;
+use App\Models\StationFunctionConfiguration;
 use App\Models\TelemetryReading;
 use App\Models\WarningStation;
 use App\Models\WarningStationDevice;
@@ -110,6 +111,7 @@ class SentinelRuntimeReadService
             'hydrometEwsRelationships.hazardClassifications.sensor',
             'hydrometEwsRelationships.hazardClassifications.canonicalParameter',
             'hydrometEwsRelationships.wdamConfigs.warningStation.devices',
+            'functionConfigurations',
         ]);
 
         $latest = $this->latestReadingsForSensors($station->sensors);
@@ -258,8 +260,8 @@ class SentinelRuntimeReadService
     {
         return match ($function) {
             'TDE' => [
-                'TDE rainfall/event definition is not defined.',
-                'Temporal aggregation and event separation rules are not defined.',
+                'Official 243-row Matrix TDE catalog must be loaded in station configuration for certified final diagnosis.',
+                'Rainfall current-condition threshold currently follows the design document default of > 0.4 mm.',
             ],
             'Discharge' => [
                 'Stage-discharge rating curve or velocity-area method is not defined.',
@@ -958,8 +960,20 @@ class SentinelRuntimeReadService
 
     private function analyticalOutputs(MonitoringStation $station): array
     {
-        return collect(['TDE', 'Discharge', 'CFPE'])
-            ->map(fn (string $function) => (new ConfigurationOnlyAnalyticalFunctionRunner($function))->run($station))
+        $station->loadMissing('functionConfigurations');
+        $configurations = $station->functionConfigurations->keyBy('function_name');
+
+        return collect(StationFunctionConfiguration::supportedFunctions())
+            ->map(function (string $function) use ($station, $configurations) {
+                if ($function === StationFunctionConfiguration::FUNCTION_TDE) {
+                    return (new TrendDiagnosisAnalyticalFunctionRunner(
+                        new TrendDiagnosisEvaluator(),
+                        $configurations->get(StationFunctionConfiguration::FUNCTION_TDE)
+                    ))->run($station);
+                }
+
+                return (new ConfigurationOnlyAnalyticalFunctionRunner($function))->run($station);
+            })
             ->values()
             ->all();
     }

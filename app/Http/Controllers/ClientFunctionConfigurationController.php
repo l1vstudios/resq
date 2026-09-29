@@ -98,6 +98,7 @@ class ClientFunctionConfigurationController extends Controller
             StationFunctionConfiguration::FUNCTION_TDE => array_merge($base, [
                 'data_window_value' => ['required', 'integer', 'min:1', 'max:10080'],
                 'data_window_unit' => ['required', Rule::in(['minutes', 'hours', 'days'])],
+                'tde_matrix_version_id' => ['nullable', 'integer', 'exists:tde_matrix_versions,id'],
             ]),
             StationFunctionConfiguration::FUNCTION_DISCHARGE => array_merge($base, [
                 'cross_sectional_area' => ['nullable', 'numeric', 'min:0'],

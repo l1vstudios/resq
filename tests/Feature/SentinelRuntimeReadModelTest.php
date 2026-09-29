@@ -17,6 +17,7 @@ use App\Models\Project;
 use App\Models\Role;
 use App\Models\Sensor;
 use App\Models\SensorMappingProfile;
+use App\Models\StationFunctionConfiguration;
 use App\Models\TelemetryReading;
 use App\Models\User;
 use App\Models\WarningStation;
@@ -195,8 +196,35 @@ class SentinelRuntimeReadModelTest extends TestCase
             ->assertJsonPath('integrity.components.power_health.status', 'Warning')
             ->assertJsonPath('integrity.components.calibration.status', 'Warning')
             ->assertJsonPath('analytical_outputs.0.function', 'TDE')
-            ->assertJsonPath('analytical_outputs.0.execution_state', 'not_implemented')
+            ->assertJsonPath('analytical_outputs.0.execution_state', 'insufficient_data')
             ->assertJsonPath('unresolved_runtime_rules.1', 'Power-health thresholds are not defined in the current station/device domain.');
+    }
+
+    public function test_station_runtime_evaluates_tde_combination_pattern_from_weather_time_series(): void
+    {
+        StationFunctionConfiguration::create([
+            'project_id' => $this->projectA->id,
+            'monitoring_station_id' => $this->stationA->id,
+            'function_name' => StationFunctionConfiguration::FUNCTION_TDE,
+            'reading_method' => 'Moving Average',
+            'configuration' => ['data_window' => ['value' => 45, 'unit' => 'minutes']],
+            'validation_state' => 'validated',
+            'validated_at' => now(),
+            'activated_at' => now(),
+            'status' => 'active',
+        ]);
+
+        $this->weatherReading($this->sensorA, now()->subMinutes(30), 30.0, 60.0, 1006.8, 0.0);
+        $this->weatherReading($this->sensorA, now()->subMinute(), 28.0, 80.0, 1007.2, 0.0);
+
+        $this->actingAs($this->clientUser($this->clientA))
+            ->getJson(route('runtime.monitoring-stations.show', [$this->stationA, 'fresh_seconds' => 300]))
+            ->assertOk()
+            ->assertJsonPath('analytical_outputs.0.function', 'TDE')
+            ->assertJsonPath('analytical_outputs.0.execution_state', 'evaluated')
+            ->assertJsonPath('analytical_outputs.0.output.combination_pattern.key', '<>><=')
+            ->assertJsonPath('analytical_outputs.0.output.condition_current.state', 'KERING')
+            ->assertJsonPath('analytical_outputs.0.output.diagnosis.fallback_interpretation.summary', 'Arah Kering -> Basah');
     }
 
     public function test_project_runtime_exposes_hazard_warning_and_administrative_state_by_scope(): void
@@ -394,5 +422,30 @@ class SentinelRuntimeReadModelTest extends TestCase
         ]);
 
         return $reading;
+    }
+
+    private function weatherReading(
+        Sensor $sensor,
+        mixed $receivedAt,
+        float $temperature,
+        float $humidity,
+        float $pressure,
+        float $rainfall
+    ): TelemetryReading {
+        return TelemetryReading::create([
+            'sensor_id' => $sensor->id,
+            'data_logger_id' => $sensor->data_logger_id,
+            'value' => 'Weather Station',
+            'numeric_value' => $temperature,
+            'parameter_values' => [
+                ['parameter' => 'Temperature', 'value' => $temperature, 'unit' => 'degC'],
+                ['parameter' => 'Humidity', 'value' => $humidity, 'unit' => '%RH'],
+                ['parameter' => 'Pressure', 'value' => $pressure, 'unit' => 'hPa'],
+                ['parameter' => 'Rainfall', 'value' => $rainfall, 'unit' => 'mm'],
+            ],
+            'alert_level' => 'Normal',
+            'status' => 'Normal',
+            'received_at' => $receivedAt,
+        ]);
     }
 }

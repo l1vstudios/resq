@@ -17,6 +17,7 @@ use App\Http\Controllers\PlatformOperationsController;
 use App\Http\Controllers\ProjectSetupController;
 use App\Http\Controllers\RegisteredDataController;
 use App\Http\Controllers\SentinelRuntimeController;
+use App\Http\Controllers\TdeMatrixController;
 use App\Http\Controllers\WarningStationDomainController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -132,7 +133,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/data-loggers/gateway-mode', [DeviceSetupController::class, 'applyDataLoggerGatewayMode'])->name('data-loggers.gateway-mode');
     Route::post('/data-loggers/node-red-mqtt/apply', [DeviceSetupController::class, 'applyNodeRedMqttConfig'])->name('data-loggers.node-red-mqtt.apply');
     Route::post('/data-loggers/node-red-mqtt/test', [DeviceSetupController::class, 'testNodeRedMqtt'])->name('data-loggers.node-red-mqtt.test');
-    Route::view('/master-data-tde', 'modules.master-data-tde.index')->name('master-data-tde.index');
+    Route::get('/master-data-tde', [TdeMatrixController::class, 'index'])->name('master-data-tde.index');
+    Route::post('/master-data-tde/import', [TdeMatrixController::class, 'store'])->name('master-data-tde.import');
+    Route::get('/master-data-tde/template', [TdeMatrixController::class, 'template'])->name('master-data-tde.template');
     Route::get('/connectivity', [RegisteredDataController::class, 'connectivity'])->name('connectivity.index');
     Route::post('/connectivity', [DeviceSetupController::class, 'storeConnectivity'])->name('connectivity.store');
     Route::get('/credentials', [RegisteredDataController::class, 'credentials'])->name('credentials.index');

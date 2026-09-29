@@ -4,6 +4,7 @@
     $readingMethods = $context['reading_methods'] ?? [];
     $referenceRoutes = collect($context['reference_routes'] ?? []);
     $referencePoints = collect($context['reference_points'] ?? []);
+    $tdeMatrixVersions = collect($context['tde_matrix_versions'] ?? []);
 @endphp
 
 <div class="row">
@@ -71,6 +72,17 @@
                                     <select name="data_window_unit" class="form-select" required>
                                         @foreach(['minutes', 'hours', 'days'] as $unit)
                                             <option value="{{ $unit }}" @selected(($config['data_window']['unit'] ?? 'minutes') === $unit)>{{ ucfirst($unit) }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-12 mb-3">
+                                    <label class="form-label">TDE Matrix Version</label>
+                                    <select name="tde_matrix_version_id" class="form-select">
+                                        <option value="">Use fallback interpretation until matrix is selected</option>
+                                        @foreach($tdeMatrixVersions as $matrix)
+                                            <option value="{{ $matrix['id'] }}" @selected((int) ($config['tde_matrix_version_id'] ?? 0) === (int) $matrix['id'])>
+                                                {{ $matrix['matrix_code'] }} - {{ $matrix['name'] }}{{ $matrix['version_label'] ? ' ('.$matrix['version_label'].')' : '' }}
+                                            </option>
                                         @endforeach
                                     </select>
                                 </div>
