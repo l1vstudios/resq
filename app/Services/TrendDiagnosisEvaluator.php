@@ -261,10 +261,10 @@ class TrendDiagnosisEvaluator
             $sensorMeta = [
                 'sensor_id' => $reading->sensor?->id,
                 'sensor_code' => $reading->sensor?->sensor_code,
-                'sensor_label' => $reading->sensor?->mappingProfile?->canonicalParameter?->field_identity
-                    ?? $reading->sensor?->sensor_code
-                    ?? $reading->sensor?->parameter
-                    ?? $reading->sensor?->type,
+                // Label stasiun/sensor: pakai tipe sensor, BUKAN parameter pertama
+                // (sensor multi-parameter seperti RIKA tidak boleh dilabeli satu parameter).
+                'sensor_label' => $reading->sensor?->type
+                    ?? $reading->sensor?->sensor_code,
             ];
             $items = collect($reading->parameter_values ?? [])
                 ->filter(fn ($item) => is_array($item))
@@ -295,6 +295,7 @@ class TrendDiagnosisEvaluator
                     'sensor_id' => $sensorMeta['sensor_id'],
                     'sensor_code' => $sensorMeta['sensor_code'],
                     'sensor_label' => $sensorMeta['sensor_label'],
+                    'parameter_label' => $item['label'] ?? $item['parameter'] ?? null,
                 ];
                 $samples[$parameter][] = $sample;
                 $rowValues[$parameter] = $sample;
@@ -427,6 +428,7 @@ class TrendDiagnosisEvaluator
                 'is_derived' => in_array($parameter, ['DP', 'DPS'], true),
                 'sensor_code' => $only['sensor_code'] ?? null,
                 'sensor_label' => $only['sensor_label'] ?? null,
+                'parameter_label' => $only['parameter_label'] ?? null,
                 'sensor_id' => $only['sensor_id'] ?? null,
                 'derived_from' => $only['derived_from'] ?? null,
             ];
@@ -454,6 +456,7 @@ class TrendDiagnosisEvaluator
             'is_derived' => in_array($parameter, ['DP', 'DPS'], true),
             'sensor_code' => $end['sensor_code'] ?? $start['sensor_code'] ?? null,
             'sensor_label' => $end['sensor_label'] ?? $start['sensor_label'] ?? null,
+            'parameter_label' => $end['parameter_label'] ?? $start['parameter_label'] ?? null,
             'sensor_id' => $end['sensor_id'] ?? $start['sensor_id'] ?? null,
             'derived_from' => $end['derived_from'] ?? $start['derived_from'] ?? null,
         ];

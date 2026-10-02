@@ -489,8 +489,8 @@
                                                 </div>
                                             @elseif($sensorCode)
                                                 <span class="tde-pill tde-pill-info" style="min-height:22px;padding:3px 8px;font-size:11px;"><i class="bx bx-chip"></i>{{ $sensorCode }}</span>
-                                                @if(($row['sensor_label'] ?? null) && $row['sensor_label'] !== $sensorCode)
-                                                    <div class="text-muted small mt-1">{{ $row['sensor_label'] }}</div>
+                                                @if($row['parameter_label'] ?? null)
+                                                    <div class="text-muted small mt-1">{{ $row['parameter_label'] }}</div>
                                                 @endif
                                             @else
                                                 <span class="text-muted small">-</span>
@@ -778,7 +778,7 @@
                         + '<div class="text-muted small mt-1">dari ' + esc(df) + '</div>';
                 } else if (r.sensor_code) {
                     sourceCell = '<span class="tde-pill tde-pill-info" style="min-height:22px;padding:3px 8px;font-size:11px;"><i class="bx bx-chip"></i>' + esc(r.sensor_code) + '</span>';
-                    if (r.sensor_label && r.sensor_label !== r.sensor_code) sourceCell += '<div class="text-muted small mt-1">' + esc(r.sensor_label) + '</div>';
+                    if (r.parameter_label) sourceCell += '<div class="text-muted small mt-1">' + esc(r.parameter_label) + '</div>';
                 } else {
                     sourceCell = '<span class="text-muted small">-</span>';
                 }
