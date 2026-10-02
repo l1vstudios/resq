@@ -245,13 +245,22 @@
     $symbols = $pattern['symbols'] ?? [];
     $parameters = collect($output['parameters'] ?? []);
     $window = $output['window'] ?? [];
+    // Durasi rentang waktu analisis dalam istilah yang mudah dipahami (jam/menit/hari)
+    $windowMinutes = (int) ($window['minutes'] ?? 0);
+    $windowFriendly = $windowMinutes <= 0
+        ? '-'
+        : ($windowMinutes % 1440 === 0
+            ? ($windowMinutes / 1440).' hari terakhir'
+            : ($windowMinutes % 60 === 0
+                ? ($windowMinutes / 60).' jam terakhir'
+                : $windowMinutes.' menit terakhir'));
     $matrixStatus = $diagnosis['matrix_status'] ?? 'matrix_not_configured';
     $matrixVersion = $diagnosis['matrix_version'] ?? null;
     $executionState = $tde['execution_state'] ?? null;
     $isInsufficient = in_array($executionState, ['insufficient_data', 'partial'], true) || str_contains((string) ($pattern['key'] ?? ''), '?');
     $missingParameters = collect($diagnosis['missing_parameters'] ?? [])->filter()->values();
     $displayForecastSummary = $isInsufficient ? 'Belum siap' : $forecastSummary;
-    $displayForecastBasis = $isInsufficient ? 'TDE membutuhkan minimal dua sampel untuk parameter AT, RH, DP, DPS, dan AP dalam window evaluasi.' : $forecastBasis;
+    $displayForecastBasis = $isInsufficient ? 'TDE membutuhkan minimal dua pembacaan untuk parameter AT, RH, DP, DPS, dan AP dalam rentang waktu analisis.' : $forecastBasis;
     $displayEstimatedTime = $isInsufficient ? 'Belum tersedia' : $estimatedTime;
     $conditionState = $condition['state'] ?? 'UNKNOWN';
     $conditionClass = $conditionState === 'BASAH' ? 'tde-pill-wet' : ($conditionState === 'KERING' ? 'tde-pill-dry' : 'tde-pill-warning');
@@ -268,7 +277,7 @@
     <div class="tde-page-header-row">
         <div>
             <h1 class="tde-page-title">TDE Forecast</h1>
-            <p class="tde-page-subtitle">Panel diagnosis tren atmosfer lokal dari time-series station dan Matrix TDE.</p>
+            <p class="tde-page-subtitle">Panel diagnosis tren cuaca lokal dari data sensor station dan Matrix TDE.</p>
         </div>
         <div class="tde-header-meta">
             <span class="tde-pill tde-pill-info"><i class="bx bx-station"></i>{{ $selectedStation?->station_code ?? 'Belum ada station' }}</span>
@@ -304,10 +313,10 @@
             <div class="d-flex flex-wrap gap-3 align-items-end">
                 <div class="form-check form-switch mb-0" style="padding-top:6px;">
                     <input class="form-check-input" type="checkbox" id="tde-realtime-toggle">
-                    <label class="form-check-label fw-semibold" for="tde-realtime-toggle">Realtime (auto-refresh)</label>
+                    <label class="form-check-label fw-semibold" for="tde-realtime-toggle">Perbarui otomatis</label>
                 </div>
                 <div>
-                    <label for="tde-interval" class="form-label mb-1 small">Interval polling (detik)</label>
+                    <label for="tde-interval" class="form-label mb-1 small">Perbarui setiap (detik)</label>
                     <input type="number" id="tde-interval" class="form-control form-control-sm" style="width:120px;" min="2" max="3600" value="10">
                 </div>
                 <div class="text-muted small" style="padding-bottom:6px;">
@@ -333,12 +342,12 @@
         <div class="tde-forecast-card">
             <div class="label">Proyeksi Kondisi</div>
             <div class="value">{{ $displayForecastSummary }}</div>
-            <div class="note">{{ $isInsufficient ? 'Menunggu data time-series' : $forecastType }}</div>
+            <div class="note">{{ $isInsufficient ? 'Menunggu data sensor' : $forecastType }}</div>
         </div>
         <div class="tde-forecast-card">
             <div class="label">Perkiraan Waktu</div>
             <div class="value">{{ $displayEstimatedTime }}</div>
-            <div class="note">Waktu evaluasi {{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('Y-m-d H:i') : '-' }}</div>
+            <div class="note">Dihitung pada {{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('d M Y H:i') : '-' }}</div>
         </div>
         <div class="tde-forecast-card">
             <div class="label">Matrix TDE</div>
@@ -347,26 +356,73 @@
         </div>
     </div>
 
+    @if(session('message'))
+        <div class="alert alert-success">{{ session('message') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+
+    @if($matrixStatus !== 'matched')
+        <div class="card tde-section-card mb-3" style="border-left:4px solid var(--emp-gold);">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-3 align-items-end justify-content-between">
+                    <div>
+                        <h5 class="mb-1">Sambungkan Matrix TDE</h5>
+                        <div class="text-muted small">
+                            @if($matrixStatus === 'matrix_not_configured')
+                                Station ini belum terhubung ke Matrix TDE. Pilih matriks lalu sambungkan agar diagnosa akhir aktif.
+                            @else
+                                Pattern belum cocok dengan matriks aktif. Anda bisa mengganti matriks di sini.
+                            @endif
+                        </div>
+                    </div>
+                    @if(! empty($availableMatrices))
+                        <form method="POST" action="{{ route('tde-forecast.attach-matrix') }}" class="d-flex flex-wrap gap-2 align-items-end">
+                            @csrf
+                            <input type="hidden" name="station_id" value="{{ $selectedStation->id }}">
+                            <div>
+                                <label class="form-label mb-1 small">Pilih Matrix TDE</label>
+                                <select name="tde_matrix_version_id" class="form-select" style="min-width:280px;" required>
+                                    @foreach($availableMatrices as $matrix)
+                                        <option value="{{ $matrix['id'] }}" @selected((int) ($currentMatrixId ?? 0) === (int) $matrix['id'])>
+                                            {{ $matrix['matrix_code'] }} - {{ $matrix['name'] }}{{ $matrix['version_label'] ? ' ('.$matrix['version_label'].')' : '' }} [{{ $matrix['scope'] }}]
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-warning"><i class="bx bx-link me-1"></i> Sambungkan</button>
+                        </form>
+                    @else
+                        <div class="text-muted">
+                            Belum ada Matrix TDE. Import dulu di <a href="{{ route('master-data-tde.index') }}">Master Data TDE</a>.
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
+
     @if($isInsufficient)
         <div class="tde-empty-panel mb-3">
             <div class="tde-empty-title">Data TDE belum cukup untuk diagnosis</div>
             <div class="tde-empty-copy">{{ $displayForecastBasis }}</div>
             <div class="tde-empty-grid">
                 <div class="tde-empty-item">
-                    <strong>{{ $window['reading_count'] ?? 0 }} readings</strong>
-                    <span>Data yang terbaca di window saat ini</span>
+                    <strong>{{ $window['reading_count'] ?? 0 }} pembacaan</strong>
+                    <span>Jumlah data sensor dalam rentang waktu ini</span>
                 </div>
                 <div class="tde-empty-item">
-                    <strong>{{ $window['minutes'] ?? '-' }} menit</strong>
-                    <span>Window evaluasi aktif</span>
+                    <strong>{{ $windowFriendly }}</strong>
+                    <span>Rentang waktu analisis</span>
                 </div>
                 <div class="tde-empty-item">
                     <strong>{{ $missingParameters->isNotEmpty() ? $missingParameters->implode(', ') : 'AT, RH, DP, DPS, AP' }}</strong>
                     <span>Parameter yang belum memenuhi syarat</span>
                 </div>
                 <div class="tde-empty-item">
-                    <strong>{{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('Y-m-d H:i') : '-' }}</strong>
-                    <span>Waktu evaluasi terakhir</span>
+                    <strong>{{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('d M Y H:i') : '-' }}</strong>
+                    <span>Waktu perhitungan terakhir</span>
                 </div>
             </div>
         </div>
@@ -380,7 +436,7 @@
                             <h4 class="card-title mb-1">Combination Pattern</h4>
                             <div class="text-muted small">Pattern key: <span id="tde-pattern-key">{{ $pattern['key'] ?? '-' }}</span></div>
                         </div>
-                        <span class="tde-pill tde-pill-info">{{ $window['minutes'] ?? '-' }} min window</span>
+                        <span class="tde-pill tde-pill-info">{{ $windowFriendly }}</span>
                     </div>
                     <div class="tde-pattern" id="tde-pattern-grid">
                         @foreach($order as $index => $parameter)
@@ -409,7 +465,7 @@
                                     <th>Awal</th>
                                     <th>Akhir</th>
                                     <th>Perubahan</th>
-                                    <th>Threshold</th>
+                                    <th>Threshold Turun / Naik</th>
                                     <th>Klasifikasi</th>
                                 </tr>
                             </thead>
@@ -443,7 +499,12 @@
                                         <td>{{ $row['value_start'] ?? '-' }}</td>
                                         <td>{{ $row['value_end'] ?? '-' }}</td>
                                         <td>{{ $row['change'] ?? '-' }}</td>
-                                        <td>{{ $row['threshold'] ?? '-' }}</td>
+                                        <td>
+                                            <span class="text-primary" title="{{ $row['threshold_down_label'] ?? 'Turun' }}">&le; {{ $row['threshold_down'] ?? ('-'.($row['threshold'] ?? '')) }}</span>
+                                            <span class="text-muted">/</span>
+                                            <span class="text-success" title="{{ $row['threshold_up_label'] ?? 'Naik' }}">&ge; +{{ $row['threshold_up'] ?? ($row['threshold'] ?? '') }}</span>
+                                            <div class="text-muted small">{{ $row['threshold_down_label'] ?? 'Turun' }} / {{ $row['threshold_up_label'] ?? 'Naik' }}</div>
+                                        </td>
                                         <td>
                                             <span class="tde-pill tde-pill-info">
                                                 <span class="{{ $symbolClass($classification) }}">{{ $classification }}</span>
@@ -578,16 +639,16 @@
                             <div class="text-muted small mt-1">Execution state</div>
                         </div>
                         <div class="col-md-6">
-                            <div class="ops-readonly-field">{{ $window['reading_count'] ?? 0 }} readings</div>
-                            <div class="text-muted small mt-1">Data in window</div>
+                            <div class="ops-readonly-field">{{ $window['reading_count'] ?? 0 }} pembacaan</div>
+                            <div class="text-muted small mt-1">Jumlah data dalam rentang</div>
                         </div>
                         <div class="col-md-6">
-                            <div class="ops-readonly-field">{{ isset($window['from']) ? \Illuminate\Support\Carbon::parse($window['from'])->format('H:i') : '-' }}</div>
-                            <div class="text-muted small mt-1">Window start</div>
+                            <div class="ops-readonly-field">{{ isset($window['from']) ? \Illuminate\Support\Carbon::parse($window['from'])->format('d M H:i') : '-' }}</div>
+                            <div class="text-muted small mt-1">Mulai dari</div>
                         </div>
                         <div class="col-md-6">
-                            <div class="ops-readonly-field">{{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('H:i') : '-' }}</div>
-                            <div class="text-muted small mt-1">Window end</div>
+                            <div class="ops-readonly-field">{{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('d M H:i') : '-' }}</div>
+                            <div class="text-muted small mt-1">Sampai dengan</div>
                         </div>
                     </div>
                 </div>
@@ -726,7 +787,10 @@
                     + '<td>' + esc(r.value_start != null ? r.value_start : '-') + '</td>'
                     + '<td>' + esc(r.value_end != null ? r.value_end : '-') + '</td>'
                     + '<td>' + esc(r.change != null ? r.change : '-') + '</td>'
-                    + '<td>' + esc(r.threshold != null ? r.threshold : '-') + '</td>'
+                    + '<td><span class="text-primary">&le; ' + esc(r.threshold_down != null ? r.threshold_down : '-') + '</span> '
+                    + '<span class="text-muted">/</span> '
+                    + '<span class="text-success">&ge; +' + esc(r.threshold_up != null ? r.threshold_up : '-') + '</span>'
+                    + '<div class="text-muted small">' + esc(r.threshold_down_label || 'Turun') + ' / ' + esc(r.threshold_up_label || 'Naik') + '</div></td>'
                     + '<td><span class="tde-pill tde-pill-info"><span class="' + symbolClass(cls) + '">' + esc(cls) + '</span> ' + esc(r.label || '-') + '</span></td></tr>';
             }).join('');
         }
@@ -772,7 +836,7 @@
                 }
             })
             .catch(function () {
-                if (statusEl) statusEl.textContent = 'Error polling';
+                if (statusEl) statusEl.textContent = 'Gagal memperbarui';
             });
     }
 

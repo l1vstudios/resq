@@ -403,6 +403,10 @@ class TrendDiagnosisEvaluator
     private function parameterResult(string $parameter, array $samples, array $thresholds): array
     {
         $threshold = (float) ($thresholds[$parameter] ?? self::DEFAULT_THRESHOLDS[$parameter]);
+        $thresholdDown = round(-$threshold, 4);
+        $thresholdUp = round($threshold, 4);
+        $downLabel = $parameter === 'DPS' ? 'Menyempit' : 'Menurun';
+        $upLabel = $parameter === 'DPS' ? 'Melebar' : 'Meningkat';
 
         if (count($samples) < 2) {
             $only = $samples[0] ?? null;
@@ -412,6 +416,10 @@ class TrendDiagnosisEvaluator
                 'value_end' => $only['value'] ?? null,
                 'change' => null,
                 'threshold' => $threshold,
+                'threshold_down' => $thresholdDown,
+                'threshold_up' => $thresholdUp,
+                'threshold_down_label' => $downLabel,
+                'threshold_up_label' => $upLabel,
                 'classification' => '?',
                 'label' => 'Data tidak cukup',
                 'sample_count' => count($samples),
@@ -433,6 +441,10 @@ class TrendDiagnosisEvaluator
             'value_end' => round((float) $end['value'], 3),
             'change' => round($change, 3),
             'threshold' => $threshold,
+            'threshold_down' => $thresholdDown,
+            'threshold_up' => $thresholdUp,
+            'threshold_down_label' => $downLabel,
+            'threshold_up_label' => $upLabel,
             'classification' => $this->classify($change, $threshold),
             'label' => $this->classificationLabel($parameter, $this->classify($change, $threshold)),
             'sample_count' => count($samples),
