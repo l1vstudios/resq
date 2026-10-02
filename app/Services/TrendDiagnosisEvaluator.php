@@ -126,6 +126,9 @@ class TrendDiagnosisEvaluator
         $hasDiagnosticSamples = collect($parameterResults)
             ->contains(fn (array $result) => ($result['sample_count'] ?? 0) > 0);
 
+        $stationSensors = $this->stationSensorSummary($station, $samples);
+        $recentReadings = $this->recentReadingList($samples);
+
         return [
             'evaluation_state' => $readings->isEmpty() || ! $hasDiagnosticSamples
                 ? 'insufficient_data'
@@ -156,6 +159,8 @@ class TrendDiagnosisEvaluator
                 'missing_parameters' => $missing,
             ],
             'thresholds' => $thresholds,
+            'station_sensors' => $stationSensors,
+            'recent_readings' => $recentReadings,
             'derived_data' => [
                 'dew_point_formula' => 'Magnus formula',
                 'dew_point_spread_formula' => 'Air Temperature - Dew Point',
@@ -182,6 +187,68 @@ class TrendDiagnosisEvaluator
             ->get();
     }
 
+    /**
+     * Ringkasan sensor station: parameter apa yang dipasok sensor mana, dan
+     * parameter mana yang merupakan turunan (DP, DPS).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function stationSensorSummary(MonitoringStation $station, array $samples): array
+    {
+        $summary = [];
+
+        foreach (self::PARAMETERS as $parameter) {
+            $items = $samples[$parameter] ?? [];
+            $last = $items === [] ? null : $items[count($items) - 1];
+            $isDerived = in_array($parameter, ['DP', 'DPS'], true);
+
+            $summary[] = [
+                'parameter' => $parameter,
+                'is_derived' => $isDerived,
+                'source_type' => $isDerived ? 'Turunan' : 'Sensor',
+                'sensor_code' => $last['sensor_code'] ?? null,
+                'sensor_label' => $last['sensor_label'] ?? null,
+                'sensor_id' => $last['sensor_id'] ?? null,
+                'derived_from' => $last['derived_from'] ?? ($isDerived ? ($parameter === 'DP' ? ['AT', 'RH'] : ['AT', 'DP']) : null),
+                'latest_value' => isset($last['value']) ? round((float) $last['value'], 3) : null,
+                'unit' => self::UNITS[$parameter] ?? null,
+                'sample_count' => count($items),
+            ];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Daftar pembacaan terakhir (List Data) lintas parameter, diurut terbaru,
+     * untuk ditampilkan pada tab List Data TDE Forecast.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function recentReadingList(array $samples, int $limit = 50): array
+    {
+        $rows = [];
+
+        foreach (self::PARAMETERS as $parameter) {
+            foreach ($samples[$parameter] ?? [] as $sample) {
+                $rows[] = [
+                    'timestamp' => $sample['timestamp'] ?? null,
+                    'parameter' => $parameter,
+                    'value' => isset($sample['value']) ? round((float) $sample['value'], 3) : null,
+                    'unit' => $sample['unit'] ?? (self::UNITS[$parameter] ?? null),
+                    'source' => $sample['source'] ?? null,
+                    'is_derived' => in_array($parameter, ['DP', 'DPS'], true),
+                    'sensor_code' => $sample['sensor_code'] ?? null,
+                    'sensor_label' => $sample['sensor_label'] ?? null,
+                ];
+            }
+        }
+
+        usort($rows, fn ($a, $b) => strcmp((string) ($b['timestamp'] ?? ''), (string) ($a['timestamp'] ?? '')));
+
+        return array_slice($rows, 0, $limit);
+    }
+
     private function samples(Collection $readings): array
     {
         $samples = collect([...self::PARAMETERS, 'RAINFALL'])
@@ -191,6 +258,14 @@ class TrendDiagnosisEvaluator
         foreach ($readings as $reading) {
             $timestamp = $reading->received_at;
             $rowValues = [];
+            $sensorMeta = [
+                'sensor_id' => $reading->sensor?->id,
+                'sensor_code' => $reading->sensor?->sensor_code,
+                'sensor_label' => $reading->sensor?->mappingProfile?->canonicalParameter?->field_identity
+                    ?? $reading->sensor?->sensor_code
+                    ?? $reading->sensor?->parameter
+                    ?? $reading->sensor?->type,
+            ];
             $items = collect($reading->parameter_values ?? [])
                 ->filter(fn ($item) => is_array($item))
                 ->values();
@@ -217,6 +292,9 @@ class TrendDiagnosisEvaluator
                     'value' => $value,
                     'unit' => self::UNITS[$parameter] ?? ($item['unit'] ?? null),
                     'source' => 'measured',
+                    'sensor_id' => $sensorMeta['sensor_id'],
+                    'sensor_code' => $sensorMeta['sensor_code'],
+                    'sensor_label' => $sensorMeta['sensor_label'],
                 ];
                 $samples[$parameter][] = $sample;
                 $rowValues[$parameter] = $sample;
@@ -224,17 +302,29 @@ class TrendDiagnosisEvaluator
 
             if (isset($rowValues['AT'], $rowValues['RH'])) {
                 $dewPoint = $this->dewPoint($rowValues['AT']['value'], $rowValues['RH']['value']);
+                $derivedFrom = array_values(array_unique(array_filter([
+                    $rowValues['AT']['sensor_code'] ?? null,
+                    $rowValues['RH']['sensor_code'] ?? null,
+                ])));
                 $samples['DP'][] = [
                     'timestamp' => $timestamp->toISOString(),
                     'value' => $dewPoint,
                     'unit' => self::UNITS['DP'],
                     'source' => 'derived',
+                    'sensor_id' => null,
+                    'sensor_code' => $derivedFrom === [] ? null : implode(' + ', $derivedFrom),
+                    'sensor_label' => 'Turunan dari AT & RH',
+                    'derived_from' => $derivedFrom,
                 ];
                 $samples['DPS'][] = [
                     'timestamp' => $timestamp->toISOString(),
                     'value' => $rowValues['AT']['value'] - $dewPoint,
                     'unit' => self::UNITS['DPS'],
                     'source' => 'derived',
+                    'sensor_id' => null,
+                    'sensor_code' => $derivedFrom === [] ? null : implode(' + ', $derivedFrom),
+                    'sensor_label' => 'Turunan dari AT & DP',
+                    'derived_from' => $derivedFrom,
                 ];
             }
         }
@@ -276,21 +366,37 @@ class TrendDiagnosisEvaluator
 
     private function derivedDewPointSample(array $temperature, array $humidity): array
     {
+        $derivedFrom = array_values(array_unique(array_filter([
+            $temperature['sensor_code'] ?? null,
+            $humidity['sensor_code'] ?? null,
+        ])));
         return [
             'timestamp' => max($temperature['timestamp'], $humidity['timestamp']),
             'value' => $this->dewPoint((float) $temperature['value'], (float) $humidity['value']),
             'unit' => self::UNITS['DP'],
             'source' => 'derived_endpoint',
+            'sensor_id' => null,
+            'sensor_code' => $derivedFrom === [] ? null : implode(' + ', $derivedFrom),
+            'sensor_label' => 'Turunan dari AT & RH',
+            'derived_from' => $derivedFrom,
         ];
     }
 
     private function derivedDewPointSpreadSample(array $temperature, array $dewPoint): array
     {
+        $derivedFrom = array_values(array_unique(array_filter([
+            $temperature['sensor_code'] ?? null,
+            $dewPoint['sensor_code'] ?? null,
+        ])));
         return [
             'timestamp' => max($temperature['timestamp'], $dewPoint['timestamp']),
             'value' => (float) $temperature['value'] - (float) $dewPoint['value'],
             'unit' => self::UNITS['DPS'],
             'source' => 'derived_endpoint',
+            'sensor_id' => null,
+            'sensor_code' => $derivedFrom === [] ? null : implode(' + ', $derivedFrom),
+            'sensor_label' => 'Turunan dari AT & DP',
+            'derived_from' => $derivedFrom,
         ];
     }
 
@@ -299,15 +405,22 @@ class TrendDiagnosisEvaluator
         $threshold = (float) ($thresholds[$parameter] ?? self::DEFAULT_THRESHOLDS[$parameter]);
 
         if (count($samples) < 2) {
+            $only = $samples[0] ?? null;
+
             return [
-                'value_start' => $samples[0]['value'] ?? null,
-                'value_end' => $samples[0]['value'] ?? null,
+                'value_start' => $only['value'] ?? null,
+                'value_end' => $only['value'] ?? null,
                 'change' => null,
                 'threshold' => $threshold,
                 'classification' => '?',
                 'label' => 'Data tidak cukup',
                 'sample_count' => count($samples),
                 'unit' => self::UNITS[$parameter],
+                'is_derived' => in_array($parameter, ['DP', 'DPS'], true),
+                'sensor_code' => $only['sensor_code'] ?? null,
+                'sensor_label' => $only['sensor_label'] ?? null,
+                'sensor_id' => $only['sensor_id'] ?? null,
+                'derived_from' => $only['derived_from'] ?? null,
             ];
         }
 
@@ -326,6 +439,11 @@ class TrendDiagnosisEvaluator
             'unit' => self::UNITS[$parameter],
             'source_start' => $start['source'] ?? null,
             'source_end' => $end['source'] ?? null,
+            'is_derived' => in_array($parameter, ['DP', 'DPS'], true),
+            'sensor_code' => $end['sensor_code'] ?? $start['sensor_code'] ?? null,
+            'sensor_label' => $end['sensor_label'] ?? $start['sensor_label'] ?? null,
+            'sensor_id' => $end['sensor_id'] ?? $start['sensor_id'] ?? null,
+            'derived_from' => $end['derived_from'] ?? $start['derived_from'] ?? null,
         ];
     }
 

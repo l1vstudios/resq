@@ -300,6 +300,22 @@
                 </button>
             </form>
         </div>
+        <div class="tde-realtime-bar mt-3 pt-3" style="border-top:1px solid var(--emp-line);">
+            <div class="d-flex flex-wrap gap-3 align-items-end">
+                <div class="form-check form-switch mb-0" style="padding-top:6px;">
+                    <input class="form-check-input" type="checkbox" id="tde-realtime-toggle">
+                    <label class="form-check-label fw-semibold" for="tde-realtime-toggle">Realtime (auto-refresh)</label>
+                </div>
+                <div>
+                    <label for="tde-interval" class="form-label mb-1 small">Interval polling (detik)</label>
+                    <input type="number" id="tde-interval" class="form-control form-control-sm" style="width:120px;" min="2" max="3600" value="10">
+                </div>
+                <div class="text-muted small" style="padding-bottom:6px;">
+                    Status: <span id="tde-realtime-status" class="fw-semibold">Nonaktif</span>
+                    <span id="tde-last-update" class="ms-2"></span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -356,17 +372,17 @@
         </div>
     @else
     <div class="row">
-        <div class="col-xl-5">
+        <div class="col-12">
             <div class="card tde-section-card">
                 <div class="card-body">
                     <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
                         <div>
                             <h4 class="card-title mb-1">Combination Pattern</h4>
-                            <div class="text-muted small">Pattern key: {{ $pattern['key'] ?? '-' }}</div>
+                            <div class="text-muted small">Pattern key: <span id="tde-pattern-key">{{ $pattern['key'] ?? '-' }}</span></div>
                         </div>
                         <span class="tde-pill tde-pill-info">{{ $window['minutes'] ?? '-' }} min window</span>
                     </div>
-                    <div class="tde-pattern">
+                    <div class="tde-pattern" id="tde-pattern-grid">
                         @foreach($order as $index => $parameter)
                             @php($symbol = $symbols[$index] ?? '?')
                             <div class="tde-pattern-item">
@@ -380,15 +396,16 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-7">
+        <div class="col-12">
             <div class="card tde-section-card">
                 <div class="card-body">
-                    <h4 class="card-title mb-3">Trend Parameter</h4>
+                    <h4 class="card-title mb-3">Trend Parameter &amp; Sumber Sensor</h4>
                     <div class="table-responsive">
                         <table class="table table-nowrap align-middle tde-parameter-table mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th>Parameter</th>
+                                    <th>Sumber Sensor</th>
                                     <th>Awal</th>
                                     <th>Akhir</th>
                                     <th>Perubahan</th>
@@ -396,18 +413,32 @@
                                     <th>Klasifikasi</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="tde-parameter-rows">
                                 @foreach($order as $parameter)
                                     @php($row = $parameters[$parameter] ?? [])
                                     @php($classification = $row['classification'] ?? '?')
-                                    @php($isDerived = in_array($parameter, $derivedParameters, true))
+                                    @php($isDerived = ($row['is_derived'] ?? in_array($parameter, $derivedParameters, true)))
+                                    @php($sensorCode = $row['sensor_code'] ?? null)
+                                    @php($derivedFrom = $row['derived_from'] ?? null)
                                     <tr>
                                         <td>
                                             <strong>{{ $parameter }}</strong>
-                                            @if($isDerived)
-                                                <span class="tde-pill tde-pill-info" style="min-height:20px;padding:2px 7px;font-size:10px;" title="Nilai turunan, bukan hasil ukur sensor">Turunan</span>
-                                            @endif
                                             <div class="text-muted small">{{ $row['unit'] ?? '-' }}</div>
+                                        </td>
+                                        <td>
+                                            @if($isDerived)
+                                                <span class="tde-pill tde-pill-warning" style="min-height:22px;padding:3px 8px;font-size:11px;">Turunan</span>
+                                                <div class="text-muted small mt-1">
+                                                    dari {{ is_array($derivedFrom) && $derivedFrom ? implode(' + ', $derivedFrom) : ($parameter === 'DP' ? 'AT + RH' : 'AT + DP') }}
+                                                </div>
+                                            @elseif($sensorCode)
+                                                <span class="tde-pill tde-pill-info" style="min-height:22px;padding:3px 8px;font-size:11px;"><i class="bx bx-chip"></i>{{ $sensorCode }}</span>
+                                                @if(($row['sensor_label'] ?? null) && $row['sensor_label'] !== $sensorCode)
+                                                    <div class="text-muted small mt-1">{{ $row['sensor_label'] }}</div>
+                                                @endif
+                                            @else
+                                                <span class="text-muted small">-</span>
+                                            @endif
                                         </td>
                                         <td>{{ $row['value_start'] ?? '-' }}</td>
                                         <td>{{ $row['value_end'] ?? '-' }}</td>
@@ -423,6 +454,96 @@
                                 @endforeach
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card tde-section-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-3 flex-wrap">
+                        <h4 class="card-title mb-0">List Data</h4>
+                        <ul class="nav nav-pills" role="tablist">
+                            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tde-tab-sensors" role="tab">Sumber Sensor</a></li>
+                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tde-tab-readings" role="tab">Pembacaan Terakhir</a></li>
+                        </ul>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-pane active" id="tde-tab-sensors" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-nowrap align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th>Tipe</th>
+                                            <th>Sensor / Sumber</th>
+                                            <th>Nilai Terakhir</th>
+                                            <th>Jumlah Sampel</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tde-sensor-rows">
+                                        @forelse(($output['station_sensors'] ?? []) as $sensorRow)
+                                            <tr>
+                                                <td><strong>{{ $sensorRow['parameter'] }}</strong></td>
+                                                <td>
+                                                    @if($sensorRow['is_derived'] ?? false)
+                                                        <span class="tde-pill tde-pill-warning" style="min-height:20px;padding:2px 7px;font-size:10px;">Turunan</span>
+                                                    @else
+                                                        <span class="tde-pill tde-pill-info" style="min-height:20px;padding:2px 7px;font-size:10px;">Sensor</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if($sensorRow['is_derived'] ?? false)
+                                                        {{ is_array($sensorRow['derived_from'] ?? null) ? implode(' + ', $sensorRow['derived_from']) : '-' }}
+                                                    @else
+                                                        {{ $sensorRow['sensor_code'] ?? '-' }}
+                                                    @endif
+                                                </td>
+                                                <td>{{ $sensorRow['latest_value'] ?? '-' }} {{ $sensorRow['unit'] ?? '' }}</td>
+                                                <td>{{ $sensorRow['sample_count'] ?? 0 }}</td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="5" class="text-center text-muted">Belum ada data sensor.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane" id="tde-tab-readings" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-nowrap align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Waktu</th>
+                                            <th>Parameter</th>
+                                            <th>Nilai</th>
+                                            <th>Sumber</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tde-reading-rows">
+                                        @forelse(($output['recent_readings'] ?? []) as $readingRow)
+                                            <tr>
+                                                <td>{{ isset($readingRow['timestamp']) ? \Illuminate\Support\Carbon::parse($readingRow['timestamp'])->format('Y-m-d H:i:s') : '-' }}</td>
+                                                <td><strong>{{ $readingRow['parameter'] }}</strong></td>
+                                                <td>{{ $readingRow['value'] ?? '-' }} {{ $readingRow['unit'] ?? '' }}</td>
+                                                <td>
+                                                    @if($readingRow['is_derived'] ?? false)
+                                                        <span class="text-warning">Turunan</span>
+                                                    @else
+                                                        {{ $readingRow['sensor_code'] ?? 'Sensor' }}
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="4" class="text-center text-muted">Belum ada pembacaan.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -529,8 +650,146 @@
 
 @section('script')
 <script>
-    document.getElementById('tde-station-id')?.addEventListener('change', function () {
-        this.form?.submit();
-    });
+(function () {
+    var stationSelect = document.getElementById('tde-station-id');
+    stationSelect?.addEventListener('change', function () { this.form?.submit(); });
+
+    var dataUrl = @json(route('tde-forecast.data'));
+    var toggle = document.getElementById('tde-realtime-toggle');
+    var intervalInput = document.getElementById('tde-interval');
+    var statusEl = document.getElementById('tde-realtime-status');
+    var lastUpdateEl = document.getElementById('tde-last-update');
+    var timer = null;
+
+    var symbolClass = function (s) {
+        if (s === '<') return 'tde-symbol-down';
+        if (s === '>') return 'tde-symbol-up';
+        if (s === '=') return 'tde-symbol-flat';
+        return 'tde-symbol-missing';
+    };
+    var esc = function (v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    };
+    var fmtTime = function (iso) {
+        if (!iso) return '-';
+        var d = new Date(iso);
+        if (isNaN(d)) return '-';
+        var p = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    };
+
+    function render(tde) {
+        if (!tde || !tde.output) return;
+        var out = tde.output;
+        var params = out.parameters || {};
+        var order = (out.combination_pattern && out.combination_pattern.order) || ['AT', 'RH', 'DP', 'DPS', 'AP'];
+        var symbols = (out.combination_pattern && out.combination_pattern.symbols) || [];
+
+        // pattern key
+        var keyEl = document.getElementById('tde-pattern-key');
+        if (keyEl) keyEl.textContent = (out.combination_pattern && out.combination_pattern.key) || '-';
+
+        // pattern grid
+        var grid = document.getElementById('tde-pattern-grid');
+        if (grid) {
+            grid.innerHTML = order.map(function (p, i) {
+                var sym = symbols[i] || '?';
+                var label = (params[p] && params[p].label) || '-';
+                return '<div class="tde-pattern-item"><div class="param">' + esc(p) + '</div>'
+                    + '<div class="symbol ' + symbolClass(sym) + '">' + esc(sym) + '</div>'
+                    + '<div class="text-muted small">' + esc(label) + '</div></div>';
+            }).join('');
+        }
+
+        // parameter rows
+        var pbody = document.getElementById('tde-parameter-rows');
+        if (pbody) {
+            pbody.innerHTML = order.map(function (p) {
+                var r = params[p] || {};
+                var cls = r.classification || '?';
+                var derived = r.is_derived || (p === 'DP' || p === 'DPS');
+                var sourceCell;
+                if (derived) {
+                    var df = Array.isArray(r.derived_from) && r.derived_from.length ? r.derived_from.join(' + ') : (p === 'DP' ? 'AT + RH' : 'AT + DP');
+                    sourceCell = '<span class="tde-pill tde-pill-warning" style="min-height:22px;padding:3px 8px;font-size:11px;">Turunan</span>'
+                        + '<div class="text-muted small mt-1">dari ' + esc(df) + '</div>';
+                } else if (r.sensor_code) {
+                    sourceCell = '<span class="tde-pill tde-pill-info" style="min-height:22px;padding:3px 8px;font-size:11px;"><i class="bx bx-chip"></i>' + esc(r.sensor_code) + '</span>';
+                    if (r.sensor_label && r.sensor_label !== r.sensor_code) sourceCell += '<div class="text-muted small mt-1">' + esc(r.sensor_label) + '</div>';
+                } else {
+                    sourceCell = '<span class="text-muted small">-</span>';
+                }
+                return '<tr><td><strong>' + esc(p) + '</strong><div class="text-muted small">' + esc(r.unit || '-') + '</div></td>'
+                    + '<td>' + sourceCell + '</td>'
+                    + '<td>' + esc(r.value_start != null ? r.value_start : '-') + '</td>'
+                    + '<td>' + esc(r.value_end != null ? r.value_end : '-') + '</td>'
+                    + '<td>' + esc(r.change != null ? r.change : '-') + '</td>'
+                    + '<td>' + esc(r.threshold != null ? r.threshold : '-') + '</td>'
+                    + '<td><span class="tde-pill tde-pill-info"><span class="' + symbolClass(cls) + '">' + esc(cls) + '</span> ' + esc(r.label || '-') + '</span></td></tr>';
+            }).join('');
+        }
+
+        // station sensors
+        var sbody = document.getElementById('tde-sensor-rows');
+        if (sbody) {
+            var sensors = out.station_sensors || [];
+            sbody.innerHTML = sensors.length ? sensors.map(function (s) {
+                var typeCell = s.is_derived
+                    ? '<span class="tde-pill tde-pill-warning" style="min-height:20px;padding:2px 7px;font-size:10px;">Turunan</span>'
+                    : '<span class="tde-pill tde-pill-info" style="min-height:20px;padding:2px 7px;font-size:10px;">Sensor</span>';
+                var src = s.is_derived ? (Array.isArray(s.derived_from) ? s.derived_from.join(' + ') : '-') : (s.sensor_code || '-');
+                return '<tr><td><strong>' + esc(s.parameter) + '</strong></td><td>' + typeCell + '</td>'
+                    + '<td>' + esc(src) + '</td>'
+                    + '<td>' + esc(s.latest_value != null ? s.latest_value : '-') + ' ' + esc(s.unit || '') + '</td>'
+                    + '<td>' + esc(s.sample_count || 0) + '</td></tr>';
+            }).join('') : '<tr><td colspan="5" class="text-center text-muted">Belum ada data sensor.</td></tr>';
+        }
+
+        // recent readings
+        var rbody = document.getElementById('tde-reading-rows');
+        if (rbody) {
+            var readings = out.recent_readings || [];
+            rbody.innerHTML = readings.length ? readings.map(function (r) {
+                var srcCell = r.is_derived ? '<span class="text-warning">Turunan</span>' : esc(r.sensor_code || 'Sensor');
+                return '<tr><td>' + esc(fmtTime(r.timestamp)) + '</td><td><strong>' + esc(r.parameter) + '</strong></td>'
+                    + '<td>' + esc(r.value != null ? r.value : '-') + ' ' + esc(r.unit || '') + '</td>'
+                    + '<td>' + srcCell + '</td></tr>';
+            }).join('') : '<tr><td colspan="4" class="text-center text-muted">Belum ada pembacaan.</td></tr>';
+        }
+    }
+
+    function poll() {
+        var stationId = stationSelect ? stationSelect.value : '';
+        if (!stationId) return;
+        fetch(dataUrl + '?station_id=' + encodeURIComponent(stationId), { headers: { 'Accept': 'application/json' } })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res.status); })
+            .then(function (json) {
+                if (json && json.ok) {
+                    render(json.tde);
+                    lastUpdateEl.textContent = 'Update: ' + fmtTime(json.server_time);
+                }
+            })
+            .catch(function () {
+                if (statusEl) statusEl.textContent = 'Error polling';
+            });
+    }
+
+    function start() {
+        stop();
+        var sec = Math.max(2, parseInt(intervalInput.value, 10) || 10);
+        timer = setInterval(poll, sec * 1000);
+        statusEl.textContent = 'Aktif (' + sec + 's)';
+        poll();
+    }
+    function stop() {
+        if (timer) { clearInterval(timer); timer = null; }
+        if (statusEl) statusEl.textContent = 'Nonaktif';
+    }
+
+    toggle?.addEventListener('change', function () { this.checked ? start() : stop(); });
+    intervalInput?.addEventListener('change', function () { if (toggle && toggle.checked) start(); });
+})();
 </script>
 @endsection

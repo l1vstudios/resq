@@ -43,6 +43,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/tde-forecast', [TdeForecastController::class, 'index'])->name('tde-forecast.index');
+    Route::get('/tde-forecast/data', [TdeForecastController::class, 'data'])->name('tde-forecast.data');
     Route::get('/dashboard/map-data', [DashboardController::class, 'mapData'])->name('dashboard.map-data');
     Route::get('/monitoring', [ProjectSetupController::class, 'monitoring'])->name('monitoring.index');
     Route::get('/platform-operations', [PlatformOperationsController::class, 'index'])->name('platform-operations.index');
