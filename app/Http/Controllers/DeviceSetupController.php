@@ -654,7 +654,7 @@ class DeviceSetupController extends Controller
     private function rednodeConnectivityCode(DataLogger $logger, string $serialPort): string
     {
         $baseCode = 'SERIAL-' . $logger->logger_code;
-        $defaultPort = trim((string) env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'));
+        $defaultPort = trim((string) env('REDNODE_SERIAL_PORT', '/dev/ttyS9'));
         $serialPort = trim($serialPort);
 
         if ($serialPort === '' || $serialPort === $defaultPort) {
@@ -1079,7 +1079,7 @@ class DeviceSetupController extends Controller
         $settings = $config?->serial_settings ?? [];
 
         return [
-            'port' => $config?->serial_port ?: ($settings['serial_port'] ?? ($config?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'))),
+            'port' => $config?->serial_port ?: ($settings['serial_port'] ?? ($config?->host_or_endpoint ?: env('REDNODE_SERIAL_PORT', '/dev/ttyS9'))),
             'baud_rate' => (int) ($config?->baud_rate ?: ($settings['baud_rate'] ?? env('REDNODE_BAUD_RATE', 9600))),
             'data_bits' => (int) ($config?->data_bits ?: ($settings['data_bits'] ?? env('REDNODE_DATA_BITS', 8))),
             'stop_bits' => (int) ($config?->stop_bits ?: ($settings['stop_bits'] ?? env('REDNODE_STOP_BITS', 1))),
@@ -2176,7 +2176,7 @@ class DeviceSetupController extends Controller
             'start_slave_id' => ['required', 'integer', 'min:1', 'max:247'],
             'end_slave_id' => ['required', 'integer', 'min:1', 'max:247', 'gte:start_slave_id'],
             'ports' => ['nullable', 'array'],
-            'ports.*' => ['string', Rule::in(['/dev/ttyAS4', '/dev/ttyAS5', '/dev/ttyAS2', '/dev/ttyAS3'])],
+            'ports.*' => ['string', Rule::in(['/dev/ttyAS4', '/dev/ttyAS5', '/dev/ttyS9', '/dev/ttyAS3'])],
             'baud_rate' => ['nullable', 'integer', 'min:300', 'max:1000000'],
             'response_timeout_ms' => ['nullable', 'integer', 'min:100', 'max:5000'],
             'delay_between_slaves_ms' => ['nullable', 'integer', 'min:0', 'max:5000'],
@@ -2645,7 +2645,7 @@ class DeviceSetupController extends Controller
             return;
         }
 
-        $primaryPort = env('REDNODE_SERIAL_PORT', '/dev/ttyAS2');
+        $primaryPort = env('REDNODE_SERIAL_PORT', '/dev/ttyS9');
         $sensorIds = $sensors
             ->pluck('id')
             ->values()

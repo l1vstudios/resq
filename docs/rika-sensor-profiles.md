@@ -214,7 +214,7 @@ Spesifikasi fisik resmi dari RK900-11 Ultrasonic Automatic Weather Instrument te
 
 Untuk integrasi dengan logger Bliiot:
 
-1. Gateway kompatibel dengan semua serial port Bliiot (ttyAS2, ttyAS3, ttyAS4, ttyAS5)
+1. Gateway kompatibel dengan semua serial port Bliiot (ttyS2, ttyAS3, ttyAS4, ttyAS5)
 2. Pin mapping dikonfigurasi di `connectivity_configs.pin_mapping`
 3. Tidak ada asumsi khusus untuk Bliiot — semua konfigurasi berbasis database
 

@@ -57,6 +57,26 @@ class MqttConfiguration extends Model
         return $this->hasMany(MqttOutboxMessage::class);
     }
 
+    public function currentSensorCount(): int
+    {
+        $directSensorIds = $this->sensors()
+            ->where('input_source', 'mqtt')
+            ->pluck('id');
+
+        $loggerIds = DataLogger::where('node_red_mqtt_configuration_id', $this->id)
+            ->where('logger_status', '!=', 'Inactive')
+            ->pluck('id');
+
+        $loggerSensorIds = $loggerIds->isNotEmpty()
+            ? Sensor::whereIn('data_logger_id', $loggerIds)->pluck('id')
+            : collect();
+
+        return $directSensorIds
+            ->merge($loggerSensorIds)
+            ->unique()
+            ->count();
+    }
+
     /**
      * Build a dynamic sensor payload from the logger's sensors and their mapping profiles.
      *

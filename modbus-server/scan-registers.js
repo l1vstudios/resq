@@ -7,7 +7,7 @@
  *   node scan-registers.js [options]
  *
  * Options:
- *   --port=/dev/ttyAS2     Serial port (default: /dev/ttyAS2)
+ *   --port=/dev/ttyS9     Serial port (default: /dev/ttyS9)
  *   --baud=9600            Baud rate (default: 9600)
  *   --slave=1              Slave ID (default: 1)
  *   --start=0              Start register address (default: 0)
@@ -25,7 +25,7 @@ const args = process.argv.slice(2).reduce((acc, arg) => {
   return acc;
 }, {});
 
-const port = args.port || '/dev/ttyAS2';
+const port = args.port || '/dev/ttyS9';
 const baudRate = Number(args.baud || 9600);
 const slaveId = Number(args.slave || 1);
 const startAddress = Number(args.start || 0);

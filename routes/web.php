@@ -17,6 +17,7 @@ use App\Http\Controllers\MqttConfigurationController;
 use App\Http\Controllers\PlatformOperationsController;
 use App\Http\Controllers\ProjectSetupController;
 use App\Http\Controllers\RegisteredDataController;
+use App\Http\Controllers\RednodeBuilderController;
 use App\Http\Controllers\SentinelRuntimeController;
 use App\Http\Controllers\TdeForecastController;
 use App\Http\Controllers\TdeMatrixController;
@@ -76,6 +77,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/mqtt-configurations', [MqttConfigurationController::class, 'store'])->name('mqtt-configurations.store');
     Route::delete('/mqtt-configurations/{configuration}', [MqttConfigurationController::class, 'destroy'])->name('mqtt-configurations.destroy');
     Route::get('/mqtt-configurations/status', [MqttConfigurationController::class, 'status'])->name('mqtt-configurations.status');
+    Route::post('/mqtt-configurations/{configuration}/toggle-active', [MqttConfigurationController::class, 'toggleActive'])->name('mqtt-configurations.toggle-active');
     Route::post('/mqtt-configurations/{configuration}/test', [MqttConfigurationController::class, 'test'])->name('mqtt-configurations.test');
     Route::get('/mqtt-gateway/status', [MqttConfigurationController::class, 'gatewayStatus'])->name('mqtt-gateway.status');
     Route::post('/mqtt-gateway/start', [MqttConfigurationController::class, 'gatewayStart'])->name('mqtt-gateway.start');
@@ -128,6 +130,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/rednode-pin-scan', [DeviceSetupController::class, 'rednodePinScan'])->name('rednode-pin-scan.store');
     Route::get('/rednode-status', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status');
     Route::get('/rednode-status/show', [DeviceSetupController::class, 'rednodeStatus'])->name('rednode-status.show');
+    Route::get('/rednode-builder', [RednodeBuilderController::class, 'index'])->name('rednode-builder.index');
+    Route::post('/rednode-builder/build', [RednodeBuilderController::class, 'build'])->name('rednode-builder.build');
     Route::get('/mini-server', [DeviceSetupController::class, 'miniServer'])->name('mini-server.index');
     Route::post('/mini-server/scan', [DeviceSetupController::class, 'miniServerScan'])->name('mini-server.scan');
     Route::get('/data-loggers', [RegisteredDataController::class, 'dataLoggers'])->name('data-loggers.index');
@@ -139,6 +143,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/asset-management', [AssetManagementController::class, 'index'])->name('asset-management.index');
     Route::post('/asset-management', [AssetManagementController::class, 'store'])->name('asset-management.store');
     Route::post('/asset-management/quick-scan', [AssetManagementController::class, 'quickScan'])->name('asset-management.quick-scan');
+    Route::get('/asset-management/{asset}', [AssetManagementController::class, 'show'])->name('asset-management.show');
     Route::post('/asset-management/{asset}/scan', [AssetManagementController::class, 'scan'])->name('asset-management.scan');
     Route::delete('/asset-management/{asset}', [AssetManagementController::class, 'destroy'])->name('asset-management.destroy');
     Route::get('/master-data-tde', [TdeMatrixController::class, 'index'])->name('master-data-tde.index');

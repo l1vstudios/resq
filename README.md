@@ -60,7 +60,7 @@ Port serial RedNode juga disimpan dari web di halaman Modbus Configuration. Mapp
 ```text
 PIN 1-2 = /dev/ttyAS4
 PIN 3-4 = /dev/ttyAS5
-PIN 5-6 = /dev/ttyAS2
+PIN 5-6 = /dev/ttyS9
 PIN 7-8 = /dev/ttyAS3
 ```
 

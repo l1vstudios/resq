@@ -1,0 +1,238 @@
+REDNODE MQTT MIGRATION TUTORIAL
+================================
+
+Tujuan
+------
+Panduan ini dipakai saat memindahkan atau menambahkan RedNode baru ke network lain.
+Contoh kasus:
+
+- RedNode lama berada di network 192.168.3.x
+- RedNode baru berada di IP 192.168.1.110
+- Mac/Laravel berada di IP 192.168.1.9
+- MQTT broker Mosquitto berjalan di Mac pada port 1883
+
+
+1. Setting MQTT Broker URL di Aplikasi
+-------------------------------------
+Setting ini ada di UI aplikasi:
+
+Menu:
+Configuration -> Project Setup -> bagian Sensor & Data Registry -> MQTT Broker Registry
+
+Atau buka langsung:
+http://127.0.0.1:8000/mqtt-configurations
+
+Field yang perlu diisi/diganti:
+
+Broker URL:
+mqtt://192.168.1.9:1883
+
+Consumer Topic:
+resq/telemetry/#
+
+Consumer:
+Enabled
+
+QoS:
+0
+
+Jika RedNode lama masih memakai:
+mqtt://192.168.3.10:1883
+
+maka untuk RedNode baru di network 192.168.1.x ganti menjadi:
+mqtt://192.168.1.9:1883
+
+
+2. Setting Data Logger RedNode Baru
+----------------------------------
+Menu:
+Configuration -> Data Loggers
+
+Buat atau edit Data Logger untuk RedNode baru.
+
+Contoh:
+
+Logger Code:
+REDNODE-BLIIOT-110
+
+Remote Host / IP:
+192.168.1.110
+
+SSH Port:
+22
+
+SSH User:
+root
+
+SSH Password:
+2021gwgood
+
+Gateway Path:
+/root/rednode-gateway
+
+Node-RED MQTT Configuration:
+Pilih MQTT config yang broker URL-nya:
+mqtt://192.168.1.9:1883
+
+
+3. IP Mac yang Harus Dipakai RedNode
+-----------------------------------
+RedNode harus mengakses Laravel dan MQTT broker lewat IP Mac yang satu jaringan dengannya.
+
+Untuk RedNode 192.168.1.110, IP Mac yang dipakai adalah:
+192.168.1.9
+
+Maka URL Laravel:
+http://192.168.1.9:8000
+
+MQTT broker:
+mqtt://192.168.1.9:1883
+
+Jangan pakai 127.0.0.1 dari RedNode, karena 127.0.0.1 berarti RedNode itu sendiri.
+
+
+4. Jalankan Laravel supaya Bisa Diakses RedNode
+----------------------------------------------
+Di Mac, jalankan:
+
+php artisan serve --host=0.0.0.0 --port=8000
+
+Cek dari browser Mac:
+http://127.0.0.1:8000
+
+Cek dari RedNode:
+curl "http://192.168.1.9:8000/api/rednode/config?logger_code=REDNODE-BLIIOT-110"
+
+
+5. Jalankan MQTT Broker Mosquitto di Mac
+---------------------------------------
+Pastikan Mosquitto sudah berjalan:
+
+brew services start mosquitto
+
+Cek port:
+
+lsof -nP -iTCP:1883 -sTCP:LISTEN
+
+Expected:
+mosquitto listen di port 1883.
+
+Cek dari RedNode:
+
+timeout 3 bash -c "</dev/tcp/192.168.1.9/1883" && echo mqtt_open || echo mqtt_closed
+
+Expected:
+mqtt_open
+
+
+6. Setting .env Gateway di RedNode
+---------------------------------
+File remote:
+/root/rednode-gateway/.env
+
+Isi penting:
+
+APP_URL=http://192.168.1.9:8000
+REDNODE_CONFIG_URL=http://192.168.1.9:8000/api/rednode/config
+REDNODE_CALLBACK_URL=http://192.168.1.9:8000/api/realtime-sensor-status
+REDNODE_HEARTBEAT_URL=http://192.168.1.9:8000/api/rednode/heartbeat
+
+REDNODE_MQTT_ENABLED=true
+REDNODE_MQTT_BROKER_URL=mqtt://192.168.1.9:1883
+REDNODE_MQTT_TOPIC_PREFIX=resq/telemetry
+
+REDNODE_LOGGER_CODE=REDNODE-BLIIOT-110
+
+Catatan:
+Biasanya file ini bisa ditulis otomatis dari menu Data Loggers jika SSH sudah benar.
+
+
+7. Restart Gateway di RedNode
+-----------------------------
+SSH ke RedNode:
+
+ssh root@192.168.1.110
+
+Restart service gateway:
+
+systemctl restart rednode-gateway.service
+
+Cek log:
+
+journalctl -u rednode-gateway.service -n 50 --no-pager
+
+Expected:
+[mqtt] connected mqtt://192.168.1.9:1883
+[config] sensor loaded from http://192.168.1.9:8000/api/rednode/config
+
+
+8. Checklist Troubleshooting
+---------------------------
+Jika MQTT masih offline:
+
+1. Cek Mosquitto di Mac:
+   brew services list
+   lsof -nP -iTCP:1883 -sTCP:LISTEN
+
+2. Cek RedNode bisa reach broker:
+   timeout 3 bash -c "</dev/tcp/192.168.1.9/1883" && echo mqtt_open || echo mqtt_closed
+
+3. Cek RedNode bisa reach Laravel:
+   curl "http://192.168.1.9:8000/api/rednode/config?logger_code=REDNODE-BLIIOT-110"
+
+4. Cek logger_code sama antara aplikasi dan RedNode:
+   REDNODE_LOGGER_CODE=REDNODE-BLIIOT-110
+
+5. Cek broker URL di MQTT Broker Registry:
+   mqtt://192.168.1.9:1883
+
+6. Cek firewall Mac jika RedNode tidak bisa connect ke 8000 atau 1883.
+
+
+9. File/Kode yang Terkait
+------------------------
+UI MQTT Registry:
+resources/views/modules/mqtt-configurations/_monitor.blade.php
+
+Controller MQTT:
+app/Http/Controllers/MqttConfigurationController.php
+
+Data Logger remote apply/test:
+app/Http/Controllers/DeviceSetupController.php
+
+Gateway lokal Laravel/Node:
+modbus-server/server.js
+
+Gateway RedNode remote:
+/root/rednode-gateway/gateway.js
+
+Remote env RedNode:
+/root/rednode-gateway/.env
+
+
+Ringkasan Migrasi Cepat
+----------------------
+Untuk RedNode 192.168.1.110:
+
+1. Pastikan Mac IP:
+   192.168.1.9
+
+2. Laravel:
+   php artisan serve --host=0.0.0.0 --port=8000
+
+3. Mosquitto:
+   brew services start mosquitto
+
+4. MQTT Broker Registry:
+   mqtt://192.168.1.9:1883
+
+5. Data Logger:
+   host 192.168.1.110
+   logger code REDNODE-BLIIOT-110
+
+6. RedNode env:
+   APP_URL=http://192.168.1.9:8000
+   REDNODE_MQTT_BROKER_URL=mqtt://192.168.1.9:1883
+
+7. Restart gateway:
+   systemctl restart rednode-gateway.service

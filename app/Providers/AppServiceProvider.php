@@ -46,8 +46,12 @@ class AppServiceProvider extends ServiceProvider
         */
 
         $appUrl = rtrim((string) config('app.url'), '/');
+        $forceAppUrl = filter_var(
+            env('FORCE_APP_URL', ! app()->environment('local')),
+            FILTER_VALIDATE_BOOLEAN
+        );
 
-        if (!empty($appUrl)) {
+        if ($forceAppUrl && !empty($appUrl)) {
             URL::forceRootUrl($appUrl);
         }
 

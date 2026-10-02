@@ -342,7 +342,7 @@ function ensureMqtt(config) {
 
 async function ensureSerial(serial) {
   const next = {
-    port: serial.port || process.env.REDNODE_SERIAL_PORT || '/dev/ttyAS2',
+    port: serial.port || process.env.REDNODE_SERIAL_PORT || '/dev/ttyS9',
     baudRate: Number(serial.baud_rate || process.env.REDNODE_BAUD_RATE || 9600),
     dataBits: Number(serial.data_bits || process.env.REDNODE_DATA_BITS || 8),
     stopBits: Number(serial.stop_bits || process.env.REDNODE_STOP_BITS || 1),

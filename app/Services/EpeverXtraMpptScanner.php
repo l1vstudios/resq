@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Process;
 use RuntimeException;
 
 class EpeverXtraMpptScanner
@@ -23,6 +24,11 @@ class EpeverXtraMpptScanner
         }
 
         $timeoutMs = max(300, min(10000, (int) ($config['timeout_ms'] ?? 1000)));
+        $pythonPayload = $this->scanWithPython($port, $slave, (int) ($config['baud_rate'] ?? 115200), $timeoutMs);
+        if ($pythonPayload !== null) {
+            return $pythonPayload;
+        }
+
         $this->configureSerialPort($port, [
             'baud_rate' => (int) ($config['baud_rate'] ?? 115200),
             'data_bits' => (int) ($config['data_bits'] ?? 8),
@@ -67,6 +73,46 @@ class EpeverXtraMpptScanner
             'scanned_at' => now()->toISOString(),
             'values' => $values,
         ];
+    }
+
+    private function scanWithPython(string $port, int $slave, int $baudRate, int $timeoutMs): ?array
+    {
+        $script = base_path('modbus-server/epever_xtra_scan.py');
+        if (! is_file($script)) {
+            return null;
+        }
+
+        $python = trim((string) env('PYTHON_BIN', 'python3'));
+        $result = Process::timeout(max(8, (int) ceil($timeoutMs / 1000) + 8))->run([
+            $python,
+            $script,
+            '--port',
+            $port,
+            '--slave',
+            (string) $slave,
+            '--baudrate',
+            (string) $baudRate,
+            '--timeout',
+            (string) max(0.3, $timeoutMs / 1000),
+        ]);
+
+        if (! $result->successful()) {
+            $message = trim($result->errorOutput() ?: $result->output());
+            throw new RuntimeException('Python MPPT scan gagal: '.($message ?: 'unknown error'));
+        }
+
+        $payload = json_decode(trim($result->output()), true);
+        if (! is_array($payload)) {
+            throw new RuntimeException('Python MPPT scan mengembalikan output JSON tidak valid.');
+        }
+
+        if (($payload['ok'] ?? true) === false) {
+            throw new RuntimeException((string) ($payload['message'] ?? 'Python MPPT scan gagal.'));
+        }
+
+        $payload['scanner'] = 'python-minimalmodbus';
+
+        return $payload;
     }
 
     public function availablePorts(): array

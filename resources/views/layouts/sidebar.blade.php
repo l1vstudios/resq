@@ -220,6 +220,13 @@
                     </a>
                 </li>
 
+                <li class="{{ request()->routeIs('rednode-builder.*') ? 'mm-active' : '' }}">
+                    <a href="{{ route('rednode-builder.index') }}" class="waves-effect {{ request()->routeIs('rednode-builder.*') ? 'active' : '' }}">
+                        <i class="bx bx-package"></i>
+                        <span>RedNode Builder</span>
+                    </a>
+                </li>
+
                 {{-- Mini Server hidden --}}
                 {{--
                 <li class="{{ request()->routeIs('mini-server.*') ? 'mm-active' : '' }}">

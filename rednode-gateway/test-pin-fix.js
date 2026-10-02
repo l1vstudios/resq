@@ -15,7 +15,7 @@ const TESTS = [
   {
     pins: 'PIN 5-6',
     mapping: 'Pin 5 = B, Pin 6 = A',
-    port: '/dev/ttyAS2',
+    port: '/dev/ttyS9',
   },
   {
     pins: 'PIN 7-8',

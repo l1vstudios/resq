@@ -7,6 +7,7 @@ use App\Models\MonitoringStation;
 use App\Models\Project;
 use App\Services\AuthorizationService;
 use App\Services\EpeverXtraMpptScanner;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -72,11 +73,32 @@ class AssetManagementController extends Controller
             ->with('message', "Asset {$asset->asset_code} berhasil disimpan.");
     }
 
-    public function scan(Request $request, AssetDevice $asset): RedirectResponse
+    public function show(Request $request, AssetDevice $asset): View
     {
         abort_unless($this->authorization->canAccessProject($request->user(), $asset->project_id), 403);
 
-        return $this->scanAndStore($asset);
+        return view('modules.asset-management.show', [
+            'asset' => $asset->load(['project', 'monitoringStation']),
+            'scanUrl' => route('asset-management.scan', $asset, false),
+        ]);
+    }
+
+    public function scan(Request $request, AssetDevice $asset): JsonResponse|RedirectResponse
+    {
+        abort_unless($this->authorization->canAccessProject($request->user(), $asset->project_id), 403);
+
+        $result = $this->scanAndStore($asset);
+
+        if ($request->expectsJson()) {
+            return response()->json($result, $result['ok'] ? 200 : 422);
+        }
+
+        return back()->with('scan_result', [
+            'ok' => $result['ok'],
+            'title' => $result['ok'] ? 'Scan berhasil' : 'Scan gagal',
+            'message' => $result['message'],
+            'payload' => $result['payload'] ?? null,
+        ]);
     }
 
     public function quickScan(Request $request): RedirectResponse
@@ -125,7 +147,7 @@ class AssetManagementController extends Controller
         return back()->with('message', 'Asset berhasil dihapus.');
     }
 
-    private function scanAndStore(AssetDevice $asset): RedirectResponse
+    private function scanAndStore(AssetDevice $asset): array
     {
         try {
             $payload = $this->scanner->scan($asset->toArray());
@@ -143,19 +165,36 @@ class AssetManagementController extends Controller
                 'last_scan_payload' => null,
             ])->save();
 
-            return back()->with('scan_result', [
+            return [
                 'ok' => false,
-                'title' => 'Scan gagal',
                 'message' => $error->getMessage(),
-            ]);
+                'asset' => $this->assetRuntimePayload($asset->fresh(['project', 'monitoringStation'])),
+            ];
         }
 
-        return back()->with('scan_result', [
+        return [
             'ok' => true,
-            'title' => 'Scan berhasil',
             'message' => "Asset {$asset->asset_code} berhasil dibaca.",
             'payload' => $payload,
-        ]);
+            'asset' => $this->assetRuntimePayload($asset->fresh(['project', 'monitoringStation'])),
+        ];
+    }
+
+    private function assetRuntimePayload(AssetDevice $asset): array
+    {
+        return [
+            'id' => $asset->id,
+            'asset_code' => $asset->asset_code,
+            'name' => $asset->name,
+            'status' => $asset->status,
+            'serial_port' => $asset->serial_port,
+            'slave_address' => $asset->slave_address,
+            'baud_rate' => $asset->baud_rate,
+            'last_scanned_at' => optional($asset->last_scanned_at)->toISOString(),
+            'last_scan_status' => $asset->last_scan_status,
+            'last_scan_message' => $asset->last_scan_message,
+            'last_scan_payload' => $asset->last_scan_payload,
+        ];
     }
 
     private function validatedAssetData(Request $request): array

@@ -232,10 +232,10 @@
     $ttyOptions = [
         ['pins' => 'PIN 1-2', 'mapping' => 'Pin 1 = B, Pin 2 = A', 'port' => '/dev/ttyAS4'],
         ['pins' => 'PIN 3-4', 'mapping' => 'Pin 3 = B, Pin 4 = A', 'port' => '/dev/ttyAS5'],
-        ['pins' => 'PIN 5-6', 'mapping' => 'Pin 5 = B, Pin 6 = A', 'port' => '/dev/ttyAS2'],
+        ['pins' => 'PIN 5-6', 'mapping' => 'Pin 5 = B, Pin 6 = A', 'port' => '/dev/ttyS9'],
         ['pins' => 'PIN 7-8', 'mapping' => 'Pin 7 = B, Pin 8 = A', 'port' => '/dev/ttyAS3'],
     ];
-    $selectedSerialPort = $rednodeSerialConfig['serial_port'] ?? $rednodeSerialConfig['host_or_endpoint'] ?? env('REDNODE_SERIAL_PORT', '/dev/ttyAS2');
+    $selectedSerialPort = $rednodeSerialConfig['serial_port'] ?? $rednodeSerialConfig['host_or_endpoint'] ?? env('REDNODE_SERIAL_PORT', '/dev/ttyS9');
     $selectedPinMapping = $rednodeSerialConfig['pin_mapping'] ?? $rednodeSerialConfig['topic_or_api_path'] ?? collect($ttyOptions)->firstWhere('port', $selectedSerialPort)['mapping'] ?? '';
     $rednodePollIntervalSeconds = (($rednodeSerialConfig['rednode_poll_interval_ms'] ?? env('REDNODE_POLL_INTERVAL_MS', 1000)) / 1000);
     $selectedRednodeSensorIds = collect($rednodeSerialConfig['monitored_sensor_ids'] ?? [])

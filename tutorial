@@ -1,0 +1,12 @@
+networksetup -setairportpower en0 off
+
+sudo ifconfig en3 down
+sudo ifconfig en3 inet 192.168.1.10 netmask 255.255.255.0 up
+
+sudo route -n flush
+sudo route -n add -net 192.168.1.0/24 -interface en3
+sudo arp -d 192.168.1.110
+
+route -n get 192.168.1.110
+ping -c 4 192.168.1.110
+ssh -o BindAddress=192.168.1.10 -o ConnectTimeout=5 root@192.168.1.110

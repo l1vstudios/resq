@@ -162,6 +162,24 @@ class MqttConfigurationController extends Controller
         return back()->with('message', 'MQTT configuration berhasil dihapus.');
     }
 
+    public function toggleActive(Request $request, MqttConfiguration $configuration): RedirectResponse
+    {
+        abort_unless($this->authorization->canAccessProject($request->user(), $configuration->project_id)
+            && $this->authorization->canMutateAssetRegistry($request->user()), 403);
+
+        $activate = ! $configuration->is_active;
+        $configuration->forceFill([
+            'is_active' => $activate,
+            'connection_status' => $activate ? 'pending' : 'inactive',
+            'last_error' => null,
+            'runtime_metrics' => $activate ? $configuration->runtime_metrics : [],
+        ])->save();
+
+        return back()->with('message', $activate
+            ? 'MQTT configuration diaktifkan. Gateway akan connect pada refresh berikutnya.'
+            : 'MQTT configuration dinonaktifkan. Gateway akan melepas koneksi pada refresh berikutnya.');
+    }
+
     public function status(Request $request): JsonResponse
     {
         $projects = $this->authorization->scopeProjectsForUser($request->user(), Project::query())->pluck('id');

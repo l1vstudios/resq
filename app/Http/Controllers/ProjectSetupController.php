@@ -287,7 +287,7 @@ class ProjectSetupController extends Controller
                 'data_logger_id' => $dataLogger->id,
                 'communication_type' => 'RS485',
                 'protocol' => 'Modbus RTU',
-                'host_or_endpoint' => env('REDNODE_SERIAL_PORT', '/dev/ttyAS2'),
+                'host_or_endpoint' => env('REDNODE_SERIAL_PORT', '/dev/ttyS9'),
                 'gateway_id' => $dataLogger->logger_code,
                 'connectivity_status' => 'Offline',
             ]

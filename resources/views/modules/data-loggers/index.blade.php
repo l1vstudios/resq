@@ -308,7 +308,7 @@
                                             <td>
                                                 <div>{{ $logger['remote_host'] ?? '-' }}</div>
                                                 <small class="text-muted">
-                                                    {{ $logger['remote_ssh_user'] ?? '-' }}@{{ $logger['remote_ssh_port'] ?? 22 }}
+                                                    {{ ($logger['remote_ssh_user'] ?? '-') . '@' . ($logger['remote_ssh_port'] ?? 22) }}
                                                 </small>
                                             </td>
                                             <td>

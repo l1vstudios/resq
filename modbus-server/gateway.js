@@ -6,7 +6,7 @@ const mqtt = require('mqtt');
 const ModbusRTU = require('modbus-serial');
 
 const configUrl = process.env.REDNODE_CONFIG_URL
-  || `${String(process.env.APP_URL || 'http://192.168.3.10:8000').replace(/\/$/, '')}/api/rednode/config`;
+  || `${String(process.env.APP_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')}/api/rednode/config`;
 const configToken = process.env.REDNODE_CONFIG_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || '';
 const callbackToken = process.env.REDNODE_CALLBACK_TOKEN || process.env.MQTT_CALLBACK_TOKEN || process.env.MODBUS_CALLBACK_TOKEN || '';
 const loggerCode = process.env.REDNODE_LOGGER_CODE || 'REDNODE-BLIIOT-01';
@@ -253,7 +253,7 @@ function ensureMqtt(config) {
 
 async function ensureSerial(serial) {
   const next = {
-    port: serial.port || process.env.REDNODE_SERIAL_PORT || '/dev/ttyAS2',
+    port: serial.port || process.env.REDNODE_SERIAL_PORT || '/dev/ttyS9',
     baudRate: Number(serial.baud_rate || process.env.REDNODE_BAUD_RATE || 9600),
     dataBits: Number(serial.data_bits || process.env.REDNODE_DATA_BITS || 8),
     stopBits: Number(serial.stop_bits || process.env.REDNODE_STOP_BITS || 1),

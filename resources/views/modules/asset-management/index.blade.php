@@ -132,7 +132,7 @@
     </div>
 
     <div class="row">
-        <div class="col-xl-5">
+        <div class="col-12">
             <div class="card mb-3">
                 <div class="card-body">
                     <h4 class="card-title mb-3">Tambah / Update Asset</h4>
@@ -283,15 +283,15 @@
             </div>
         </div>
 
-        <div class="col-xl-7">
+        <div class="col-12">
             @if($scanPayload)
                 <div class="card mb-3">
                     <div class="card-body">
                         <h4 class="card-title mb-3">{{ $scanPayload['device'] ?? 'MPPT' }} Scan Result</h4>
                         <div class="asset-metric-grid">
-                            <div class="asset-metric"><span>PV Voltage</span><strong>{{ data_get($scanValues, 'pv_voltage', '-') }} V</strong></div>
-                            <div class="asset-metric"><span>PV Current</span><strong>{{ data_get($scanValues, 'pv_current', '-') }} A</strong></div>
-                            <div class="asset-metric"><span>PV Power</span><strong>{{ data_get($scanValues, 'pv_power', '-') }} W</strong></div>
+                            <div class="asset-metric"><span>PV (Solar Panel) Voltage</span><strong>{{ data_get($scanValues, 'pv_voltage', '-') }} V</strong></div>
+                            <div class="asset-metric"><span>PV (Solar Panel) Current</span><strong>{{ data_get($scanValues, 'pv_current', '-') }} A</strong></div>
+                            <div class="asset-metric"><span>PV (Solar Panel) Power</span><strong>{{ data_get($scanValues, 'pv_power', '-') }} W</strong></div>
                             <div class="asset-metric"><span>Battery Voltage</span><strong>{{ data_get($scanValues, 'battery_voltage', '-') }} V</strong></div>
                             <div class="asset-metric"><span>Charge Voltage</span><strong>{{ data_get($scanValues, 'charge_voltage', '-') }} V</strong></div>
                             <div class="asset-metric"><span>Charge Current</span><strong>{{ data_get($scanValues, 'charge_current', '-') }} A</strong></div>
@@ -347,12 +347,9 @@
                                             @endif
                                         </td>
                                         <td class="text-end">
-                                            <form method="POST" action="{{ route('asset-management.scan', $asset) }}" class="d-inline">
-                                                @csrf
-                                                <button type="submit" class="btn btn-outline-primary btn-sm">
-                                                    <i class="bx bx-search-alt-2 me-1"></i> Scan
-                                                </button>
-                                            </form>
+                                            <a href="{{ route('asset-management.show', $asset) }}" class="btn btn-outline-primary btn-sm">
+                                                <i class="bx bx-line-chart me-1"></i> Detail
+                                            </a>
                                             <form method="POST" action="{{ route('asset-management.destroy', $asset) }}" class="d-inline" onsubmit="return confirm('Hapus asset ini?')">
                                                 @csrf
                                                 @method('DELETE')
