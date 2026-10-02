@@ -106,6 +106,78 @@
         </div>
     </div>
 
+    @php
+        $dpMeta = \App\Services\TrendDiagnosisEvaluator::dewPointMetadata();
+        $dpoint = $dpMeta['dew_point'];
+        $dspread = $dpMeta['dew_point_spread'];
+        $tdeParameters = [
+            ['code' => 'AT', 'name' => 'Air Temperature', 'unit' => '°C', 'source' => 'Hasil ukur sensor', 'desc' => 'Suhu udara dari sensor cuaca.'],
+            ['code' => 'RH', 'name' => 'Relative Humidity', 'unit' => '%', 'source' => 'Hasil ukur sensor', 'desc' => 'Kelembapan relatif udara.'],
+            ['code' => 'AP', 'name' => 'Atmospheric Pressure', 'unit' => 'hPa', 'source' => 'Hasil ukur sensor', 'desc' => 'Tekanan atmosfer permukaan.'],
+            ['code' => 'DP', 'name' => $dpoint['name'], 'unit' => '°C', 'source' => 'Turunan ('.implode(' & ', $dpoint['derived_from']).')', 'desc' => 'Dihitung via '.$dpoint['method'].': '.$dpoint['formula']],
+            ['code' => 'DPS', 'name' => $dspread['name'], 'unit' => '°C', 'source' => 'Turunan ('.implode(' & ', $dspread['derived_from']).')', 'desc' => $dspread['formula']],
+        ];
+    @endphp
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="mb-3">
+                    <h4 class="card-title mb-1">Referensi Parameter TDE</h4>
+                    <p class="text-muted mb-0">Lima parameter inti pada Matrix TDE (urutan: AT, RH, DP, DPS, AP). Dew Point &amp; Dew-Point Spread adalah nilai turunan.</p>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-nowrap align-middle mb-3">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Kode</th>
+                                <th>Parameter</th>
+                                <th>Satuan</th>
+                                <th>Sumber Nilai</th>
+                                <th>Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($tdeParameters as $param)
+                                <tr>
+                                    <td><strong>{{ $param['code'] }}</strong></td>
+                                    <td>{{ $param['name'] }}</td>
+                                    <td>{{ $param['unit'] }}</td>
+                                    <td>
+                                        @if(str_starts_with($param['source'], 'Turunan'))
+                                            <span class="badge bg-info-subtle text-info">{{ $param['source'] }}</span>
+                                        @else
+                                            <span class="badge bg-success-subtle text-success">{{ $param['source'] }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-muted">{{ $param['desc'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="alert alert-light border mb-0">
+                    <h6 class="mb-2"><i class="bx bx-flask me-1"></i> Sumber Nilai Dew Point ({{ $dpoint['method'] }})</h6>
+                    <p class="mb-2 text-muted">
+                        Dew Point tidak diukur langsung oleh sensor, melainkan dihitung dari suhu udara (AT) dan kelembapan relatif (RH)
+                        menggunakan rumus Magnus-Tetens dengan koefisien baku
+                        b = {{ $dpoint['coefficients']['b'] }}, c = {{ $dpoint['coefficients']['c'] }} °C
+                        (valid {{ $dpoint['valid_range']['min_temperature_c'] }}°C s.d. {{ $dpoint['valid_range']['max_temperature_c'] }}°C,
+                        galat &lt; {{ $dpoint['valid_range']['accuracy_c'] }}°C).
+                    </p>
+                    <code class="d-block bg-white border rounded p-2 mb-2">{{ $dpoint['formula'] }}</code>
+                    <div class="fw-semibold mb-1">Referensi ilmiah:</div>
+                    <ul class="text-muted small mb-0 ps-3">
+                        @foreach($dpoint['references'] as $reference)
+                            <li class="mb-1">{{ $reference }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="col-12">
         <div class="card">
             <div class="card-body">

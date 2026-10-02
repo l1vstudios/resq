@@ -15,6 +15,61 @@ class TrendDiagnosisEvaluator
 {
     private const PARAMETERS = ['AT', 'RH', 'DP', 'DPS', 'AP'];
 
+    /**
+     * Koefisien Magnus (varian Magnus-Tetens) untuk perhitungan dew point.
+     *
+     * Nilai b = 17.62 dan c = 243.12 degC adalah koefisien baku yang
+     * direkomendasikan WMO (2008, CIMO Guide), identik dengan Sonntag (1990)
+     * dan Alduchov & Eskridge (1996, dipakai NOAA). Valid untuk rentang suhu
+     * -45 degC s.d. +60 degC dengan galat dew point < 0.4 degC.
+     *
+     * @see https://library.wmo.int/idurl/4/35625 (WMO-No. 8, CIMO Guide)
+     */
+    private const DEW_POINT_MAGNUS_B = 17.62;
+
+    private const DEW_POINT_MAGNUS_C = 243.12;
+
+    /**
+     * Metadata ilmiah dew point untuk ditampilkan kepada peneliti sehingga
+     * jelas bahwa DP & DPS adalah nilai turunan (derived), bukan hasil ukur
+     * langsung sensor, lengkap dengan rumus dan rujukannya.
+     */
+    private const DEW_POINT_METADATA = [
+        'parameter' => 'DP',
+        'name' => 'Dew Point (Titik Embun)',
+        'derived' => true,
+        'derived_from' => ['AT', 'RH'],
+        'method' => 'Magnus-Tetens',
+        'formula' => 'Td = (c * γ) / (b - γ), dengan γ = ln(RH/100) + (b * T) / (c + T)',
+        'coefficients' => [
+            'b' => self::DEW_POINT_MAGNUS_B,
+            'c' => self::DEW_POINT_MAGNUS_C,
+            'c_unit' => 'degC',
+        ],
+        'valid_range' => [
+            'min_temperature_c' => -45.0,
+            'max_temperature_c' => 60.0,
+            'accuracy_c' => 0.4,
+        ],
+        'references' => [
+            'WMO (2008), Guide to Meteorological Instruments and Methods of Observation (CIMO Guide), WMO-No. 8.',
+            'Sonntag, D. (1990), Important new values of the physical constants of 1986, vapour pressure formulations based on the ITS-90. Z. Meteorol., 70(5), 340-344.',
+            'Alduchov, O.A. & Eskridge, R.E. (1996), Improved Magnus form approximation of saturation vapor pressure. J. Appl. Meteorol., 35(4), 601-609.',
+        ],
+    ];
+
+    private const DEW_POINT_SPREAD_METADATA = [
+        'parameter' => 'DPS',
+        'name' => 'Dew-Point Spread (Selisih Titik Embun)',
+        'derived' => true,
+        'derived_from' => ['AT', 'DP'],
+        'method' => 'Selisih langsung',
+        'formula' => 'DPS = AT - DP',
+        'references' => [
+            'DPS mendekati nol menandakan udara mendekati jenuh (kelembapan relatif tinggi).',
+        ],
+    ];
+
     private const DEFAULT_THRESHOLDS = [
         'AT' => 1.0,
         'RH' => 3.0,
@@ -104,6 +159,8 @@ class TrendDiagnosisEvaluator
             'derived_data' => [
                 'dew_point_formula' => 'Magnus formula',
                 'dew_point_spread_formula' => 'Air Temperature - Dew Point',
+                'dew_point_metadata' => self::DEW_POINT_METADATA,
+                'dew_point_spread_metadata' => self::DEW_POINT_SPREAD_METADATA,
             ],
         ];
     }
@@ -430,9 +487,23 @@ class TrendDiagnosisEvaluator
     private function dewPoint(float $temperatureC, float $humidityPct): float
     {
         $humidityRatio = min(max($humidityPct / 100, 0.01), 1.0);
-        $gamma = log($humidityRatio) + ((17.62 * $temperatureC) / (243.12 + $temperatureC));
+        $gamma = log($humidityRatio) + ((self::DEW_POINT_MAGNUS_B * $temperatureC) / (self::DEW_POINT_MAGNUS_C + $temperatureC));
 
-        return (243.12 * $gamma) / (17.62 - $gamma);
+        return (self::DEW_POINT_MAGNUS_C * $gamma) / (self::DEW_POINT_MAGNUS_B - $gamma);
+    }
+
+    /**
+     * Metadata ilmiah dew point & dew-point spread untuk ditampilkan di UI
+     * (TDE Forecast & Master TDE) agar peneliti mengetahui asal nilai DP/DPS.
+     *
+     * @return array<string, mixed>
+     */
+    public static function dewPointMetadata(): array
+    {
+        return [
+            'dew_point' => self::DEW_POINT_METADATA,
+            'dew_point_spread' => self::DEW_POINT_SPREAD_METADATA,
+        ];
     }
 
     private function classificationLabel(string $parameter, string $classification): string

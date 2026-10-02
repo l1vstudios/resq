@@ -257,6 +257,10 @@
     $conditionClass = $conditionState === 'BASAH' ? 'tde-pill-wet' : ($conditionState === 'KERING' ? 'tde-pill-dry' : 'tde-pill-warning');
     $matrixClass = $matrixStatus === 'matched' ? 'tde-pill-dry' : ($matrixStatus === 'matrix_not_matched' ? 'tde-pill-error' : 'tde-pill-warning');
     $symbolClass = fn ($symbol) => $symbol === '<' ? 'tde-symbol-down' : ($symbol === '>' ? 'tde-symbol-up' : ($symbol === '=' ? 'tde-symbol-flat' : 'tde-symbol-missing'));
+    $derivedData = $output['derived_data'] ?? [];
+    $dewPointMeta = $derivedData['dew_point_metadata'] ?? \App\Services\TrendDiagnosisEvaluator::dewPointMetadata()['dew_point'];
+    $dewPointSpreadMeta = $derivedData['dew_point_spread_metadata'] ?? \App\Services\TrendDiagnosisEvaluator::dewPointMetadata()['dew_point_spread'];
+    $derivedParameters = ['DP', 'DPS'];
 @endphp
 
 <div class="emp-ui">
@@ -396,8 +400,15 @@
                                 @foreach($order as $parameter)
                                     @php($row = $parameters[$parameter] ?? [])
                                     @php($classification = $row['classification'] ?? '?')
+                                    @php($isDerived = in_array($parameter, $derivedParameters, true))
                                     <tr>
-                                        <td><strong>{{ $parameter }}</strong><div class="text-muted small">{{ $row['unit'] ?? '-' }}</div></td>
+                                        <td>
+                                            <strong>{{ $parameter }}</strong>
+                                            @if($isDerived)
+                                                <span class="tde-pill tde-pill-info" style="min-height:20px;padding:2px 7px;font-size:10px;" title="Nilai turunan, bukan hasil ukur sensor">Turunan</span>
+                                            @endif
+                                            <div class="text-muted small">{{ $row['unit'] ?? '-' }}</div>
+                                        </td>
                                         <td>{{ $row['value_start'] ?? '-' }}</td>
                                         <td>{{ $row['value_end'] ?? '-' }}</td>
                                         <td>{{ $row['change'] ?? '-' }}</td>
@@ -456,6 +467,55 @@
                         <div class="col-md-6">
                             <div class="ops-readonly-field">{{ isset($window['to']) ? \Illuminate\Support\Carbon::parse($window['to'])->format('H:i') : '-' }}</div>
                             <div class="text-muted small mt-1">Window end</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card tde-section-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
+                        <div>
+                            <h4 class="card-title mb-1">Sumber Nilai Dew Point</h4>
+                            <div class="text-muted small">Transparansi untuk peneliti: dari mana nilai DP &amp; DPS berasal.</div>
+                        </div>
+                        <span class="tde-pill tde-pill-info"><i class="bx bx-flask"></i>{{ $dewPointMeta['method'] ?? 'Magnus-Tetens' }}</span>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="tde-diagnosis-box mb-2">
+                                <div class="mb-1"><strong>{{ $dewPointMeta['name'] ?? 'Dew Point' }}</strong></div>
+                                <div class="text-muted small mb-2">Nilai turunan dari {{ implode(' &amp; ', $dewPointMeta['derived_from'] ?? ['AT', 'RH']) }} (bukan hasil ukur sensor langsung).</div>
+                                <code style="display:block;background:#fff;border:1px solid var(--emp-line);border-radius:6px;padding:8px 10px;color:var(--emp-navy);">
+                                    {{ $dewPointMeta['formula'] ?? 'Td = (c * γ) / (b - γ)' }}
+                                </code>
+                                <div class="text-muted small mt-2">
+                                    Koefisien: b = {{ $dewPointMeta['coefficients']['b'] ?? '17.62' }},
+                                    c = {{ $dewPointMeta['coefficients']['c'] ?? '243.12' }} °C.
+                                    @if(isset($dewPointMeta['valid_range']))
+                                        Valid {{ $dewPointMeta['valid_range']['min_temperature_c'] }}°C s.d. {{ $dewPointMeta['valid_range']['max_temperature_c'] }}°C
+                                        (galat &lt; {{ $dewPointMeta['valid_range']['accuracy_c'] }}°C).
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="tde-diagnosis-box">
+                                <div class="mb-1"><strong>{{ $dewPointSpreadMeta['name'] ?? 'Dew-Point Spread' }}</strong></div>
+                                <code style="display:block;background:#fff;border:1px solid var(--emp-line);border-radius:6px;padding:8px 10px;color:var(--emp-navy);">
+                                    {{ $dewPointSpreadMeta['formula'] ?? 'DPS = AT - DP' }}
+                                </code>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="label text-muted" style="font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Referensi Ilmiah</div>
+                            <ul class="text-muted small mb-0" style="padding-left:18px;">
+                                @foreach(($dewPointMeta['references'] ?? []) as $reference)
+                                    <li class="mb-2">{{ $reference }}</li>
+                                @endforeach
+                            </ul>
                         </div>
                     </div>
                 </div>
