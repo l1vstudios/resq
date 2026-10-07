@@ -81,10 +81,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/mqtt-configurations/status', [MqttConfigurationController::class, 'status'])->name('mqtt-configurations.status');
     Route::post('/mqtt-configurations/{configuration}/toggle-active', [MqttConfigurationController::class, 'toggleActive'])->name('mqtt-configurations.toggle-active');
     Route::post('/mqtt-configurations/{configuration}/test', [MqttConfigurationController::class, 'test'])->name('mqtt-configurations.test');
-    Route::get('/mqtt-gateway/status', [MqttConfigurationController::class, 'gatewayStatus'])->name('mqtt-gateway.status');
-    Route::post('/mqtt-gateway/start', [MqttConfigurationController::class, 'gatewayStart'])->name('mqtt-gateway.start');
-    Route::post('/mqtt-gateway/stop', [MqttConfigurationController::class, 'gatewayStop'])->name('mqtt-gateway.stop');
-    Route::post('/mqtt-gateway/restart', [MqttConfigurationController::class, 'gatewayRestart'])->name('mqtt-gateway.restart');
+    Route::get('/mqtt-configurations/gateway/status', [MqttConfigurationController::class, 'gatewayStatus'])->name('mqtt-gateway.status');
+    Route::post('/mqtt-configurations/gateway/start', [MqttConfigurationController::class, 'gatewayStart'])->name('mqtt-gateway.start');
+    Route::post('/mqtt-configurations/gateway/stop', [MqttConfigurationController::class, 'gatewayStop'])->name('mqtt-gateway.stop');
+    Route::post('/mqtt-configurations/gateway/restart', [MqttConfigurationController::class, 'gatewayRestart'])->name('mqtt-gateway.restart');
     Route::post('/canonical-parameters', [CanonicalDatabaseController::class, 'storeParameter'])->name('canonical-parameters.store');
     Route::delete('/canonical-parameters/{parameter}', [CanonicalDatabaseController::class, 'destroyParameter'])->name('canonical-parameters.destroy');
     Route::post('/sensor-mapping-presets', [CanonicalDatabaseController::class, 'storePreset'])->name('sensor-mapping-presets.store');
