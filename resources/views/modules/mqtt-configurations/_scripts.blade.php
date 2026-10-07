@@ -2,11 +2,11 @@
 (() => {
     const csrf = @json(csrf_token());
     const sameOriginUrl = (path) => new URL(path, window.location.origin).toString();
-    const gatewayStatusUrl = sameOriginUrl(@json(route('mqtt-gateway.status', [], false)));
-    const gatewayStartUrl = sameOriginUrl(@json(route('mqtt-gateway.start', [], false)));
-    const gatewayStopUrl = sameOriginUrl(@json(route('mqtt-gateway.stop', [], false)));
-    const gatewayRestartUrl = sameOriginUrl(@json(route('mqtt-gateway.restart', [], false)));
-    const mqttStatusUrl = sameOriginUrl(@json(route('mqtt-configurations.status', [], false)));
+    const gatewayStatusUrl = @json(route('mqtt-gateway.status'));
+    const gatewayStartUrl = @json(route('mqtt-gateway.start'));
+    const gatewayStopUrl = @json(route('mqtt-gateway.stop'));
+    const gatewayRestartUrl = @json(route('mqtt-gateway.restart'));
+    const mqttStatusUrl = @json(route('mqtt-configurations.status'));
 
     const badge = document.getElementById('mqtt-gateway-badge');
     const btnStart = document.getElementById('mqtt-gateway-start');

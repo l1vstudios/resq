@@ -199,7 +199,7 @@ class MqttConfigurationController extends Controller
     public function test(Request $request, MqttConfiguration $configuration): JsonResponse
     {
         abort_unless($this->authorization->canAccessProject($request->user(), $configuration->project_id), 403);
-        $gateway = rtrim((string) env('MODBUS_BACKEND_URL'), '/');
+        $gateway = $this->gatewayBaseUrl();
         if ($gateway === '') {
             return response()->json(['ok' => false, 'message' => 'MODBUS_BACKEND_URL belum dikonfigurasi.'], 422);
         }
