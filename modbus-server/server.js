@@ -899,6 +899,41 @@ app.post('/api/mqtt/test-publish', async (req, res, next) => {
   }
 });
 
+app.post('/start', (req, res) => {
+  res.json({
+    ok: true,
+    message: 'MQTT Gateway sudah berjalan.',
+    running: true,
+    mqtt: mqttStatus(),
+    stats,
+  });
+});
+
+app.post('/stop', (req, res) => {
+  res.json({
+    ok: true,
+    message: 'Runtime MQTT berjalan sebagai proses ini. Gunakan system service untuk stop penuh.',
+    running: true,
+    mqtt: mqttStatus(),
+    stats,
+  });
+});
+
+app.post('/restart', (req, res) => {
+  databaseMqttRuntime.refresh().catch((error) => {
+    stats.err += 1;
+    stats.lastError = error.message;
+  });
+
+  res.json({
+    ok: true,
+    message: 'MQTT Gateway refresh diminta.',
+    running: true,
+    mqtt: mqttStatus(),
+    stats,
+  });
+});
+
 app.use((error, req, res, next) => {
   stats.err += 1;
   stats.lastError = error.message;
