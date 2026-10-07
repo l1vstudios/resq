@@ -368,13 +368,16 @@ class MqttConfigurationController extends Controller
 
             if ($response->ok()) {
                 $data = $response->json();
+                $mqttDatabase = $data['mqttDatabase'] ?? null;
 
                 return response()->json([
                     'ok' => true,
-                    'running' => true,
+                    'running' => (bool) ($mqttDatabase['active'] ?? false),
+                    'process_running' => true,
                     'mqtt' => $data['mqtt'] ?? null,
+                    'mqtt_database' => $mqttDatabase,
                     'stats' => $data['stats'] ?? null,
-                    'configurations' => $data['mqtt']['configurations'] ?? [],
+                    'configurations' => $mqttDatabase['configurations'] ?? [],
                 ]);
             }
         } catch (\Throwable $e) {
@@ -384,7 +387,9 @@ class MqttConfigurationController extends Controller
         return response()->json([
             'ok' => true,
             'running' => false,
+            'process_running' => false,
             'mqtt' => null,
+            'mqtt_database' => null,
             'stats' => null,
         ]);
     }
@@ -400,10 +405,19 @@ class MqttConfigurationController extends Controller
         try {
             $health = Http::timeout(3)->get("{$gatewayUrl}/health");
             if ($health->ok()) {
+                $start = Http::timeout(12)->post("{$gatewayUrl}/api/mqtt/configurations/start");
+                if (! $start->ok()) {
+                    return response()->json($start->json() ?: [
+                        'ok' => false,
+                        'message' => 'Proses gateway hidup, tapi runtime MQTT database gagal dijalankan.',
+                    ], $start->status());
+                }
+
                 return response()->json([
                     'ok' => true,
-                    'message' => 'MQTT Gateway sudah running.',
+                    'message' => 'MQTT Gateway runtime aktif.',
                     'already_running' => true,
+                    'mqtt_database' => $start->json(),
                 ]);
             }
         } catch (\Throwable $e) {

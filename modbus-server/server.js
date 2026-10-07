@@ -769,6 +769,7 @@ app.get('/health', (req, res) => {
       lastError: pollJob.lastError,
     },
     mqtt: mqttStatus(),
+    mqttDatabase: databaseMqttRuntime.runtimeStatus(),
   });
 });
 
@@ -859,7 +860,24 @@ app.get('/api/mqtt/status', (req, res) => {
 });
 
 app.get('/api/mqtt/configurations/status', (req, res) => {
-  res.json({ ok: true, configurations: databaseMqttRuntime.statuses() });
+  res.json({ ok: true, ...databaseMqttRuntime.runtimeStatus() });
+});
+
+app.post('/api/mqtt/configurations/start', async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await databaseMqttRuntime.start()) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/mqtt/configurations/restart', async (req, res, next) => {
+  try {
+    await databaseMqttRuntime.stop();
+    res.json({ ok: true, ...(await databaseMqttRuntime.start()) });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/mqtt/configurations/:configuration/test', async (req, res, next) => {
@@ -920,7 +938,7 @@ app.post('/stop', (req, res) => {
 });
 
 app.post('/restart', (req, res) => {
-  databaseMqttRuntime.refresh().catch((error) => {
+  databaseMqttRuntime.start().then(() => databaseMqttRuntime.refresh()).catch((error) => {
     stats.err += 1;
     stats.lastError = error.message;
   });
@@ -930,6 +948,7 @@ app.post('/restart', (req, res) => {
     message: 'MQTT Gateway refresh diminta.',
     running: true,
     mqtt: mqttStatus(),
+    mqttDatabase: databaseMqttRuntime.runtimeStatus(),
     stats,
   });
 });

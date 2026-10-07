@@ -111,6 +111,9 @@ class MqttDatabaseRuntime {
     this.db = null;
     this.refreshTimer = null;
     this.outboxTimer = null;
+    this.starting = null;
+    this.startedAt = null;
+    this.lastError = null;
     this.callbackUrl = options.callbackUrl
       || process.env.MQTT_CALLBACK_URL
       || `${String(process.env.APP_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')}/api/mqtt/ingest`;
@@ -120,11 +123,32 @@ class MqttDatabaseRuntime {
   }
 
   async start() {
-    this.db = await createDatabase();
-    await this.refresh();
-    this.refreshTimer = setInterval(() => this.refresh().catch((error) => this.logError('refresh', error)), this.refreshMs);
-    this.outboxTimer = setInterval(() => this.drainOutbox().catch((error) => this.logError('outbox', error)), this.outboxMs);
-    console.log(`[mqtt-db] runtime started (${this.db.driver}, refresh ${this.refreshMs}ms)`);
+    if (this.db) return this.runtimeStatus();
+    if (this.starting) return this.starting;
+
+    this.starting = (async () => {
+      try {
+        this.db = await createDatabase();
+        await this.refresh();
+        clearInterval(this.refreshTimer);
+        clearInterval(this.outboxTimer);
+        this.refreshTimer = setInterval(() => this.refresh().catch((error) => this.logError('refresh', error)), this.refreshMs);
+        this.outboxTimer = setInterval(() => this.drainOutbox().catch((error) => this.logError('outbox', error)), this.outboxMs);
+        this.startedAt = new Date().toISOString();
+        this.lastError = null;
+        console.log(`[mqtt-db] runtime started (${this.db.driver}, refresh ${this.refreshMs}ms)`);
+        return this.runtimeStatus();
+      } catch (error) {
+        if (this.db) await this.db.close().catch(() => {});
+        this.db = null;
+        this.lastError = error.message;
+        throw error;
+      } finally {
+        this.starting = null;
+      }
+    })();
+
+    return this.starting;
   }
 
   async stop() {
@@ -133,13 +157,26 @@ class MqttDatabaseRuntime {
     for (const state of this.clients.values()) state.client.end(true);
     this.clients.clear();
     if (this.db) await this.db.close();
+    this.db = null;
+    this.startedAt = null;
   }
 
   statuses() {
     return [...this.clients.entries()].map(([id, state]) => ({ id, connected: state.connected, code: state.config.configuration_code }));
   }
 
+  runtimeStatus() {
+    return {
+      active: Boolean(this.db),
+      driver: this.db?.driver || null,
+      startedAt: this.startedAt,
+      lastError: this.lastError,
+      configurations: this.statuses(),
+    };
+  }
+
   async refresh() {
+    if (!this.db) await this.start();
     const configs = await this.db.query('SELECT * FROM mqtt_configurations WHERE is_active = ?', [true]);
     const activeIds = new Set(configs.map((config) => Number(config.id)));
     for (const [id, state] of this.clients.entries()) {
