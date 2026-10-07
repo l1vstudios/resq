@@ -1,0 +1,19 @@
+[Unit]
+Description=RedNode Modbus to MQTT gateway
+After=network-online.target nodered.service mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/rednode-gateway
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /root/rednode-gateway/gateway.js
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

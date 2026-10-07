@@ -22,11 +22,27 @@
         if (btnRestart) btnRestart.disabled = !running;
     }
 
+    async function readJsonResponse(response) {
+        const contentType = response.headers.get('content-type') || '';
+        const text = await response.text();
+
+        if (!contentType.includes('application/json')) {
+            const plainText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            throw new Error(plainText || `HTTP ${response.status}`);
+        }
+
+        try {
+            return JSON.parse(text || '{}');
+        } catch (error) {
+            throw new Error(`Respons JSON tidak valid: ${error.message}`);
+        }
+    }
+
     async function checkGatewayStatus() {
         try {
             const res = await fetch(gatewayStatusUrl, { headers: { 'Accept': 'application/json' } });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+            const data = await readJsonResponse(res);
             updateGatewayBadge(data.running === true);
         } catch (e) {
             updateGatewayBadge(false);
@@ -42,7 +58,10 @@
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
             });
-            const data = await res.json();
+            const data = await readJsonResponse(res);
+            if (!res.ok || data.ok === false) {
+                throw new Error(data.message || `HTTP ${res.status}`);
+            }
             if (data.message) alert(data.message);
             await checkGatewayStatus();
         } catch (e) {
@@ -64,7 +83,7 @@
         try {
             const response = await fetch(mqttStatusUrl, {headers: {'Accept':'application/json'}});
             if (!response.ok) return;
-            const body = await response.json();
+            const body = await readJsonResponse(response);
             body.configurations.forEach(item => {
                 document.querySelectorAll(`[data-mqtt-row="${item.id}"]`).forEach(row => {
                     const badgeEl = row.querySelector('[data-status]');
@@ -85,7 +104,7 @@
         button.disabled = true;
         try {
             const response = await fetch(sameOriginUrl(button.dataset.testUrl), {method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf}});
-            const body = await response.json().catch(() => ({}));
+            const body = await readJsonResponse(response).catch(() => ({}));
             window.alert(body.ok ? (body.message || `Test publish berhasil ke ${body.topic}`) : (body.message || 'Test MQTT gagal.'));
             refresh();
         } catch (e) {

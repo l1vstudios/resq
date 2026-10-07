@@ -230,7 +230,7 @@
     $rednodePublicBaseUrl = rtrim(env('REDNODE_PUBLIC_APP_URL') ?: config('app.url') ?: url('/'), '/');
     $rednodeConfigUrl = $rednodePublicBaseUrl . '/api/rednode/config';
     $ttyOptions = [
-        ['pins' => 'PIN 1-2', 'mapping' => 'Pin 1 = B, Pin 2 = A', 'port' => '/dev/ttyAS4'],
+        ['pins' => 'PIN 1-2', 'mapping' => 'Pin 1 = B, Pin 2 = A', 'port' => '/dev/ttyS9'],
         ['pins' => 'PIN 3-4', 'mapping' => 'Pin 3 = B, Pin 4 = A', 'port' => '/dev/ttyAS5'],
         ['pins' => 'PIN 5-6', 'mapping' => 'Pin 5 = B, Pin 6 = A', 'port' => '/dev/ttyS9'],
         ['pins' => 'PIN 7-8', 'mapping' => 'Pin 7 = B, Pin 8 = A', 'port' => '/dev/ttyAS3'],

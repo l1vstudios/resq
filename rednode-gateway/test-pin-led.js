@@ -1,28 +1,20 @@
+require('dotenv').config({ quiet: true });
+
 const { SerialPort } = require('serialport');
 const readline = require('readline');
 
-const TESTS = [
-  {
-    pins: 'PIN 1-2',
-    mapping: 'Pin 1 = B, Pin 2 = A',
-    port: '/dev/ttyAS4',
-  },
-  {
-    pins: 'PIN 3-4',
-    mapping: 'Pin 3 = B, Pin 4 = A',
-    port: '/dev/ttyAS5',
-  },
-  {
-    pins: 'PIN 5-6',
-    mapping: 'Pin 5 = B, Pin 6 = A',
-    port: '/dev/ttyS9',
-  },
-  {
-    pins: 'PIN 7-8',
-    mapping: 'Pin 7 = B, Pin 8 = A',
-    port: '/dev/ttyAS3',
-  },
-];
+const configuredSerialPort = process.env.REDNODE_SERIAL_PORT || '/dev/ttyS9';
+
+const TESTS = Array.from({ length: 10 }, (_, index) => {
+  const firstPin = (index * 2) + 1;
+  const secondPin = firstPin + 1;
+
+  return {
+    pins: `PIN ${firstPin}-${secondPin}`,
+    mapping: `Pin ${firstPin} = B, Pin ${secondPin} = A`,
+    port: configuredSerialPort,
+  };
+});
 
 function parseArgs(argv) {
   const args = {

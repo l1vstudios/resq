@@ -2176,7 +2176,7 @@ class DeviceSetupController extends Controller
             'start_slave_id' => ['required', 'integer', 'min:1', 'max:247'],
             'end_slave_id' => ['required', 'integer', 'min:1', 'max:247', 'gte:start_slave_id'],
             'ports' => ['nullable', 'array'],
-            'ports.*' => ['string', Rule::in(['/dev/ttyAS4', '/dev/ttyAS5', '/dev/ttyS9', '/dev/ttyAS3'])],
+            'ports.*' => ['string', Rule::in(['/dev/ttyS9', '/dev/ttyAS5', '/dev/ttyAS3'])],
             'baud_rate' => ['nullable', 'integer', 'min:300', 'max:1000000'],
             'response_timeout_ms' => ['nullable', 'integer', 'min:100', 'max:5000'],
             'delay_between_slaves_ms' => ['nullable', 'integer', 'min:0', 'max:5000'],
