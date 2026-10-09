@@ -236,7 +236,7 @@
                     </div>
                 </div>
 
-                <ul class="nav nav-tabs nav-tabs-custom flex-wrap" role="tablist">
+                <ul class="nav nav-tabs nav-tabs-custom flex-wrap d-none" role="tablist">
                     <li class="nav-item" role="presentation"><button class="nav-link active" id="project-tab" data-bs-toggle="tab" data-bs-target="#project-tab-pane" type="button" role="tab">Project</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" id="geospatial-tab" data-bs-toggle="tab" data-bs-target="#geospatial-tab-pane" type="button" role="tab">Geospatial</button></li>
                     @if($canMutateAssetRegistry)
@@ -1690,6 +1690,12 @@
             form.addEventListener('submit', function () {
                 storeTarget(currentTarget());
             });
+        });
+
+        window.addEventListener('hashchange', function () {
+            if (validTarget(window.location.hash)) {
+                showTarget(window.location.hash);
+            }
         });
     })();
 

@@ -119,10 +119,10 @@
                 {{-- Platform Operations hidden from sidebar --}}
 
                 @php
-                    $configurationMenuActive = request()->routeIs('projects.*')
+                    $projectSetupMenuActive = request()->routeIs('projects.*')
                         || request()->routeIs('project-configuration')
-                        || request()->routeIs('project-*')
-                        || request()->routeIs('cfpe.*')
+                        || request()->routeIs('project-*');
+                    $configurationMenuActive = request()->routeIs('cfpe.*')
                         || request()->routeIs('canonical-database.*')
                         || request()->routeIs('canonical-mapping.*')
                         || request()->routeIs('master-data-tde.*')
@@ -134,17 +134,45 @@
                         || request()->routeIs('tde-forecast.*');
                 @endphp
 
+                <li class="{{ $projectSetupMenuActive ? 'mm-active' : '' }}">
+                    <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $projectSetupMenuActive ? 'true' : 'false' }}">
+                        <i class="bx bx-folder-open"></i>
+                        <span>Project Setup</span>
+                    </a>
+                    <ul class="sub-menu {{ $projectSetupMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $projectSetupMenuActive ? 'true' : 'false' }}">
+                        <li>
+                            <a href="{{ route('projects.index') }}#project-tab-pane" data-project-setup-tab-link="#project-tab-pane">Project</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#geospatial-tab-pane" data-project-setup-tab-link="#geospatial-tab-pane">Geospatial</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#monitoring-tab-pane" data-project-setup-tab-link="#monitoring-tab-pane">Monitoring Station</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#warning-tab-pane" data-project-setup-tab-link="#warning-tab-pane">Warning Station</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#data-tab-pane" data-project-setup-tab-link="#data-tab-pane">Sensor &amp; Data</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#canonical-tab-pane" data-project-setup-tab-link="#canonical-tab-pane">Canonical Data</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#operation-tab-pane" data-project-setup-tab-link="#operation-tab-pane">Operational &amp; Response</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('projects.index') }}#user-setup-tab-pane" data-project-setup-tab-link="#user-setup-tab-pane">User Setup</a>
+                        </li>
+                    </ul>
+                </li>
+
                 <li class="{{ $configurationMenuActive ? 'mm-active' : '' }}">
                     <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $configurationMenuActive ? 'true' : 'false' }}">
                         <i class="bx bx-cog"></i>
                         <span>Configuration</span>
                     </a>
                     <ul class="sub-menu {{ $configurationMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $configurationMenuActive ? 'true' : 'false' }}">
-                        <li class="{{ request()->routeIs('projects.index') ? 'mm-active' : '' }}">
-                            <a href="{{ route('projects.index') }}" class="{{ request()->routeIs('projects.index') ? 'active' : '' }}">
-                                Project Setup
-                            </a>
-                        </li>
                         <li class="{{ request()->routeIs('cfpe.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('cfpe.index') }}" class="{{ request()->routeIs('cfpe.*') ? 'active' : '' }}">
                                 CFPE Corridor
