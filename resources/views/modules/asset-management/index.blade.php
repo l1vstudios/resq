@@ -96,6 +96,8 @@
     $availablePorts = collect($availablePorts ?? []);
     $scanPayload = $scanResult['payload'] ?? null;
     $scanValues = $scanPayload['values'] ?? [];
+    $assetFormOpen = old('_asset_form') === 'asset' || ($errors->any() && old('_asset_form') !== 'scan');
+    $assetScanOpen = old('_asset_form') === 'scan';
 @endphp
 
 <div class="asset-page">
@@ -131,13 +133,19 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
-            <div class="card mb-3">
+    <div class="row g-3">
+        <div class="col-12 order-2">
+            <div id="asset-form-collapse" class="card mb-3 collapse {{ $assetFormOpen ? 'show' : '' }}">
                 <div class="card-body">
-                    <h4 class="card-title mb-3">Tambah / Update Asset</h4>
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                        <h4 class="card-title mb-0">Tambah / Update Asset</h4>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#asset-form-collapse" aria-expanded="{{ $assetFormOpen ? 'true' : 'false' }}" aria-controls="asset-form-collapse">
+                            <i class="bx bx-x me-1"></i> Tutup
+                        </button>
+                    </div>
                     <form method="POST" action="{{ route('asset-management.store') }}">
                         @csrf
+                        <input type="hidden" name="_asset_form" value="asset">
                         <div class="mb-3">
                             <label class="form-label">Project</label>
                             <select name="project_id" class="form-select" required>
@@ -248,11 +256,17 @@
                 </div>
             </div>
 
-            <div class="card mb-3">
+            <div id="asset-scan-collapse" class="card mb-3 collapse {{ $assetScanOpen ? 'show' : '' }}">
                 <div class="card-body">
-                    <h4 class="card-title mb-3">Quick Scan MPPT</h4>
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                        <h4 class="card-title mb-0">Quick Scan MPPT</h4>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#asset-scan-collapse" aria-expanded="{{ $assetScanOpen ? 'true' : 'false' }}" aria-controls="asset-scan-collapse">
+                            <i class="bx bx-x me-1"></i> Tutup
+                        </button>
+                    </div>
                     <form method="POST" action="{{ route('asset-management.quick-scan') }}">
                         @csrf
+                        <input type="hidden" name="_asset_form" value="scan">
                         <div class="mb-3">
                             <label class="form-label">Serial Port</label>
                             <input name="serial_port" class="form-control" list="serial-port-options" value="{{ old('serial_port', '/dev/cu.usbserial-142120') }}" required>
@@ -283,7 +297,7 @@
             </div>
         </div>
 
-        <div class="col-12">
+        <div class="col-12 order-1">
             @if($scanPayload)
                 <div class="card mb-3">
                     <div class="card-body">
@@ -304,7 +318,17 @@
 
             <div class="card">
                 <div class="card-body">
-                    <h4 class="card-title mb-3">Daftar Assets</h4>
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                        <h4 class="card-title mb-0">Daftar Assets</h4>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#asset-form-collapse" aria-expanded="{{ $assetFormOpen ? 'true' : 'false' }}" aria-controls="asset-form-collapse">
+                                <i class="bx bx-plus me-1"></i> Tambah Asset
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#asset-scan-collapse" aria-expanded="{{ $assetScanOpen ? 'true' : 'false' }}" aria-controls="asset-scan-collapse">
+                                <i class="bx bx-search-alt-2 me-1"></i> Quick Scan
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-nowrap align-middle mb-0">
                             <thead class="table-light">

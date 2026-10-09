@@ -40,18 +40,27 @@
 @slot('title') Master Data TDE @endslot
 @endcomponent
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
+@php
+    $tdeImportOpen = $errors->any();
+@endphp
+
+<div class="row g-4">
+    <div class="col-12 order-2">
+        <div id="tde-import-collapse" class="card collapse {{ $tdeImportOpen ? 'show' : '' }}">
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
                     <div>
                         <h4 class="card-title mb-1">Import Excel</h4>
                         <p class="text-muted mb-0">Upload master data TDE dari file Excel.</p>
                     </div>
-                    <a href="{{ route('master-data-tde.template') }}" class="btn btn-light">
-                        <i class="bx bx-download me-1"></i> Template CSV
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ route('master-data-tde.template') }}" class="btn btn-light">
+                            <i class="bx bx-download me-1"></i> Template CSV
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#tde-import-collapse" aria-expanded="{{ $tdeImportOpen ? 'true' : 'false' }}" aria-controls="tde-import-collapse">
+                            <i class="bx bx-x me-1"></i> Tutup
+                        </button>
+                    </div>
                 </div>
 
                 @if(session('message'))
@@ -119,7 +128,7 @@
         ];
     @endphp
 
-    <div class="col-12">
+    <div class="col-12 order-3">
         <div class="card">
             <div class="card-body">
                 <div class="mb-3">
@@ -178,7 +187,7 @@
         </div>
     </div>
 
-    <div class="col-12">
+    <div class="col-12 order-1">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
@@ -186,9 +195,14 @@
                         <h4 class="card-title mb-1">Grid Data TDE</h4>
                         <p class="text-muted mb-0">Versioned matrix yang siap dipakai oleh konfigurasi TDE station.</p>
                     </div>
-                    <div class="input-group" style="max-width: 260px;">
-                        <span class="input-group-text"><i class="bx bx-search"></i></span>
-                        <input type="text" class="form-control" placeholder="Search TDE">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-end">
+                        <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#tde-import-collapse" aria-expanded="{{ $tdeImportOpen ? 'true' : 'false' }}" aria-controls="tde-import-collapse">
+                            <i class="bx bx-import me-1"></i> Import Matrix
+                        </button>
+                        <div class="input-group" style="max-width: 260px;">
+                            <span class="input-group-text"><i class="bx bx-search"></i></span>
+                            <input type="text" class="form-control" placeholder="Search TDE">
+                        </div>
                     </div>
                 </div>
 

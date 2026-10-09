@@ -70,6 +70,24 @@
     .sentinel-map-empty strong {
         color: #071f49;
     }
+
+    .sentinel-section-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .sentinel-section-card {
+        margin-bottom: 1.5rem;
+    }
+
+    .sentinel-section-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .sentinel-section-body {
+        padding-top: 1rem;
+    }
 </style>
 @endsection
 
@@ -156,9 +174,24 @@
     $selectedMonitoringStation = $monitoringStations->first();
     $selectedWarningStation = $warningStations->first();
     $selectedSensor = $sensors->first();
+    $routeTypeOptions = [
+        'reference' => 'Reference',
+        'main' => 'Main',
+        'alternate' => 'Alternate',
+        'evacuation' => 'Evacuation',
+        'access' => 'Access',
+    ];
     $loggerSectionOpen = old('logger_code') !== null;
     $mqttSectionOpen = old('configuration_code') !== null;
     $sensorSectionOpen = old('sensor_code') !== null;
+    $projectFormOpen = old('project_code') !== null;
+    $workspaceFormOpen = old('workspace_code') !== null;
+    $informationLayerFormOpen = old('layer_code') !== null;
+    $corridorFormOpen = old('corridor_code') !== null || old('route_code') !== null;
+    $referencePointFormOpen = old('point_code') !== null;
+    $stationSpatialFormOpen = old('placement_role') !== null || old('station_offset') !== null;
+    $monitoringFormOpen = old('station_type') !== null || old('logger_id') !== null;
+    $warningFormOpen = old('zone_id') !== null || old('controller_id') !== null;
 @endphp
 
 @if (session('message'))
@@ -224,42 +257,54 @@
 
 <div class="tab-content text-muted">
     <div class="tab-pane fade show active" id="project-tab-pane" role="tabpanel" aria-labelledby="project-tab" tabindex="0">
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="card h-100">
+        <div class="row g-4">
+            <div class="col-xl-12 order-2">
+                <div class="card h-100 collapse {{ $projectFormOpen ? 'show' : '' }}" id="project-form-collapse">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Set Up New Project</h4>
-                        <form method="POST" action="{{ route('projects.store') }}" id="project-form">
-                            @csrf
-                            <div class="mb-3">
-                                <label class="form-label">Project ID</label>
-                                <input type="text" name="project_code" class="form-control" value="{{ old('project_code') }}" placeholder="PRJ-RESQ-001" required @disabled(! $databaseReady)>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Project Name</label>
-                                <input type="text" name="name" class="form-control" value="{{ old('name') }}" required @disabled(! $databaseReady)>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Project Owner</label>
-                                <input type="text" name="owner" class="form-control" value="{{ old('owner') }}" @disabled(! $databaseReady)>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Project Date</label>
-                                <input type="date" name="project_date" class="form-control" value="{{ old('project_date') }}" @disabled(! $databaseReady)>
-                            </div>
-                            <input type="hidden" name="status" value="Active">
-                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady)>
-                                <i class="bx bx-save me-1"></i> Save / Update Project
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                            <h4 class="card-title mb-0">Set Up New Project</h4>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#project-form-collapse">
+                                <i class="bx bx-x me-1"></i> Tutup
                             </button>
-                        </form>
+                        </div>
+                        <div>
+                            <form method="POST" action="{{ route('projects.store') }}" id="project-form">
+                                @csrf
+                                <div class="mb-3">
+                                    <label class="form-label">Project ID</label>
+                                    <input type="text" name="project_code" class="form-control" value="{{ old('project_code') }}" placeholder="PRJ-RESQ-001" required @disabled(! $databaseReady)>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Project Name</label>
+                                    <input type="text" name="name" class="form-control" value="{{ old('name') }}" required @disabled(! $databaseReady)>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Project Owner</label>
+                                    <input type="text" name="owner" class="form-control" value="{{ old('owner') }}" @disabled(! $databaseReady)>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Project Date</label>
+                                    <input type="date" name="project_date" class="form-control" value="{{ old('project_date') }}" @disabled(! $databaseReady)>
+                                </div>
+                                <input type="hidden" name="status" value="Active">
+                                <button type="submit" class="btn btn-primary" @disabled(! $databaseReady)>
+                                    <i class="bx bx-save me-1"></i> Save / Update Project
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-xl-12">
+            <div class="col-xl-12 order-1">
                 <div class="card h-100">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Project List</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Project List</h4>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#project-form-collapse" @disabled(! $databaseReady)>
+                                <i class="bx bx-plus me-1"></i> Tambah Baru
+                            </button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light">
@@ -284,6 +329,7 @@
                                                 @isset($item['db_id'])
                                                     <div class="d-inline-flex gap-1">
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            data-open-collapse="#project-form-collapse"
                                                             data-edit-form="#project-form"
                                                             data-edit-fields="{{ base64_encode(json_encode([
                                                                 'project_code' => $item['id'] ?? '',
@@ -314,11 +360,16 @@
     </div>
 
     <div class="tab-pane fade" id="geospatial-tab-pane" role="tabpanel" aria-labelledby="geospatial-tab" tabindex="0">
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="card h-100">
+        <div class="row g-4">
+            <div class="col-xl-12 order-2">
+                <div class="card h-100 collapse {{ $workspaceFormOpen ? 'show' : '' }}" id="geospatial-workspace-form-collapse">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Add Geospatial Workspace</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Import OSM / Set Up Geospasial</h4>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-close-collapse="#geospatial-workspace-form-collapse">
+                                <i class="bx bx-x me-1"></i> Tutup
+                            </button>
+                        </div>
                         <form method="POST" action="{{ route('project-workspaces.store') }}" id="workspace-form">
                             @csrf
                             <div class="mb-3">
@@ -385,11 +436,27 @@
                 </div>
             </div>
 
-            <div class="col-xl-12">
+            <div class="col-xl-12 order-1">
                 <div class="card h-100">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Workspace Listing</h4>
-                        <div class="table-responsive">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Daftar Geospasial</h4>
+                            <div class="sentinel-section-actions">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#geospatial-list-grid-collapse" aria-expanded="false">
+                                    <i class="bx bx-show me-1"></i> Show / Hide Grid
+                                </button>
+                                <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#geospatial-workspace-form-collapse" @disabled(! $databaseReady || $projects->isEmpty())>
+                                    <i class="bx bx-plus me-1"></i> Tambah Geospasial
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#geospatial-workspace-form-collapse" @disabled(! $databaseReady || $projects->isEmpty())>
+                                    <i class="bx bx-map-alt me-1"></i> Import OSM
+                                </button>
+                                <button type="button" class="btn btn-outline-info" data-bs-toggle="collapse" data-bs-target="#information-layer-form-collapse" @disabled(! $databaseReady || $projects->isEmpty())>
+                                    <i class="bx bx-map-pin me-1"></i> Landmark / Legend
+                                </button>
+                            </div>
+                        </div>
+                        <div class="collapse table-responsive" id="geospatial-list-grid-collapse">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Province</th><th>City</th><th>Status</th><th></th></tr></thead>
                                 <tbody>
@@ -404,6 +471,7 @@
                                                 @isset($cluster['db_id'])
                                                     <div class="d-inline-flex gap-1">
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            data-open-collapse="#geospatial-workspace-form-collapse"
                                                             data-edit-form="#workspace-form"
                                                             data-edit-fields="{{ base64_encode(json_encode([
                                                                 'project_id' => $cluster['project_db_id'] ?? '',
@@ -435,21 +503,19 @@
             </div>
 
             <div class="col-xl-12">
-                <div class="card h-100">
+                <div class="card h-100 collapse {{ $informationLayerFormOpen ? 'show' : '' }}" id="information-layer-form-collapse">
                     <div class="card-body">
-                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
-                            <h4 class="card-title mb-0">Geospatial Workspace Map</h4>
-                            <span class="badge bg-primary-subtle text-primary">Configuration Map</span>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Import Landmark / Legend</h4>
+                            <div class="sentinel-section-actions">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#information-layer-grid-collapse" aria-expanded="true">
+                                    <i class="bx bx-show me-1"></i> Show / Hide Grid
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#information-layer-form-collapse">
+                                    <i class="bx bx-x me-1"></i> Tutup
+                                </button>
+                            </div>
                         </div>
-                        <div id="project-spatial-config-map" class="sentinel-config-map"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-xl-12">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h4 class="card-title mb-4">Information Layer Module</h4>
                         <form method="POST" action="{{ route('project-information-layers.store') }}" id="information-layer-form">
                             @csrf
                             <div class="row">
@@ -469,7 +535,7 @@
                             <input type="hidden" name="sort_order" value="0">
                             <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Layer</button>
                         </form>
-                        <div class="table-responsive mt-4">
+                        <div class="collapse show table-responsive mt-4" id="information-layer-grid-collapse">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Project</th><th>Workspace</th><th>Status</th><th></th></tr></thead>
                                 <tbody>
@@ -479,6 +545,7 @@
                                             <td class="text-end">
                                                 @isset($layer['db_id'])
                                                     <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        data-open-collapse="#information-layer-form-collapse"
                                                         data-edit-form="#information-layer-form"
                                                         data-edit-fields="{{ base64_encode(json_encode([
                                                             'project_id' => $layer['project_db_id'] ?? '',
@@ -507,18 +574,52 @@
             </div>
 
             <div class="col-xl-12">
-                <div class="card h-100">
+                <div class="card h-100 sentinel-section-card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Route Registry & Corridor Monitoring</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Grid Koridor Utama</h4>
+                            <div class="sentinel-section-actions">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#corridor-grid-collapse" aria-expanded="true">
+                                    <i class="bx bx-show me-1"></i> Show / Hide Grid
+                                </button>
+                                <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#corridor-import-collapse" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>
+                                    <i class="bx bx-plus me-1"></i> Tambah / Import Koridor
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" data-close-collapse="#corridor-import-collapse">
+                                    <i class="bx bx-x me-1"></i> Tutup Form
+                                </button>
+                                <a href="{{ route('cfpe.index') }}" class="btn btn-outline-danger">
+                                    <i class="bx bx-git-branch me-1"></i> CFPE
+                                </a>
+                            </div>
+                        </div>
+                        <div class="collapse {{ $corridorFormOpen ? 'show' : '' }}" id="corridor-import-collapse">
                         <div class="row">
                             <div class="col-lg-6">
                                 <form method="POST" action="{{ route('project-reference-routes.store') }}" id="reference-route-form">
                                     @csrf
                                     <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
                                     <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Shared Reference Route</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Route ID</label><input name="route_code" class="form-control" placeholder="RTE-PDG-001" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Route ID</label>
+                                        <select name="route_code" class="form-select" required @disabled(! $databaseReady)>
+                                            <option value="">Pilih Route ID</option>
+                                            @forelse ($referenceRoutes->pluck('id')->filter()->unique()->values() as $routeCode)
+                                                <option value="{{ $routeCode }}" @selected(old('route_code') === $routeCode)>{{ $routeCode }}</option>
+                                            @empty
+                                                <option value="RTE-PDG-001" @selected(old('route_code', 'RTE-PDG-001') === 'RTE-PDG-001')>RTE-PDG-001</option>
+                                            @endforelse
+                                        </select>
+                                    </div>
                                     <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
-                                    <div class="mb-3"><label class="form-label">Route Type</label><input name="route_type" class="form-control" value="reference" required @disabled(! $databaseReady)></div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Route Type</label>
+                                        <select name="route_type" class="form-select" required @disabled(! $databaseReady)>
+                                            @foreach($routeTypeOptions as $value => $label)
+                                                <option value="{{ $value }}" @selected(old('route_type', 'reference') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
                                     <div class="mb-3"><label class="form-label">Path Coordinates</label><textarea name="path_coordinates" class="form-control spatial-coordinate-input" placeholder="[[-0.92,100.36],[-0.91,100.38]]" @disabled(! $databaseReady)></textarea></div>
                                     <input type="hidden" name="status" value="Active">
                                     <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Route</button>
@@ -538,7 +639,8 @@
                                 </form>
                             </div>
                         </div>
-                        <div class="table-responsive mt-4">
+                        </div>
+                        <div class="collapse show table-responsive mt-4" id="corridor-grid-collapse">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light"><tr><th>Corridor</th><th>Workspace</th><th>Route</th><th>Status</th><th></th></tr></thead>
                                 <tbody>
@@ -547,17 +649,29 @@
                                             <td>{{ $corridor['id'] }} - {{ $corridor['name'] }}</td><td>{{ $corridor['workspace_id'] }}</td><td>{{ $corridor['reference_route_id'] ?? '-' }}</td><td><span class="badge bg-info">{{ $corridor['status'] }}</span></td>
                                             <td class="text-end">
                                                 @isset($corridor['db_id'])
-                                                    <button type="button" class="btn btn-outline-primary btn-sm"
-                                                        data-edit-form="#corridor-form"
-                                                        data-edit-fields="{{ base64_encode(json_encode([
-                                                            'project_id' => $corridor['project_db_id'] ?? '',
-                                                            'workspace_id' => $corridor['workspace_db_id'] ?? '',
-                                                            'reference_route_id' => $corridor['reference_route_db_id'] ?? '',
-                                                            'corridor_code' => $corridor['id'] ?? '',
-                                                            'name' => $corridor['name'] ?? '',
-                                                            'path_coordinates' => json_encode($corridor['path_coordinates'] ?? []),
-                                                            'status' => $corridor['status'] ?? 'Planned',
-                                                        ])) }}">Edit</button>
+                                                    <div class="d-inline-flex gap-1">
+                                                        <a href="{{ route('cfpe.index') }}" class="btn btn-outline-danger btn-sm">
+                                                            CFPE
+                                                        </a>
+                                                        <a href="#monitoring-tab-pane" class="btn btn-outline-success btn-sm"
+                                                            data-open-tab="#monitoring-tab-pane"
+                                                            data-monitoring-type="hydrological_monitoring"
+                                                            data-corridor-id="{{ $corridor['db_id'] }}">
+                                                            Hidrologi
+                                                        </a>
+                                                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            data-open-collapse="#corridor-import-collapse"
+                                                            data-edit-form="#corridor-form"
+                                                            data-edit-fields="{{ base64_encode(json_encode([
+                                                                'project_id' => $corridor['project_db_id'] ?? '',
+                                                                'workspace_id' => $corridor['workspace_db_id'] ?? '',
+                                                                'reference_route_id' => $corridor['reference_route_db_id'] ?? '',
+                                                                'corridor_code' => $corridor['id'] ?? '',
+                                                                'name' => $corridor['name'] ?? '',
+                                                                'path_coordinates' => json_encode($corridor['path_coordinates'] ?? []),
+                                                                'status' => $corridor['status'] ?? 'Planned',
+                                                            ])) }}">Edit</button>
+                                                    </div>
                                                 @endisset
                                             </td>
                                         </tr>
@@ -572,49 +686,116 @@
             </div>
 
             <div class="col-xl-12">
-                <div class="card h-100">
+                <div class="card sentinel-section-card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Reference Points & Station Spatial Placement</h4>
-                        <div class="row">
-                            <div class="col-lg-6">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                            <h4 class="card-title mb-0">Reference Points</h4>
+                            <div class="sentinel-section-actions">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#reference-point-grid-collapse" aria-expanded="false">
+                                    <i class="bx bx-show me-1"></i> Show / Hide Grid
+                                </button>
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#reference-point-form-collapse" @disabled(! $databaseReady || $projects->isEmpty())>
+                                    <i class="bx bx-plus me-1"></i> Tambah Point
+                                </button>
+                            </div>
+                        </div>
+                        <div class="collapse {{ $referencePointFormOpen ? 'show' : '' }}" id="reference-point-form-collapse">
+                            <div class="sentinel-section-body">
                                 <form method="POST" action="{{ route('project-reference-points.store') }}" id="reference-point-form">
                                     @csrf
-                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Project Reference Point</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Point ID</label><input name="point_code" class="form-control" placeholder="REF-PDG-001" required @disabled(! $databaseReady)></div>
-                                    <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
-                                    <div class="mb-3"><label class="form-label">Point Type</label><input name="point_type" class="form-control" value="reference" required @disabled(! $databaseReady)></div>
-                                    <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" @disabled(! $databaseReady)></div>
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Project Reference Point</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Point ID</label><input name="point_code" class="form-control" placeholder="REF-PDG-001" required @disabled(! $databaseReady)></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Point Type</label><input name="point_type" class="form-control" value="reference" required @disabled(! $databaseReady)></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" @disabled(! $databaseReady)></div>
+                                    </div>
                                     <input type="hidden" name="status" value="Active">
                                     <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Point</button>
                                 </form>
                             </div>
-                            <div class="col-lg-6">
+                        </div>
+                        <div class="collapse table-responsive mt-4" id="reference-point-grid-collapse">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead class="table-light"><tr><th>Point</th><th>Workspace</th><th>Corridor</th><th>Coordinate</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                    @forelse ($referencePoints as $point)
+                                        <tr>
+                                            <td>{{ $point['id'] }} - {{ $point['name'] }}</td>
+                                            <td>{{ $point['workspace_id'] ?? 'Project' }}</td>
+                                            <td>{{ $point['corridor_id'] ?? '-' }}</td>
+                                            <td>{{ $point['coordinate'] ?? trim(($point['latitude'] ?? '') . ', ' . ($point['longitude'] ?? ''), ', ') ?: '-' }}</td>
+                                            <td><span class="badge bg-success">{{ $point['status'] }}</span></td>
+                                            <td class="text-end">
+                                                @isset($point['db_id'])
+                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        data-open-collapse="#reference-point-form-collapse"
+                                                        data-edit-form="#reference-point-form"
+                                                        data-edit-fields="{{ base64_encode(json_encode([
+                                                            'project_id' => $point['project_db_id'] ?? '',
+                                                            'workspace_id' => $point['workspace_db_id'] ?? '',
+                                                            'corridor_id' => $point['corridor_db_id'] ?? '',
+                                                            'point_code' => $point['id'] ?? '',
+                                                            'name' => $point['name'] ?? '',
+                                                            'point_type' => $point['point_type'] ?? 'reference',
+                                                            'coordinate' => $point['coordinate'] ?? '',
+                                                            'status' => $point['status'] ?? 'Active',
+                                                        ])) }}">Edit</button>
+                                                @endisset
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="6" class="text-center text-muted">Belum ada reference point.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card sentinel-section-card">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                            <h4 class="card-title mb-0">Station Spatial Placement</h4>
+                            <div class="sentinel-section-actions">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#station-spatial-grid-collapse" aria-expanded="false">
+                                    <i class="bx bx-show me-1"></i> Show / Hide Grid
+                                </button>
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#station-spatial-form-collapse" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>
+                                    <i class="bx bx-plus me-1"></i> Tambah Placement
+                                </button>
+                            </div>
+                        </div>
+                        <div class="collapse {{ $stationSpatialFormOpen ? 'show' : '' }}" id="station-spatial-form-collapse">
+                            <div class="sentinel-section-body">
                                 <form method="POST" action="{{ route('project-station-spatial-references.store') }}" id="station-spatial-reference-form">
                                     @csrf
-                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referenceRoutes as $route)<option value="{{ $route['db_id'] }}">{{ $route['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Reference Point</label><select name="reference_point_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referencePoints as $point)<option value="{{ $point['db_id'] }}">{{ $point['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Monitoring Station</label><select name="monitoring_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($monitoringStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Warning Station</label><select name="warning_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($warningStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
-                                    <div class="mb-3"><label class="form-label">Placement Role</label><input name="placement_role" class="form-control" value="corridor_reference" required @disabled(! $databaseReady)></div>
-                                    <div class="mb-3"><label class="form-label">Station Offset</label><input name="station_offset" class="form-control" placeholder="KM 12+400 / upstream" @disabled(! $databaseReady)></div>
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referenceRoutes as $route)<option value="{{ $route['db_id'] }}">{{ $route['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Reference Point</label><select name="reference_point_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referencePoints as $point)<option value="{{ $point['db_id'] }}">{{ $point['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Monitoring Station</label><select name="monitoring_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($monitoringStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Warning Station</label><select name="warning_station_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($warningStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Placement Role</label><input name="placement_role" class="form-control" value="corridor_reference" required @disabled(! $databaseReady)></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Station Offset</label><input name="station_offset" class="form-control" placeholder="KM 12+400 / upstream" @disabled(! $databaseReady)></div>
+                                    </div>
                                     <input type="hidden" name="status" value="Active">
                                     <button class="btn btn-primary" @disabled(! $databaseReady || ! $canWriteSpatial)>Save / Update Placement</button>
                                 </form>
                             </div>
                         </div>
-                        <div class="table-responsive mt-4">
+                        <div class="collapse table-responsive mt-4" id="station-spatial-grid-collapse">
                             <table class="table table-nowrap align-middle mb-0">
-                                <thead class="table-light"><tr><th>Station</th><th>Workspace</th><th>Corridor</th><th>Reference</th><th>Role</th></tr></thead>
+                                <thead class="table-light"><tr><th>Station</th><th>Workspace</th><th>Corridor</th><th>Reference</th><th>Role</th><th>Offset</th></tr></thead>
                                 <tbody>
                                     @forelse ($stationSpatialReferences as $reference)
-                                        <tr><td>{{ $reference['monitoring_station_id'] ?? $reference['warning_station_id'] ?? '-' }}</td><td>{{ $reference['workspace_id'] }}</td><td>{{ $reference['corridor_id'] ?? '-' }}</td><td>{{ $reference['reference_point_id'] ?? $reference['reference_route_id'] ?? '-' }}</td><td>{{ $reference['placement_role'] }}</td></tr>
+                                        <tr><td>{{ $reference['monitoring_station_id'] ?? $reference['warning_station_id'] ?? '-' }}</td><td>{{ $reference['workspace_id'] }}</td><td>{{ $reference['corridor_id'] ?? '-' }}</td><td>{{ $reference['reference_point_id'] ?? $reference['reference_route_id'] ?? '-' }}</td><td>{{ $reference['placement_role'] }}</td><td>{{ $reference['station_offset'] ?? '-' }}</td></tr>
                                     @empty
-                                        <tr><td colspan="5" class="text-center text-muted">Belum ada station spatial reference.</td></tr>
+                                        <tr><td colspan="6" class="text-center text-muted">Belum ada station spatial reference.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
@@ -627,11 +808,16 @@
 
     @if($canMutateAssetRegistry)
     <div class="tab-pane fade" id="monitoring-tab-pane" role="tabpanel" aria-labelledby="monitoring-tab" tabindex="0">
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="card h-100">
+        <div class="row g-4">
+            <div class="col-xl-12 order-2">
+                <div class="card h-100 collapse {{ $monitoringFormOpen ? 'show' : '' }}" id="monitoring-form-collapse">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Monitoring Station Registry</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Monitoring Station Registry</h4>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monitoring-form-collapse">
+                                <i class="bx bx-x me-1"></i> Tutup
+                            </button>
+                        </div>
                         <form method="POST" action="{{ route('project-monitoring-stations.store') }}" id="monitoring-form">
                             @csrf
                             <div class="mb-3">
@@ -642,7 +828,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="mb-3">
+                            <div class="mb-3" id="monitoring-corridor-wrap">
                                 <label class="form-label">Corridor</label>
                                 <select name="corridor_id" class="form-select" @disabled(! $databaseReady)>
                                     <option value="">-</option>
@@ -651,14 +837,47 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="mb-3"><label class="form-label">Station ID</label><input name="station_code" class="form-control" placeholder="MS-PDG-001" required @disabled(! $databaseReady)></div>
-                            <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" required @disabled(! $databaseReady)></div>
-                            <div class="mb-3"><label class="form-label">Station Type</label><input name="station_type" class="form-control" value="environmental_monitoring" required @disabled(! $databaseReady)></div>
+                            <div class="mb-3">
+                                <label class="form-label">Station ID</label>
+                                <select name="station_code" class="form-select" id="monitoring-station-code" required @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>
+                                    <option value="">Pilih Station ID</option>
+                                    @foreach ($monitoringStations->whereNotNull('db_id') as $station)
+                                        <option value="{{ $station['id'] }}"
+                                            data-name="{{ $station['name'] ?? '' }}"
+                                            data-coordinate="{{ $station['coordinate'] ?? '' }}"
+                                            data-latitude="{{ $station['latitude'] ?? '' }}"
+                                            data-longitude="{{ $station['longitude'] ?? '' }}"
+                                            data-logger-id="{{ $station['logger_id'] ?? '' }}"
+                                            data-connectivity-status="{{ $station['connectivity_status'] ?? 'Online' }}"
+                                            data-station-type="{{ $station['station_type'] ?? 'hydrological_monitoring' }}"
+                                            @selected(old('station_code') === ($station['id'] ?? null))>
+                                            {{ $station['id'] }} - {{ $station['name'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" value="{{ old('name') }}" readonly required @disabled(! $databaseReady)></div>
+                            <div class="mb-3">
+                                <label class="form-label">Station Type</label>
+                                <select name="station_type" class="form-select" id="monitoring-station-type" required @disabled(! $databaseReady)>
+                                    <option value="hydrological_monitoring">Hidrologi</option>
+                                    <option value="meteorological_monitoring">Meteorologi</option>
+                                    <option value="environmental_monitoring">Environmental Monitoring</option>
+                                </select>
+                            </div>
                             <div class="mb-3"><label class="form-label">Coordinate</label><input name="coordinate" class="form-control" placeholder="-0.9200, 100.3600" @disabled(! $databaseReady)></div>
                             <input type="hidden" name="latitude">
                             <input type="hidden" name="longitude">
                             <div class="row">
-                                <div class="col-md-6 mb-3"><label class="form-label">Logger ID</label><input name="logger_id" class="form-control" @disabled(! $databaseReady)></div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Logger ID</label>
+                                    <select name="logger_id" class="form-select" @disabled(! $databaseReady)>
+                                        <option value="">-</option>
+                                        @foreach($dataLoggers->whereNotNull('id') as $logger)
+                                            <option value="{{ $logger['id'] }}" @selected(old('logger_id') === ($logger['id'] ?? null))>{{ $logger['id'] }}{{ ! empty($logger['monitoring_station_id']) ? ' - '.$logger['monitoring_station_id'] : '' }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                                 <div class="col-md-6 mb-3"><label class="form-label">Connectivity</label><select name="connectivity_status" class="form-select" @disabled(! $databaseReady)><option>Online</option><option>Offline</option></select></div>
                             </div>
                             <input type="hidden" name="logger_status" value="Active">
@@ -670,10 +889,15 @@
                 </div>
             </div>
 
-            <div class="col-xl-12">
+            <div class="col-xl-12 order-1">
                 <div class="card h-100">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Monitoring Station List</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Monitoring Station List</h4>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#monitoring-form-collapse" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>
+                                <i class="bx bx-plus me-1"></i> Tambah Monitoring Station
+                            </button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Project</th><th>Workspace</th><th>Corridor</th><th>Type</th><th>Logger</th><th>Status</th><th></th></tr></thead>
@@ -686,6 +910,7 @@
                                                 @isset($station['db_id'])
                                                     <div class="d-inline-flex gap-1">
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            data-open-collapse="#monitoring-form-collapse"
                                                             data-edit-form="#monitoring-form"
                                                             data-edit-fields="{{ base64_encode(json_encode([
                                                                 'workspace_id' => $station['workspace_db_id'] ?? '',
@@ -693,7 +918,7 @@
                                                                 'corridor_id' => $station['corridor_db_id'] ?? '',
                                                                 'station_code' => $station['id'] ?? '',
                                                                 'name' => $station['name'] ?? '',
-                                                                'station_type' => $station['station_type'] ?? 'environmental_monitoring',
+                                                                'station_type' => $station['station_type'] ?? 'hydrological_monitoring',
                                                                 'coordinate' => $station['coordinate'] ?? '',
                                                                 'latitude' => $station['latitude'] ?? '',
                                                                 'longitude' => $station['longitude'] ?? '',
@@ -720,11 +945,16 @@
     </div>
 
     <div class="tab-pane fade" id="warning-tab-pane" role="tabpanel" aria-labelledby="warning-tab" tabindex="0">
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="card h-100">
+        <div class="row g-4">
+            <div class="col-xl-12 order-2">
+                <div class="card h-100 collapse {{ $warningFormOpen ? 'show' : '' }}" id="warning-form-collapse">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Warning Station Registry</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Warning Station Registry</h4>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#warning-form-collapse">
+                                <i class="bx bx-x me-1"></i> Tutup
+                            </button>
+                        </div>
                         <form method="POST" action="{{ route('project-warning-stations.store') }}" id="warning-form">
                             @csrf
                             <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }} - {{ $cluster['name'] }}</option>@endforeach</select></div>
@@ -753,10 +983,15 @@
                 </div>
             </div>
 
-            <div class="col-xl-12">
+            <div class="col-xl-12 order-1">
                 <div class="card h-100">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Warning Station List</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Warning Station List</h4>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#warning-form-collapse" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>
+                                <i class="bx bx-plus me-1"></i> Tambah Warning Station
+                            </button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
                                 <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Workspace</th><th>Source MS</th><th>Status</th><th></th></tr></thead>
@@ -769,6 +1004,7 @@
                                                 @isset($station['db_id'])
                                                     <div class="d-inline-flex gap-1">
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            data-open-collapse="#warning-form-collapse"
                                                             data-edit-form="#warning-form"
                                                             data-edit-fields="{{ base64_encode(json_encode([
                                                                 'workspace_id' => $station['workspace_db_id'] ?? '',
@@ -828,7 +1064,12 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Logger ID</label>
-                                <input name="logger_code" class="form-control" placeholder="DL-PDG-001" required @disabled(! $databaseReady)>
+                                <input name="logger_code" class="form-control" list="project-logger-code-options" placeholder="DL-PDG-001" required @disabled(! $databaseReady)>
+                                <datalist id="project-logger-code-options">
+                                    @foreach($dataLoggers->whereNotNull('id') as $logger)
+                                        <option value="{{ $logger['id'] }}">{{ $logger['id'] }}{{ ! empty($logger['monitoring_station_id']) ? ' - '.$logger['monitoring_station_id'] : '' }}</option>
+                                    @endforeach
+                                </datalist>
                             </div>
                             <div class="row">
                                 <div class="col-md-6 mb-3"><label class="form-label">Serial Number</label><input name="serial_number" class="form-control" @disabled(! $databaseReady)></div>
@@ -1377,16 +1618,8 @@
 @endsection
 
 @section('script')
-<script src="{{ URL::asset('build/libs/leaflet/leaflet.js') }}"></script>
-<script src="{{ URL::asset('build/js/pages/sentinel-spatial-map.js') }}"></script>
 <script>
     window.SentinelProjectSpatialResources = @json($spatialResources);
-
-    document.addEventListener('DOMContentLoaded', function () {
-        if (window.SentinelSpatialMap) {
-            window.SentinelSpatialMap.createConfigurationMap('project-spatial-config-map', window.SentinelProjectSpatialResources || {});
-        }
-    });
 
     (function () {
         const storageKey = 'resq.projectSetup.activeTab';
@@ -1458,6 +1691,173 @@
                 storeTarget(currentTarget());
             });
         });
+    })();
+
+    (function () {
+        function showCollapse(selector) {
+            const element = selector ? document.querySelector(selector) : null;
+            if (!element) {
+                return;
+            }
+
+            if (window.bootstrap?.Collapse) {
+                window.bootstrap.Collapse.getOrCreateInstance(element, { toggle: false }).show();
+                return;
+            }
+
+            element.classList.add('show');
+        }
+
+        function hideCollapse(selector) {
+            const element = selector ? document.querySelector(selector) : null;
+            if (!element) {
+                return;
+            }
+
+            if (window.bootstrap?.Collapse) {
+                window.bootstrap.Collapse.getOrCreateInstance(element, { toggle: false }).hide();
+                return;
+            }
+
+            element.classList.remove('show');
+        }
+
+        function showTab(selector) {
+            const tab = selector
+                ? document.querySelector('[data-bs-toggle="tab"][data-bs-target="' + selector + '"]')
+                : null;
+
+            if (!tab) {
+                return;
+            }
+
+            if (window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(tab).show();
+                return;
+            }
+
+            tab.click();
+        }
+
+        function fillForm(form, values) {
+            Object.entries(values || {}).forEach(([name, value]) => {
+                const fields = Array.from(form.querySelectorAll('[name="' + name + '"], [name="' + name + '[]"]'));
+
+                fields.forEach((field) => {
+                    if (field.type === 'checkbox') {
+                        field.checked = Array.isArray(value) ? value.includes(field.value) : Boolean(value);
+                        return;
+                    }
+
+                    if (field.type === 'radio') {
+                        field.checked = field.value === String(value);
+                        return;
+                    }
+
+                    field.value = value ?? '';
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        }
+
+        document.querySelectorAll('[data-edit-form][data-edit-fields]').forEach((button) => {
+            button.addEventListener('click', function () {
+                showCollapse(button.dataset.openCollapse);
+
+                const form = document.querySelector(button.dataset.editForm);
+                if (!form) {
+                    return;
+                }
+
+                try {
+                    fillForm(form, JSON.parse(atob(button.dataset.editFields)));
+                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } catch (error) {
+                    console.error('Gagal membaca data edit form', error);
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-close-collapse]').forEach((button) => {
+            button.addEventListener('click', function () {
+                hideCollapse(button.dataset.closeCollapse);
+            });
+        });
+
+        document.querySelectorAll('[data-open-tab]').forEach((button) => {
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                showTab(button.dataset.openTab);
+                showCollapse('#monitoring-form-collapse');
+
+                const monitoringForm = document.getElementById('monitoring-form');
+                if (!monitoringForm) {
+                    return;
+                }
+
+                fillForm(monitoringForm, {
+                    station_type: button.dataset.monitoringType || 'hydrological_monitoring',
+                    corridor_id: button.dataset.corridorId || '',
+                });
+                monitoringForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    })();
+
+    (function () {
+        const form = document.getElementById('monitoring-form');
+        const stationCode = document.getElementById('monitoring-station-code');
+        const stationType = document.getElementById('monitoring-station-type');
+        const corridorWrap = document.getElementById('monitoring-corridor-wrap');
+        const corridorSelect = corridorWrap?.querySelector('[name="corridor_id"]');
+        const corridorInitiallyDisabled = Boolean(corridorSelect?.disabled);
+
+        if (!form || !stationType || !corridorWrap || !corridorSelect) {
+            return;
+        }
+
+        function syncCorridorBinding() {
+            const meteorological = stationType.value === 'meteorological_monitoring';
+            corridorWrap.classList.toggle('d-none', meteorological);
+            corridorSelect.disabled = corridorInitiallyDisabled || meteorological;
+            corridorSelect.required = !corridorInitiallyDisabled && stationType.value === 'hydrological_monitoring';
+
+            if (meteorological) {
+                corridorSelect.value = '';
+            }
+        }
+
+        stationType.addEventListener('change', syncCorridorBinding);
+        syncCorridorBinding();
+
+        function syncStationIdentity() {
+            const selected = stationCode?.selectedOptions[0];
+
+            if (!selected || !selected.value) {
+                return;
+            }
+
+            const name = form.querySelector('[name="name"]');
+            const coordinate = form.querySelector('[name="coordinate"]');
+            const latitude = form.querySelector('[name="latitude"]');
+            const longitude = form.querySelector('[name="longitude"]');
+            const logger = form.querySelector('[name="logger_id"]');
+            const connectivity = form.querySelector('[name="connectivity_status"]');
+
+            if (name) name.value = selected.dataset.name || '';
+            if (coordinate) coordinate.value = selected.dataset.coordinate || '';
+            if (latitude) latitude.value = selected.dataset.latitude || '';
+            if (longitude) longitude.value = selected.dataset.longitude || '';
+            if (logger) logger.value = selected.dataset.loggerId || '';
+            if (connectivity && selected.dataset.connectivityStatus) connectivity.value = selected.dataset.connectivityStatus;
+            if (stationType && selected.dataset.stationType) {
+                stationType.value = selected.dataset.stationType;
+                stationType.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+
+        stationCode?.addEventListener('change', syncStationIdentity);
+        syncStationIdentity();
     })();
 
     (function () {

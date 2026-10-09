@@ -55,12 +55,14 @@
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('tde-forecast.*') ? 'mm-active' : '' }}">
-                    <a href="{{ route('tde-forecast.index') }}" class="waves-effect {{ request()->routeIs('tde-forecast.*') ? 'active' : '' }}">
-                        <i class="bx bx-cloud-lightning"></i>
-                        <span>TDE Forecast</span>
-                    </a>
-                </li>
+                @if($sidebarIsClient)
+                    <li class="{{ request()->routeIs('tde-forecast.*') ? 'mm-active' : '' }}">
+                        <a href="{{ route('tde-forecast.index') }}" class="waves-effect {{ request()->routeIs('tde-forecast.*') ? 'active' : '' }}">
+                            <i class="bx bx-cloud-lightning"></i>
+                            <span>TDE Forecast</span>
+                        </a>
+                    </li>
+                @endif
 
                 @if($sidebarIsClient)
                     <li class="{{ request()->routeIs('client-operations.*') ? 'mm-active' : '' }}">
@@ -128,7 +130,8 @@
                         || request()->routeIs('data-loggers.*');
                     $registeredMenuActive = request()->routeIs('clusters.*')
                         || request()->routeIs('monitoring-stations.*')
-                        || request()->routeIs('warning-stations.*');
+                        || request()->routeIs('warning-stations.*')
+                        || request()->routeIs('tde-forecast.*');
                 @endphp
 
                 <li class="{{ $configurationMenuActive ? 'mm-active' : '' }}">
@@ -189,6 +192,11 @@
                         <li>
                             <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
                                 Warning Station
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('tde-forecast.index') }}" class="{{ request()->routeIs('tde-forecast.*') ? 'active' : '' }}">
+                                TDE Forecast
                             </a>
                         </li>
                     </ul>

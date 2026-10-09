@@ -47,6 +47,11 @@
     @slot('title') Canonical Database @endslot
 @endcomponent
 
+@php
+    $canonicalParameterFormOpen = $errors->any();
+    $sensorPresetFormOpen = $errors->any();
+@endphp
+
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -136,12 +141,17 @@
                     <!-- PARAMETERS TAB -->
                     <div class="tab-pane" id="parameters" role="tabpanel">
                         <div class="row mt-4">
-                            <div class="col-xl-4">
-                                <div class="card border">
+                            <div class="col-12 order-2">
+                                <div id="canonical-parameter-form-collapse" class="card collapse {{ $canonicalParameterFormOpen ? 'show' : '' }}">
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between mb-3">
                                             <h5 class="mb-0">Master Parameter</h5>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" data-reset-form="#canonical-parameter-form">Reset</button>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" data-reset-form="#canonical-parameter-form">Reset</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#canonical-parameter-form-collapse" aria-expanded="{{ $canonicalParameterFormOpen ? 'true' : 'false' }}" aria-controls="canonical-parameter-form-collapse">
+                                                    <i class="bx bx-x me-1"></i> Tutup
+                                                </button>
+                                            </div>
                                         </div>
                                         <form method="POST" action="{{ route('canonical-parameters.store') }}" id="canonical-parameter-form">
                                             @csrf
@@ -247,86 +257,96 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-xl-8">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered dt-responsive nowrap w-100 datatable">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>Canonical Parameter</th>
-                                                <th>Domain</th>
-                                                <th>Unit</th>
-                                                <th>Origin Type</th>
-                                                <th>Status</th>
-                                                <th>Definition</th>
-                                                <th>Specification Source</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($canonicalParameters as $param)
-                                            <tr>
-                                                <td><strong>{{ is_array($param) ? $param['field_identity'] : $param->field_identity }}</strong></td>
-                                                <td><span class="badge bg-info text-uppercase">{{ is_array($param) ? $param['domain'] : $param->domain }}</span></td>
-                                                <td>{{ is_array($param) ? $param['canonical_unit'] : $param->canonical_unit }}</td>
-                                                <td>
-                                                    @php
-                                                        $origin = is_array($param)
-                                                            ? $param['origin']
-                                                            : ($param->is_platform_processed ? 'PPC' : 'RDM');
-                                                        $badgeClass = str_contains($origin, 'RDM') ? 'badge-rdm' : (str_contains($origin, 'RDP') ? 'badge-rdp' : 'badge-ppc');
-                                                    @endphp
-                                                    <span class="badge {{ $badgeClass }}">{{ $origin }}</span>
-                                                </td>
-                                                <td><span class="badge bg-{{ (is_array($param) ? ($param['status'] ?? 'active') : $param->status) === 'active' ? 'success' : 'secondary' }}">{{ is_array($param) ? ($param['status'] ?? 'active') : ucfirst($param->status) }}</span></td>
-                                                <td>{{ is_array($param) ? $param['definition'] : $param->definition }}</td>
-                                                <td>
-                                                    @php
-                                                        $requirements = is_array($param) ? ($param['input_requirements'] ?? []) : ($param->input_requirements ?? []);
-                                                        $sourceUrl = $requirements['source_url'] ?? null;
-                                                        $sourceReference = $requirements['source_reference'] ?? null;
-                                                    @endphp
-                                                    @if($sourceUrl)
-                                                        <a href="{{ $sourceUrl }}" target="_blank" rel="noopener">{{ $sourceReference ?: 'Datasheet' }}</a>
-                                                    @else
-                                                        <span class="text-muted">-</span>
-                                                    @endif
-                                                </td>
-                                                <td class="text-end">
-                                                    @if(! is_array($param))
-                                                        <div class="d-inline-flex gap-1">
-                                                            <button type="button" class="btn btn-outline-primary btn-sm"
-                                                                data-edit-form="#canonical-parameter-form"
-                                                                data-edit-fields="{{ base64_encode(json_encode([
-                                                                    'canonical_parameter_id' => $param->id,
-                                                                    'field_identity' => $param->field_identity,
-                                                                    'definition' => $param->definition,
-                                                                    'domain' => $param->domain,
-                                                                    'canonical_unit' => $param->canonical_unit,
-                                                                    'data_type' => $param->data_type,
-                                                                    'measurement_characteristic' => $param->measurement_characteristic,
-                                                                    'formula' => $param->formula,
-                                                                    'status' => $param->status,
-                                                                    'is_platform_processed' => $param->is_platform_processed ? 1 : 0,
-                                                                    'min_value' => $param->input_requirements['min_value'] ?? null,
-                                                                    'max_value' => $param->input_requirements['max_value'] ?? null,
-                                                                    'resolution' => $param->input_requirements['resolution'] ?? null,
-                                                                    'accuracy' => $param->input_requirements['accuracy'] ?? null,
-                                                                    'source_url' => $param->input_requirements['source_url'] ?? null,
-                                                                    'source_reference' => $param->input_requirements['source_reference'] ?? null,
-                                                                    'source_note' => $param->input_requirements['source_note'] ?? null,
-                                                                ])) }}">Edit</button>
-                                                            <form method="POST" action="{{ route('canonical-parameters.destroy', $param->id) }}">
-                                                                @csrf
-                                                                @method('DELETE')
-                                                                <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
-                                                            </form>
-                                                        </div>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                            <div class="col-12 order-1">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                                            <h5 class="mb-0">Canonical Parameters</h5>
+                                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#canonical-parameter-form-collapse" aria-expanded="{{ $canonicalParameterFormOpen ? 'true' : 'false' }}" aria-controls="canonical-parameter-form-collapse">
+                                                <i class="bx bx-plus me-1"></i> Tambah Baru
+                                            </button>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered dt-responsive nowrap w-100 datatable">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Canonical Parameter</th>
+                                                        <th>Domain</th>
+                                                        <th>Unit</th>
+                                                        <th>Origin Type</th>
+                                                        <th>Status</th>
+                                                        <th>Definition</th>
+                                                        <th>Specification Source</th>
+                                                        <th></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($canonicalParameters as $param)
+                                                    <tr>
+                                                        <td><strong>{{ is_array($param) ? $param['field_identity'] : $param->field_identity }}</strong></td>
+                                                        <td><span class="badge bg-info text-uppercase">{{ is_array($param) ? $param['domain'] : $param->domain }}</span></td>
+                                                        <td>{{ is_array($param) ? $param['canonical_unit'] : $param->canonical_unit }}</td>
+                                                        <td>
+                                                            @php
+                                                                $origin = is_array($param)
+                                                                    ? $param['origin']
+                                                                    : ($param->is_platform_processed ? 'PPC' : 'RDM');
+                                                                $badgeClass = str_contains($origin, 'RDM') ? 'badge-rdm' : (str_contains($origin, 'RDP') ? 'badge-rdp' : 'badge-ppc');
+                                                            @endphp
+                                                            <span class="badge {{ $badgeClass }}">{{ $origin }}</span>
+                                                        </td>
+                                                        <td><span class="badge bg-{{ (is_array($param) ? ($param['status'] ?? 'active') : $param->status) === 'active' ? 'success' : 'secondary' }}">{{ is_array($param) ? ($param['status'] ?? 'active') : ucfirst($param->status) }}</span></td>
+                                                        <td>{{ is_array($param) ? $param['definition'] : $param->definition }}</td>
+                                                        <td>
+                                                            @php
+                                                                $requirements = is_array($param) ? ($param['input_requirements'] ?? []) : ($param->input_requirements ?? []);
+                                                                $sourceUrl = $requirements['source_url'] ?? null;
+                                                                $sourceReference = $requirements['source_reference'] ?? null;
+                                                            @endphp
+                                                            @if($sourceUrl)
+                                                                <a href="{{ $sourceUrl }}" target="_blank" rel="noopener">{{ $sourceReference ?: 'Datasheet' }}</a>
+                                                            @else
+                                                                <span class="text-muted">-</span>
+                                                            @endif
+                                                        </td>
+                                                        <td class="text-end">
+                                                            @if(! is_array($param))
+                                                                <div class="d-inline-flex gap-1">
+                                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                                        data-edit-form="#canonical-parameter-form"
+                                                                        data-edit-fields="{{ base64_encode(json_encode([
+                                                                            'canonical_parameter_id' => $param->id,
+                                                                            'field_identity' => $param->field_identity,
+                                                                            'definition' => $param->definition,
+                                                                            'domain' => $param->domain,
+                                                                            'canonical_unit' => $param->canonical_unit,
+                                                                            'data_type' => $param->data_type,
+                                                                            'measurement_characteristic' => $param->measurement_characteristic,
+                                                                            'formula' => $param->formula,
+                                                                            'status' => $param->status,
+                                                                            'is_platform_processed' => $param->is_platform_processed ? 1 : 0,
+                                                                            'min_value' => $param->input_requirements['min_value'] ?? null,
+                                                                            'max_value' => $param->input_requirements['max_value'] ?? null,
+                                                                            'resolution' => $param->input_requirements['resolution'] ?? null,
+                                                                            'accuracy' => $param->input_requirements['accuracy'] ?? null,
+                                                                            'source_url' => $param->input_requirements['source_url'] ?? null,
+                                                                            'source_reference' => $param->input_requirements['source_reference'] ?? null,
+                                                                            'source_note' => $param->input_requirements['source_note'] ?? null,
+                                                                        ])) }}">Edit</button>
+                                                                    <form method="POST" action="{{ route('canonical-parameters.destroy', $param->id) }}">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                                                                    </form>
+                                                                </div>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -335,15 +355,20 @@
                     <!-- SENSOR PRESETS TAB -->
                     <div class="tab-pane" id="presets" role="tabpanel">
                         <div class="row mt-4">
-                            <div class="col-xl-12">
-                                <div class="card border">
+                            <div class="col-12 order-2">
+                                <div id="sensor-preset-form-collapse" class="card collapse {{ $sensorPresetFormOpen ? 'show' : '' }}">
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
                                             <div>
                                                 <h5 class="mb-1">Sensor Preset</h5>
                                                 <p class="text-muted mb-0">Buat template parameter per model sensor untuk bulk mapping.</p>
                                             </div>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="reset-preset-form">Reset</button>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="reset-preset-form">Reset</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#sensor-preset-form-collapse" aria-expanded="{{ $sensorPresetFormOpen ? 'true' : 'false' }}" aria-controls="sensor-preset-form-collapse">
+                                                    <i class="bx bx-x me-1"></i> Tutup
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <form method="POST" action="{{ route('sensor-mapping-presets.store') }}" id="sensor-preset-form">
@@ -419,12 +444,17 @@
                                 </div>
                             </div>
 
-                            <div class="col-xl-12">
-                                <div class="card border">
+                            <div class="col-12 order-1">
+                                <div class="card">
                                     <div class="card-body">
-                                        <h5 class="mb-3">Saved Presets</h5>
+                                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+                                            <h5 class="mb-0">Saved Presets</h5>
+                                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#sensor-preset-form-collapse" aria-expanded="{{ $sensorPresetFormOpen ? 'true' : 'false' }}" aria-controls="sensor-preset-form-collapse">
+                                                <i class="bx bx-plus me-1"></i> Tambah Baru
+                                            </button>
+                                        </div>
                                         @if(empty($sensorPresets))
-                                            <div class="alert alert-info mb-0">Belum ada sensor preset. Buat preset pertama dari form di sebelah kiri.</div>
+                                            <div class="alert alert-info mb-0">Belum ada sensor preset. Klik Tambah Baru untuk membuat preset pertama.</div>
                                         @else
                                             <div class="table-responsive">
                                                 <table class="table table-bordered dt-responsive nowrap w-100 datatable">
@@ -1116,7 +1146,16 @@
                 if (window.bootstrap && presetTab) {
                     window.bootstrap.Tab.getOrCreateInstance(presetTab).show();
                 }
-                form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                const presetCollapse = document.querySelector('#sensor-preset-form-collapse');
+                if (window.bootstrap && presetCollapse) {
+                    presetCollapse.dataset.autoScrollOnShow = '1';
+                    window.bootstrap.Collapse.getOrCreateInstance(presetCollapse, { toggle: false }).show();
+                }
+
+                setTimeout(function() {
+                    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 220);
             } catch (error) {
                 console.error(error);
             }

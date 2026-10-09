@@ -13,14 +13,20 @@
     $dataLoggerDiscoveries = collect($dataLoggerDiscoveries ?? []);
     $monitoringStations = collect($monitoringStations ?? []);
     $mqttConfigurations = collect($mqttConfigurations ?? []);
+    $dataLoggerFormOpen = $errors->any();
 @endphp
 
 <div class="card">
     <div class="card-body">
         <ul class="nav nav-tabs nav-tabs-custom mb-4" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="logger-setup-tab" data-bs-toggle="tab" data-bs-target="#logger-setup-pane" type="button" role="tab" aria-controls="logger-setup-pane" aria-selected="true">
-                    Setup Logger
+                <button class="nav-link active" id="logger-list-tab" data-bs-toggle="tab" data-bs-target="#logger-list-pane" type="button" role="tab" aria-controls="logger-list-pane" aria-selected="true">
+                    Logger List
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="logger-setup-tab" data-bs-toggle="tab" data-bs-target="#logger-setup-pane" type="button" role="tab" aria-controls="logger-setup-pane" aria-selected="false">
+                    Detected Gateway
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -28,135 +34,21 @@
                     Remote Tools
                 </button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="logger-list-tab" data-bs-toggle="tab" data-bs-target="#logger-list-pane" type="button" role="tab" aria-controls="logger-list-pane" aria-selected="false">
-                    Logger List
-                </button>
-            </li>
         </ul>
 
         <div class="tab-content">
-            <div class="tab-pane fade show active" id="logger-setup-pane" role="tabpanel" aria-labelledby="logger-setup-tab" tabindex="0">
-                <div class="card border mb-4">
+            <div class="tab-pane fade" id="logger-setup-pane" role="tabpanel" aria-labelledby="logger-setup-tab" tabindex="0">
+                <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Data Logger Setup</h4>
-                        <form method="POST" action="{{ route('data-loggers.store') }}" id="data-logger-form">
-                            @csrf
-                            <input type="hidden" name="discovery_id">
-                            <div class="mb-3">
-                                <label class="form-label">Monitoring Station</label>
-                                <select name="monitoring_station_id" class="form-select">
-                                    <option value="">-</option>
-                                    @foreach ($monitoringStations->whereNotNull('db_id') as $station)
-                                        <option value="{{ $station['db_id'] }}">{{ $station['id'] }} - {{ $station['name'] }}</option>
-                                    @endforeach
-                                </select>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <div>
+                                <h4 class="card-title mb-1">Detected Gateway Devices</h4>
+                                <p class="text-muted mb-0">Pilih perangkat terdeteksi untuk mengisi form logger.</p>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Logger ID</label>
-                                <input name="logger_code" class="form-control" placeholder="DL-PDG-001" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Serial Number</label>
-                                <input name="serial_number" class="form-control">
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Model</label>
-                                    <input name="logger_model" class="form-control">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Vendor</label>
-                                    <input name="vendor" class="form-control">
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Firmware</label>
-                                    <input name="firmware_version" class="form-control">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Device Label / QR</label>
-                                    <input name="device_label" class="form-control">
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">IP / Host Remote</label>
-                                <input name="remote_host" class="form-control" placeholder="192.168.3.1">
-                            </div>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">SSH Port</label>
-                                    <input type="number" name="remote_ssh_port" class="form-control" value="22" min="1" max="65535">
-                                </div>
-                                <div class="col-md-8 mb-3">
-                                    <label class="form-label">SSH User</label>
-                                    <input name="remote_ssh_user" class="form-control" placeholder="root">
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">SSH Password</label>
-                                <input type="password" name="remote_ssh_password" class="form-control" placeholder="Biarkan kosong kalau sudah pernah disimpan">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Gateway Path</label>
-                                <input name="remote_gateway_path" class="form-control" placeholder="/root/rednode-gateway">
-                            </div>
-                            <hr class="my-4">
-                            <h5 class="mb-3">Node-RED MQTT Remote</h5>
-                            <div class="mb-3">
-                                <label class="form-label">MQTT Configuration</label>
-                                <select name="node_red_mqtt_configuration_id" class="form-select">
-                                    <option value="">-</option>
-                                    @foreach ($mqttConfigurations->where('is_active', true)->where('consumer_enabled', true) as $config)
-                                        <option value="{{ $config['db_id'] }}">
-                                            {{ $config['configuration_code'] }} - {{ $config['name'] }}
-                                            @if (! empty($config['project_code']))
-                                                ({{ $config['project_code'] }})
-                                            @endif
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text">Pilih config broker MQTT yang akan dipakai Node-RED untuk publish telemetry ke RESQ.</div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Node-RED Publish Topic</label>
-                                <input name="node_red_publish_topic" class="form-control" placeholder="resq/telemetry/* atau resq/telemetry/SNS-01">
-                                <div class="form-text">Topic publish Node-RED. Isi <code>*</code> atau <code>#</code> di akhir untuk test publish ke semua sensor sekaligus. Kalau kosong, RESQ pakai consumer topic.</div>
-                            </div>
-                            <div class="alert alert-info py-3 mb-3">
-                                <div class="fw-semibold mb-1">Plug and Play Mode</div>
-                                <div>RESQ akan otomatis menulis konfigurasi MQTT Node-RED ke server remote dan restart service tanpa perlu isi folder, path, atau command manual.</div>
-                                <div class="small mt-2">
-                                    File config yang ditulis:
-                                    <code>/etc/systemd/system/node-red.service.d/resq-mqtt.conf</code>
-                                </div>
-                                <div class="small">
-                                    Service yang direstart:
-                                    <code>node-red</code>
-                                </div>
-                                <div class="small">
-                                    Lokasi user dir yang diasumsikan:
-                                    <code>/root/.node-red</code> atau <code>/home/&lt;ssh-user&gt;/.node-red</code>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Status</label>
-                                <select name="logger_status" class="form-select" required>
-                                    <option>Active</option>
-                                    <option>Inactive</option>
-                                    <option>Maintenance</option>
-                                    <option>Fault</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Save / Update Logger</button>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="card border">
-                    <div class="card-body">
-                        <h4 class="card-title mb-4">Detected Gateway Devices</h4>
+                            <button type="button" class="btn btn-primary btn-sm" data-open-logger-form>
+                                <i class="bx bx-plus me-1"></i> Tambah Baru
+                            </button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-sm align-middle mb-0">
                                 <thead class="table-light">
@@ -278,10 +170,20 @@
                 </div>
             </div>
 
-            <div class="tab-pane fade" id="logger-list-pane" role="tabpanel" aria-labelledby="logger-list-tab" tabindex="0">
-                <div class="card border">
+            <div class="tab-pane fade show active" id="logger-list-pane" role="tabpanel" aria-labelledby="logger-list-tab" tabindex="0">
+                <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title mb-4">Data Logger List</h4>
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Data Logger List</h4>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#data-logger-form-collapse" aria-expanded="{{ $dataLoggerFormOpen ? 'true' : 'false' }}" aria-controls="data-logger-form-collapse">
+                                    <i class="bx bx-plus me-1"></i> Tambah Baru
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="tab" data-bs-target="#logger-setup-pane">
+                                    <i class="bx bx-radar me-1"></i> Detected Gateway
+                                </button>
+                            </div>
+                        </div>
                         <div class="alert alert-info d-none" id="gateway-mode-message"></div>
                         <div class="table-responsive">
                             <table class="table table-nowrap align-middle mb-0">
@@ -382,6 +284,133 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="data-logger-form-collapse" class="card collapse {{ $dataLoggerFormOpen ? 'show' : '' }}">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                            <h4 class="card-title mb-0">Data Logger Setup</h4>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#data-logger-form-collapse" aria-expanded="{{ $dataLoggerFormOpen ? 'true' : 'false' }}" aria-controls="data-logger-form-collapse">
+                                <i class="bx bx-x me-1"></i> Tutup
+                            </button>
+                        </div>
+                        <form method="POST" action="{{ route('data-loggers.store') }}" id="data-logger-form">
+                            @csrf
+                            <input type="hidden" name="discovery_id">
+                            <div class="mb-3">
+                                <label class="form-label">Monitoring Station</label>
+                                <select name="monitoring_station_id" class="form-select">
+                                    <option value="">-</option>
+                                    @foreach ($monitoringStations->whereNotNull('db_id') as $station)
+                                        <option value="{{ $station['db_id'] }}">{{ $station['id'] }} - {{ $station['name'] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Logger ID</label>
+                                <input name="logger_code" class="form-control" list="data-logger-code-options" placeholder="DL-PDG-001" required>
+                                <datalist id="data-logger-code-options">
+                                    @foreach ($dataLoggers->whereNotNull('id') as $logger)
+                                        <option value="{{ $logger['id'] }}">{{ $logger['id'] }}{{ ! empty($logger['monitoring_station_id']) ? ' - '.$logger['monitoring_station_id'] : '' }}</option>
+                                    @endforeach
+                                </datalist>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Serial Number</label>
+                                <input name="serial_number" class="form-control">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Model</label>
+                                    <input name="logger_model" class="form-control">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Vendor</label>
+                                    <input name="vendor" class="form-control">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Firmware</label>
+                                    <input name="firmware_version" class="form-control">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Device Label / QR</label>
+                                    <input name="device_label" class="form-control">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">IP / Host Remote</label>
+                                <input name="remote_host" class="form-control" placeholder="192.168.3.1">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">SSH Port</label>
+                                    <input type="number" name="remote_ssh_port" class="form-control" value="22" min="1" max="65535">
+                                </div>
+                                <div class="col-md-8 mb-3">
+                                    <label class="form-label">SSH User</label>
+                                    <input name="remote_ssh_user" class="form-control" placeholder="root">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">SSH Password</label>
+                                <input type="password" name="remote_ssh_password" class="form-control" placeholder="Biarkan kosong kalau sudah pernah disimpan">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Gateway Path</label>
+                                <input name="remote_gateway_path" class="form-control" placeholder="/root/rednode-gateway">
+                            </div>
+                            <hr class="my-4">
+                            <h5 class="mb-3">Node-RED MQTT Remote</h5>
+                            <div class="mb-3">
+                                <label class="form-label">MQTT Configuration</label>
+                                <select name="node_red_mqtt_configuration_id" class="form-select">
+                                    <option value="">-</option>
+                                    @foreach ($mqttConfigurations->where('is_active', true)->where('consumer_enabled', true) as $config)
+                                        <option value="{{ $config['db_id'] }}">
+                                            {{ $config['configuration_code'] }} - {{ $config['name'] }}
+                                            @if (! empty($config['project_code']))
+                                                ({{ $config['project_code'] }})
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">Pilih config broker MQTT yang akan dipakai Node-RED untuk publish telemetry ke RESQ.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Node-RED Publish Topic</label>
+                                <input name="node_red_publish_topic" class="form-control" placeholder="resq/telemetry/* atau resq/telemetry/SNS-01">
+                                <div class="form-text">Topic publish Node-RED. Isi <code>*</code> atau <code>#</code> di akhir untuk test publish ke semua sensor sekaligus. Kalau kosong, RESQ pakai consumer topic.</div>
+                            </div>
+                            <div class="alert alert-info py-3 mb-3">
+                                <div class="fw-semibold mb-1">Plug and Play Mode</div>
+                                <div>RESQ akan otomatis menulis konfigurasi MQTT Node-RED ke server remote dan restart service tanpa perlu isi folder, path, atau command manual.</div>
+                                <div class="small mt-2">
+                                    File config yang ditulis:
+                                    <code>/etc/systemd/system/node-red.service.d/resq-mqtt.conf</code>
+                                </div>
+                                <div class="small">
+                                    Service yang direstart:
+                                    <code>node-red</code>
+                                </div>
+                                <div class="small">
+                                    Lokasi user dir yang diasumsikan:
+                                    <code>/root/.node-red</code> atau <code>/home/&lt;ssh-user&gt;/.node-red</code>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <select name="logger_status" class="form-select" required>
+                                    <option>Active</option>
+                                    <option>Inactive</option>
+                                    <option>Maintenance</option>
+                                    <option>Fault</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save / Update Logger</button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -413,6 +442,29 @@
 
 @section('script')
 <script>
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-open-logger-form]');
+        if (!button) {
+            return;
+        }
+
+        const listTab = document.getElementById('logger-list-tab');
+        const formCollapse = document.getElementById('data-logger-form-collapse');
+        const form = document.getElementById('data-logger-form');
+
+        if (window.bootstrap && listTab) {
+            bootstrap.Tab.getOrCreateInstance(listTab).show();
+        }
+
+        if (window.bootstrap && formCollapse) {
+            bootstrap.Collapse.getOrCreateInstance(formCollapse, { toggle: false }).show();
+        }
+
+        setTimeout(function () {
+            form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
+    });
+
     (function () {
         const modalElement = document.getElementById('logger-metadata-modal');
         const title = document.getElementById('logger-metadata-title');

@@ -7,11 +7,47 @@
 <style>
     .tde-page-header {
         background: #fff;
-        border: 1px solid var(--emp-line);
-        border-left: 5px solid var(--emp-teal);
-        border-radius: 8px;
+        border: 0;
+        border-radius: 2px;
+        box-shadow: 0 6px 18px rgba(18, 38, 63, 0.07);
         margin-bottom: 14px;
         padding: 18px 20px;
+    }
+
+    .emp-ui .card,
+    .emp-ui .ops-context-switcher,
+    .tde-forecast-card,
+    .tde-pattern-item,
+    .tde-diagnosis-box,
+    .tde-empty-panel,
+    .tde-empty-item {
+        background: #fff;
+        border: 0;
+        border-radius: 2px;
+        box-shadow: 0 6px 18px rgba(18, 38, 63, 0.07);
+    }
+
+    .emp-ui .card {
+        background-image: none;
+        border: 0 !important;
+        box-shadow: 0 6px 18px rgba(18, 38, 63, 0.07) !important;
+    }
+
+    .tde-realtime-bar {
+        border-top: 0 !important;
+    }
+
+    .tde-refresh-button {
+        background: #556ee6;
+        border: 0;
+        border-radius: 2px;
+        color: #fff;
+    }
+
+    .tde-refresh-button:hover,
+    .tde-refresh-button:focus {
+        background: #485ec4;
+        color: #fff;
     }
 
     .tde-page-header-row {
@@ -53,8 +89,7 @@
 
     .tde-forecast-card {
         background: #fff;
-        border: 1px solid var(--emp-line);
-        border-radius: 8px;
+        border: 0;
         min-height: 118px;
         padding: 14px;
     }
@@ -84,7 +119,7 @@
 
     .tde-pill {
         align-items: center;
-        border-radius: 999px;
+        border-radius: 2px;
         display: inline-flex;
         font-size: 12px;
         font-weight: 800;
@@ -106,9 +141,8 @@
     }
 
     .tde-pattern-item {
-        background: #f8fbfe;
-        border: 1px solid var(--emp-line);
-        border-radius: 8px;
+        background: #fff;
+        border: 0;
         min-height: 74px;
         padding: 10px;
         text-align: center;
@@ -151,9 +185,8 @@
     }
 
     .tde-diagnosis-box {
-        background: #f8fbfe;
-        border: 1px solid var(--emp-line);
-        border-radius: 8px;
+        background: #fff;
+        border: 0;
         color: var(--emp-ink);
         font-weight: 800;
         line-height: 1.35;
@@ -163,8 +196,7 @@
 
     .tde-empty-panel {
         background: #fff;
-        border: 1px solid var(--emp-line);
-        border-radius: 8px;
+        border: 0;
         padding: 22px;
     }
 
@@ -189,9 +221,8 @@
     }
 
     .tde-empty-item {
-        background: #f8fbfe;
-        border: 1px solid var(--emp-line);
-        border-radius: 8px;
+        background: #fff;
+        border: 0;
         min-height: 74px;
         padding: 12px;
     }
@@ -304,7 +335,7 @@
                         @endforeach
                     </select>
                 </div>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary tde-refresh-button">
                     <i class="bx bx-refresh me-1"></i> Refresh
                 </button>
             </form>
@@ -364,7 +395,7 @@
     @endif
 
     @if($matrixStatus !== 'matched')
-        <div class="card tde-section-card mb-3" style="border-left:4px solid var(--emp-gold);">
+        <div class="card tde-section-card mb-3">
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-3 align-items-end justify-content-between">
                     <div>
@@ -672,7 +703,7 @@
                             <div class="tde-diagnosis-box mb-2">
                                 <div class="mb-1"><strong>{{ $dewPointMeta['name'] ?? 'Dew Point' }}</strong></div>
                                 <div class="text-muted small mb-2">Nilai turunan dari {{ implode(' &amp; ', $dewPointMeta['derived_from'] ?? ['AT', 'RH']) }} (bukan hasil ukur sensor langsung).</div>
-                                <code style="display:block;background:#fff;border:1px solid var(--emp-line);border-radius:6px;padding:8px 10px;color:var(--emp-navy);">
+                                <code style="display:block;background:#fff;border:0;border-radius:2px;padding:8px 10px;color:var(--emp-navy);box-shadow:0 6px 18px rgba(18,38,63,.07);">
                                     {{ $dewPointMeta['formula'] ?? 'Td = (c * γ) / (b - γ)' }}
                                 </code>
                                 <div class="text-muted small mt-2">
@@ -686,7 +717,7 @@
                             </div>
                             <div class="tde-diagnosis-box">
                                 <div class="mb-1"><strong>{{ $dewPointSpreadMeta['name'] ?? 'Dew-Point Spread' }}</strong></div>
-                                <code style="display:block;background:#fff;border:1px solid var(--emp-line);border-radius:6px;padding:8px 10px;color:var(--emp-navy);">
+                                <code style="display:block;background:#fff;border:0;border-radius:2px;padding:8px 10px;color:var(--emp-navy);box-shadow:0 6px 18px rgba(18,38,63,.07);">
                                     {{ $dewPointSpreadMeta['formula'] ?? 'DPS = AT - DP' }}
                                 </code>
                             </div>

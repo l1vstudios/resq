@@ -10,6 +10,7 @@
 
 @php
     $mstPrefixes = collect($mstPrefixes ?? []);
+    $prefixFormOpen = $errors->any();
 @endphp
 
 @if (session('message'))
@@ -30,11 +31,16 @@
     </div>
 @endif
 
-<div class="row">
-    <div class="col-xl-4">
-        <div class="card">
+<div class="row g-3">
+    <div class="col-12 order-2">
+        <div id="mst-prefix-form-collapse" class="card collapse {{ $prefixFormOpen ? 'show' : '' }}">
             <div class="card-body">
-                <h4 class="card-title mb-4">Prefix Sensors Setup</h4>
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                    <h4 class="card-title mb-0">Prefix Sensors Setup</h4>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#mst-prefix-form-collapse" aria-expanded="{{ $prefixFormOpen ? 'true' : 'false' }}" aria-controls="mst-prefix-form-collapse">
+                        <i class="bx bx-x me-1"></i> Tutup
+                    </button>
+                </div>
                 <form method="POST" action="{{ route('mst-prefixes.store') }}" id="mst-prefix-form">
                     @csrf
                     <div class="mb-3">
@@ -63,10 +69,15 @@
         </div>
     </div>
 
-    <div class="col-xl-8">
+    <div class="col-12 order-1">
         <div class="card">
             <div class="card-body">
-                <h4 class="card-title mb-4">Prefix Sensors List</h4>
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+                    <h4 class="card-title mb-0">Prefix Sensors List</h4>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#mst-prefix-form-collapse" aria-expanded="{{ $prefixFormOpen ? 'true' : 'false' }}" aria-controls="mst-prefix-form-collapse">
+                        <i class="bx bx-plus me-1"></i> Tambah Baru
+                    </button>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-nowrap align-middle mb-0">
                         <thead class="table-light">

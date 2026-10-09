@@ -295,13 +295,13 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <a class="text-dark" data-bs-toggle="collapse" href="#csvImportCollapse" role="button" aria-expanded="false" aria-controls="csvImportCollapse">
+                        <a class="text-dark" data-bs-toggle="collapse" href="#csvImportCollapse" role="button" aria-expanded="true" aria-controls="csvImportCollapse">
                             <i class="bx bx-import me-1"></i> CSV Route Import
                             <i class="bx bx-chevron-down float-end"></i>
                         </a>
                     </h5>
                 </div>
-                <div class="collapse" id="csvImportCollapse">
+                <div class="collapse show" id="csvImportCollapse">
                     <div class="card-body">
                         <form id="csv-import-form" enctype="multipart/form-data">
                             <div class="row">
@@ -350,13 +350,13 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <a class="text-dark" data-bs-toggle="collapse" href="#gpkgImportCollapse" role="button" aria-expanded="false" aria-controls="gpkgImportCollapse">
+                        <a class="text-dark" data-bs-toggle="collapse" href="#gpkgImportCollapse" role="button" aria-expanded="true" aria-controls="gpkgImportCollapse">
                             <i class="bx bx-layer me-1"></i> GPKG Import (Corridor & Information Layer)
                             <i class="bx bx-chevron-down float-end"></i>
                         </a>
                     </h5>
                 </div>
-                <div class="collapse" id="gpkgImportCollapse">
+                <div class="collapse show" id="gpkgImportCollapse">
                     <div class="card-body">
                         <form id="gpkg-import-form" enctype="multipart/form-data">
                             <div class="row">

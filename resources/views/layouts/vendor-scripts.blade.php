@@ -46,6 +46,32 @@
     }
 </script>
 <script>
+    function sentinelScrollToFormTarget(target, block) {
+        if (!target) {
+            return;
+        }
+
+        target.scrollIntoView({ behavior: 'smooth', block: block || 'start' });
+    }
+
+    function sentinelShowTabForElement(element) {
+        var tabPane = element ? element.closest('.tab-pane') : null;
+        if (!tabPane || !window.bootstrap) {
+            return;
+        }
+
+        var tabTrigger = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]')).find(function (trigger) {
+            return trigger.dataset.bsTarget === '#' + tabPane.id || trigger.getAttribute('href') === '#' + tabPane.id;
+        });
+        if (tabTrigger) {
+            bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+        }
+    }
+
+    function sentinelShouldScrollCollapse(target) {
+        return Boolean(target && target.querySelector('form'));
+    }
+
     document.addEventListener('click', function (event) {
         var button = event.target.closest('[data-edit-form]');
         if (!button) {
@@ -59,18 +85,11 @@
 
         event.preventDefault();
 
-        var tabPane = form.closest('.tab-pane');
-        if (tabPane && window.bootstrap) {
-            var tabTrigger = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]')).find(function (trigger) {
-                return trigger.dataset.bsTarget === '#' + tabPane.id;
-            });
-            if (tabTrigger) {
-                bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
-            }
-        }
+        sentinelShowTabForElement(form);
 
         var collapse = form.closest('.collapse');
         if (collapse && window.bootstrap) {
+            collapse.dataset.autoScrollOnShow = '1';
             bootstrap.Collapse.getOrCreateInstance(collapse, { toggle: false }).show();
         }
 
@@ -140,18 +159,59 @@
             });
         });
 
-        form.classList.add('border', 'border-primary', 'rounded', 'p-2');
-
         setTimeout(function () {
-            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            sentinelScrollToFormTarget(form, 'start');
         }, 200);
+    });
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-bs-toggle="collapse"][data-bs-target]');
+        if (!button) {
+            return;
+        }
+
+        var label = (button.textContent || '').trim();
+        if (!/(Tambah|Import|Add)/i.test(label)) {
+            return;
+        }
+
+        var target = document.querySelector(button.getAttribute('data-bs-target'));
+        if (!target) {
+            return;
+        }
+
+        sentinelShowTabForElement(target);
+        if (sentinelShouldScrollCollapse(target)) {
+            target.dataset.autoScrollOnShow = '1';
+        }
 
         setTimeout(function () {
-            form.classList.remove('border', 'border-primary', 'rounded', 'p-2');
-        }, 1800);
+            if (target.classList.contains('show')) {
+                sentinelScrollToFormTarget(target, 'start');
+            }
+        }, 260);
+    });
+
+    document.addEventListener('shown.bs.collapse', function (event) {
+        var target = event.target;
+        if (!sentinelShouldScrollCollapse(target)) {
+            return;
+        }
+
+        delete target.dataset.autoScrollOnShow;
+        setTimeout(function () {
+            sentinelScrollToFormTarget(target, 'start');
+        }, 80);
     });
 
     document.addEventListener('DOMContentLoaded', function () {
+        if (window.location.hash && window.bootstrap) {
+            var hashTabTrigger = document.querySelector('[data-bs-toggle="tab"][href="' + window.location.hash + '"], [data-bs-toggle="tab"][data-bs-target="' + window.location.hash + '"]');
+            if (hashTabTrigger) {
+                bootstrap.Tab.getOrCreateInstance(hashTabTrigger).show();
+            }
+        }
+
         var openCollapse = document.querySelector('.tab-pane:not(.active) .collapse.show');
         var tabPane = openCollapse ? openCollapse.closest('.tab-pane') : null;
         if (!tabPane || !window.bootstrap) {
@@ -163,6 +223,14 @@
         });
         if (tabTrigger) {
             bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+        }
+    });
+
+    document.addEventListener('shown.bs.tab', function (event) {
+        var target = event.target;
+        var hash = target.dataset.bsTarget || target.getAttribute('href');
+        if (hash && hash.charAt(0) === '#' && window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', hash);
         }
     });
 </script>

@@ -29,5 +29,23 @@
 
 @yield('css')
 
+<style id="sentinel-card-surface">
+    .card,
+    .card.border,
+    .card[class*="border"] {
+        border: 0 !important;
+        box-shadow: 0 6px 18px rgba(18, 38, 63, 0.07) !important;
+    }
+
+    .tab-content:focus,
+    .tab-content:focus-visible,
+    .tab-content > .tab-pane:focus,
+    .tab-content > .tab-pane:focus-visible,
+    .collapse:focus,
+    .collapse:focus-visible {
+        outline: 0 !important;
+    }
+</style>
+
 <!-- App js -->
 <script src="{{ asset('build/js/plugin.js') }}?v={{ filemtime(public_path('build/js/plugin.js')) }}"></script>
