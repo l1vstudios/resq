@@ -1,25 +1,36 @@
 <style>
-    .map-monitor-panel { position: absolute; z-index: 1000; left: 16px; right: 16px; bottom: 26px; color: #24334a; background: rgba(255,255,255,.97); border: 1px solid #dde5ee; border-radius: 14px; box-shadow: 0 8px 32px rgba(18,38,63,.18); font: 13px/1.5 system-ui, sans-serif; }
+    .map-monitor-panel {
+        position: absolute; z-index: 1000; left: 16px; right: 16px; bottom: 26px;
+        color: #24334a;
+        background: linear-gradient(135deg, rgba(255,255,255,.8), rgba(235,244,255,.64));
+        -webkit-backdrop-filter: blur(24px) saturate(165%);
+        backdrop-filter: blur(24px) saturate(165%);
+        border: 1px solid rgba(255,255,255,.8); border-radius: 18px;
+        box-shadow: 0 12px 40px rgba(18,38,63,.18), inset 0 1px 0 rgba(255,255,255,.9);
+        font: 13px/1.5 system-ui, sans-serif;
+    }
     .monitor-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; padding: 12px 16px; }
     .monitor-header h2 { display: inline; font-size: 15px; font-weight: 700; margin: 0 10px 0 0; }
     .monitor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    .monitor-actions button { border: 1px solid #d5deea; border-radius: 7px; background: #fff; color: #25334b; padding: 6px 10px; font: inherit; font-weight: 600; }
+    .monitor-actions button { border: 1px solid rgba(255,255,255,.85); border-radius: 9px; background: rgba(255,255,255,.65); color: #25334b; padding: 6px 10px; font: inherit; font-weight: 600; box-shadow: 0 2px 6px rgba(18,38,63,.05), inset 0 1px 0 rgba(255,255,255,.8); }
+    .monitor-actions button:hover { background: rgba(255,255,255,.9); }
     .monitor-actions button:focus-visible { outline: 2px solid #556ee6; outline-offset: 2px; }
-    .monitor-actions .siren-button { color: #b42318; border-color: #f2b7b2; background: #fff5f4; }
-    .monitor-actions .siren-active { color: #fff; background: #c9362b; border-color: #c9362b; }
-    .monitor-body { border-top: 1px solid #e7ecf2; }
+    .monitor-actions .siren-button { color: #a51e17; border-color: rgba(242,183,178,.8); background: rgba(255,240,238,.8); }
+    .monitor-actions .siren-button:hover { background: rgba(255,229,225,.95); }
+    .monitor-actions .siren-active, .monitor-actions .siren-active:hover { color: #fff; background: #c9362b; border-color: #c9362b; }
+    .monitor-body { border-top: 1px solid rgba(255,255,255,.6); }
     .monitor-body[hidden] { display: none; }
-    .monitor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
-    .monitor-section { min-width: 0; padding: 12px 16px; }
-    .monitor-section + .monitor-section { border-left: 1px solid #e7ecf2; }
+    .monitor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; padding: 12px; }
+    .monitor-section { min-width: 0; padding: 12px 16px; background: rgba(255,255,255,.38); border: 1px solid rgba(255,255,255,.7); border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.55); }
     .monitor-section-title { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 4px; margin-bottom: 8px; }
     .monitor-section-title h3 { margin: 0; font-size: 13px; font-weight: 700; }
-    .monitor-muted { color: #68768a; font-size: 11px; }
-    .monitor-scroll { overflow: auto; max-height: min(27vh, 245px); overscroll-behavior: contain; }
+    .monitor-muted { color: #526177; font-size: 11px; }
+    .monitor-scroll { overflow: auto; max-height: min(27vh, 245px); overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(82,97,119,.35) transparent; }
     .monitor-sensors { width: 100%; border-collapse: collapse; }
-    .monitor-sensors th { position: sticky; top: 0; background: #f6f8fb; color: #68768a; font-size: 11px; font-weight: 600; text-align: left; }
-    .monitor-sensors td, .monitor-sensors th { padding: 8px; border-bottom: 1px solid #edf0f4; vertical-align: top; }
-    .monitor-sensors small, .monitor-tde-card > small { display: block; color: #68768a; font-size: 11px; margin-top: 3px; }
+    .monitor-sensors th { position: sticky; z-index: 1; top: 0; background: rgba(245,249,255,.82); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: #526177; font-size: 11px; font-weight: 600; text-align: left; }
+    .monitor-sensors td, .monitor-sensors th { padding: 8px; border-bottom: 1px solid rgba(115,139,168,.15); vertical-align: top; }
+    .monitor-sensors tbody tr:hover { background: rgba(255,255,255,.35); }
+    .monitor-sensors small, .monitor-tde-card > small { display: block; color: #526177; font-size: 11px; margin-top: 3px; }
     .monitor-value { font-size: 17px; white-space: nowrap; }
     .monitor-badge { display: inline-block; border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 700; white-space: nowrap; }
     .tone-normal { color: #067647; background: #dcfae6; }
@@ -28,13 +39,13 @@
     .tone-awas { color: #b42318; background: #fee4e2; }
     .tone-info { color: #1849a9; background: #eaf2ff; }
     .tone-unknown { color: #475467; background: #eaecf0; }
-    .monitor-empty { color: #68768a; text-align: center; padding: 20px 8px; margin: 0; }
-    .monitor-tde-card { border: 1px solid #e6ebf1; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+    .monitor-empty { color: #526177; text-align: center; padding: 20px 8px; margin: 0; }
+    .monitor-tde-card { background: linear-gradient(135deg, rgba(255,255,255,.6), rgba(255,255,255,.25)); border: 1px solid rgba(255,255,255,.8); border-radius: 10px; padding: 10px; margin-bottom: 8px; box-shadow: 0 3px 12px rgba(18,38,63,.04), inset 0 1px 0 rgba(255,255,255,.75); }
     .monitor-tde-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px; }
     .monitor-tde-card h3 { font-size: 15px; font-weight: 700; margin: 8px 0 4px; }
     .monitor-tde-card p { font-size: 12px; margin: 0 0 8px; }
     .monitor-tde-card dl { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 8px 0 0; }
-    .monitor-tde-card dt { font-size: 10px; color: #68768a; font-weight: 500; }
+    .monitor-tde-card dt { font-size: 10px; color: #526177; font-weight: 500; }
     .monitor-tde-card dd { font-size: 12px; margin: 0; font-weight: 600; }
     @media (max-width: 767px) {
         .map-monitor-panel { left: 8px; right: 8px; bottom: 24px; }
@@ -42,10 +53,17 @@
         .monitor-actions { gap: 5px; }
         .monitor-actions > small { flex-basis: 100%; }
         .monitor-body { max-height: 35vh; overflow: auto; overscroll-behavior: contain; }
-        .monitor-grid { grid-template-columns: 1fr; }
+        .monitor-grid { grid-template-columns: 1fr; gap: 8px; padding: 8px; }
         .monitor-section { padding: 10px; }
-        .monitor-section + .monitor-section { border-left: 0; border-top: 1px solid #e7ecf2; }
         .monitor-scroll { max-height: 23vh; }
+    }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .map-monitor-panel { background: rgba(245,249,255,.96); }
+        .monitor-sensors th { background: #f5f9ff; }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+        .map-monitor-panel { background: #f5f9ff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+        .monitor-sensors th { background: #f5f9ff; -webkit-backdrop-filter: none; backdrop-filter: none; }
     }
 </style>
 <section id="map-monitor-panel" class="map-monitor-panel" aria-label="Informasi monitoring project">
