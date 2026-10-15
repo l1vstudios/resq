@@ -3,126 +3,85 @@
 namespace App\Http\Controllers;
 
 use App\Models\GeospatialWorkspace;
-use App\Models\MonitoringStation;
 use App\Models\Project;
 use App\Models\Province;
 use App\Models\Sensor;
 use App\Models\TelemetryReading;
 use App\Models\WarningStation;
+use App\Services\AuthorizationService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function index(): View
+    public function __construct(private readonly AuthorizationService $authorization)
     {
-        if (! Schema::hasTable('resq_projects')) {
-            $clusters = collect(config('resq_dummy.clusters'));
-            $sensors = collect(config('resq_dummy.sensors'));
-            $monitoringStations = collect(config('resq_dummy.monitoring_stations'));
-            $warningStations = collect(config('resq_dummy.warning_stations'));
+    }
 
-            $mapClusters = $this->dummyMapClusters($clusters);
-            $mapSensors = $this->dummyMapSensors($sensors, $monitoringStations, $clusters);
-            $mapWarningStations = $this->dummyMapWarningStations($warningStations, $sensors, $clusters);
-            $mapPayload = [
-                'clusters' => $mapClusters,
-                'sensors' => $mapSensors,
-                'warningStations' => $mapWarningStations,
-            ];
-
-            return view('modules.dashboard.index', [
-                'dashboardTotals' => [
-                    'projects' => 1,
-                    'workspaces' => $clusters->count(),
-                    'monitoring_stations' => $monitoringStations->count(),
-                    'warning_stations' => $warningStations->count(),
-                    'sensors' => $sensors->count(),
-                    'provinces' => $clusters->pluck('province')->unique()->count(),
-                ],
-                'coverageRows' => $clusters->map(function ($cluster) use ($sensors) {
-                    return [
-                        'province' => $cluster['province'],
-                        'workspaces' => 1,
-                        'sensors' => $sensors->where('cluster_id', $cluster['id'])->count(),
-                        'status' => $cluster['status'],
-                    ];
-                })->values(),
-                'mapClusters' => $mapClusters,
-                'mapSensors' => $mapSensors,
-                'mapWarningStations' => $mapWarningStations,
-                'dashboardAlertActive' => $this->payloadHasActiveAlert($mapPayload),
-            ]);
-        }
-
-        $coverageRows = GeospatialWorkspace::query()
-            ->selectRaw('province, COUNT(*) as workspaces, MAX(status) as status')
-            ->groupBy('province')
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'province' => $row->province,
-                    'workspaces' => $row->workspaces,
-                    'sensors' => Sensor::whereHas('workspace', fn ($query) => $query->where('province', $row->province))->count(),
-                    'status' => $row->status,
-                ];
-            });
-
-        $mapClusters = $this->mapClusters();
-        $mapSensors = $this->mapSensors();
-        $mapWarningStations = $this->mapWarningStations();
-        $mapPayload = [
-            'clusters' => $mapClusters,
-            'sensors' => $mapSensors,
-            'warningStations' => $mapWarningStations,
-        ];
-
+    public function index(Request $request): View
+    {
         return view('modules.dashboard.index', [
-            'dashboardTotals' => [
-                'projects' => Project::count(),
-                'workspaces' => GeospatialWorkspace::count(),
-                'monitoring_stations' => MonitoringStation::count(),
-                'warning_stations' => WarningStation::count(),
-                'sensors' => Sensor::count(),
-                'provinces' => GeospatialWorkspace::distinct('province')->count('province'),
-            ],
-            'coverageRows' => $coverageRows,
-            'mapClusters' => $mapClusters,
-            'mapSensors' => $mapSensors,
-            'mapWarningStations' => $mapWarningStations,
-            'dashboardAlertActive' => $this->payloadHasActiveAlert($mapPayload),
+            'projects' => $this->accessibleProjects($request),
         ]);
     }
 
-    public function mapData(): JsonResponse
+    public function projectMap(Request $request, Project $project): View
+    {
+        abort_unless($this->authorization->canAccessProject($request->user(), $project), 403);
+        $payload = $this->mapPayload([$project->id]);
+
+        return view('modules.dashboard.map', [
+            'project' => $project,
+            'mapClusters' => $payload['clusters'],
+            'mapSensors' => $payload['sensors'],
+            'mapWarningStations' => $payload['warningStations'],
+            'dashboardAlertActive' => $payload['alert_active'],
+        ]);
+    }
+
+    public function projectMapData(Request $request, Project $project): JsonResponse
+    {
+        abort_unless($this->authorization->canAccessProject($request->user(), $project), 403);
+
+        return $this->noStoreJson($this->mapPayload([$project->id]));
+    }
+
+    public function mapData(Request $request): JsonResponse
+    {
+        return $this->noStoreJson($this->mapPayload($this->accessibleProjects($request)->modelKeys()));
+    }
+
+    private function accessibleProjects(Request $request): Collection
     {
         if (! Schema::hasTable('resq_projects')) {
-            $clusters = collect(config('resq_dummy.clusters'));
-            $sensors = collect(config('resq_dummy.sensors'));
-            $monitoringStations = collect(config('resq_dummy.monitoring_stations'));
-            $warningStations = collect(config('resq_dummy.warning_stations'));
-            $payload = [
-                'clusters' => $this->dummyMapClusters($clusters),
-                'sensors' => $this->dummyMapSensors($sensors, $monitoringStations, $clusters),
-                'warningStations' => $this->dummyMapWarningStations($warningStations, $sensors, $clusters),
-                'generated_at' => now()->toISOString(),
-            ];
-            $payload['alert_active'] = $this->payloadHasActiveAlert($payload);
-
-            return $this->noStoreJson($payload);
+            return new Collection();
         }
 
+        $query = Project::with(['client', 'workspaces'])
+            ->withCount(['workspaces', 'monitoringStations', 'warningStations'])
+            ->orderBy('name');
+        $this->authorization->scopeProjectsForUser($request->user(), $query);
+
+        return $query->get()
+            ->filter(fn (Project $project) => $this->authorization->canAccessProject($request->user(), $project))
+            ->values();
+    }
+
+    private function mapPayload(array $projectIds): array
+    {
         $payload = [
-            'clusters' => $this->mapClusters(),
-            'sensors' => $this->mapSensors(),
-            'warningStations' => $this->mapWarningStations(),
+            'clusters' => $projectIds ? $this->mapClusters($projectIds) : collect(),
+            'sensors' => $projectIds ? $this->mapSensors($projectIds) : collect(),
+            'warningStations' => $projectIds ? $this->mapWarningStations($projectIds) : collect(),
             'generated_at' => now()->toISOString(),
         ];
         $payload['alert_active'] = $this->payloadHasActiveAlert($payload);
 
-        return $this->noStoreJson($payload);
+        return $payload;
     }
 
     private function noStoreJson(array $payload): JsonResponse
@@ -152,11 +111,12 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function mapClusters()
+    private function mapClusters(array $projectIds)
     {
         $provinceCoordinates = $this->provinceCoordinates();
 
         return GeospatialWorkspace::with(['sensors'])->withCount(['sensors', 'warningStations'])
+            ->whereIn('project_id', $projectIds)
             ->get()
             ->map(function (GeospatialWorkspace $workspace) use ($provinceCoordinates) {
                 $fallback = $provinceCoordinates[$workspace->province] ?? ['lat' => null, 'lng' => null];
@@ -183,10 +143,16 @@ class DashboardController extends Controller
             ->values();
     }
 
-    private function mapSensors()
+    private function mapSensors(array $projectIds)
     {
         $provinceCoordinates = $this->provinceCoordinates();
-        $sensorModels = Sensor::with(['workspace', 'monitoringStation', 'warningStation'])->get();
+        $sensorModels = Sensor::with(['workspace', 'monitoringStation', 'warningStation'])
+            ->where(function ($query) use ($projectIds) {
+                $query->whereHas('workspace', fn ($workspace) => $workspace->whereIn('project_id', $projectIds))
+                    ->orWhereHas('monitoringStation', fn ($station) => $station->whereIn('project_id', $projectIds))
+                    ->orWhereHas('warningStation', fn ($station) => $station->whereIn('project_id', $projectIds));
+            })
+            ->get();
         $sensorIds = $sensorModels->pluck('id');
 
         // Optimized: only fetch the latest reading per sensor using a subquery
@@ -254,11 +220,12 @@ class DashboardController extends Controller
             ->values();
     }
 
-    private function mapWarningStations()
+    private function mapWarningStations(array $projectIds)
     {
         $provinceCoordinates = $this->provinceCoordinates();
 
         return WarningStation::with(['workspace', 'sensors'])
+            ->whereIn('project_id', $projectIds)
             ->get()
             ->map(function (WarningStation $station) use ($provinceCoordinates) {
                 $workspace = $station->workspace;
@@ -379,124 +346,4 @@ class DashboardController extends Controller
         return null;
     }
 
-    private function dummyMapClusters($clusters)
-    {
-        return collect($clusters)->map(function ($cluster) {
-            $coords = $this->dummyCoordinates($cluster['province'] ?? null, $cluster['id'] ?? null);
-
-            return [
-                'name' => $cluster['name'],
-                'province' => $cluster['province'],
-                'city' => $cluster['city'] ?? '-',
-                'hazard' => $cluster['hazard'] ?? '-',
-                'status' => $cluster['status'] ?? 'Normal',
-                'sensors' => 0,
-                'warnings' => ! empty($cluster['warning_station_id']) ? 1 : 0,
-                'lat' => $coords['lat'],
-                'lng' => $coords['lng'],
-            ];
-        })->values();
-    }
-
-    private function dummyMapSensors($sensors, $monitoringStations, $clusters)
-    {
-        $stations = collect($monitoringStations)->keyBy('id');
-        $clusterRows = collect($clusters)->keyBy('id');
-
-        return collect($sensors)->map(function ($sensor) use ($stations, $clusterRows) {
-            $station = $stations->get($sensor['monitoring_station_id']);
-            $cluster = $clusterRows->get($sensor['cluster_id']);
-            $coords = $this->coordinatesFromText($station['coordinate'] ?? null)
-                ?? $this->dummyCoordinates($cluster['province'] ?? null, $cluster['id'] ?? null);
-
-            return [
-                'name' => $sensor['id'],
-                'type' => $sensor['type'] ?? '-',
-                'parameter' => $sensor['parameter'] ?? '-',
-                'value' => $sensor['value'] ?? '-',
-                'threshold' => $sensor['threshold'] ?? '-',
-                'unit' => $sensor['unit'] ?? '',
-                'alert_level' => $sensor['alert_level'] ?? $sensor['status'] ?? 'Normal',
-                'station' => $sensor['monitoring_station_id'] ?? '-',
-                'warning_station' => $sensor['warning_station_id'] ?? '-',
-                'province' => $cluster['province'] ?? '-',
-                'city' => $cluster['city'] ?? '-',
-                'status' => $sensor['status'] ?? 'Normal',
-                'last_seen' => $sensor['last_seen'] ?? '-',
-                'threshold_exceeded' => $this->thresholdExceeded($sensor['value'] ?? null, $sensor['threshold'] ?? null),
-                'is_danger' => $this->isDangerStatus($sensor['status'] ?? null)
-                    || $this->thresholdExceeded($sensor['value'] ?? null, $sensor['threshold'] ?? null),
-                'lat' => $coords['lat'],
-                'lng' => $coords['lng'],
-            ];
-        })->values();
-    }
-
-    private function dummyMapWarningStations($warningStations, $sensors, $clusters)
-    {
-        $clusterRows = collect($clusters)->keyBy('id');
-        $sensorRows = collect($sensors)->groupBy('warning_station_id');
-
-        return collect($warningStations)->map(function ($station) use ($clusterRows, $sensorRows) {
-            $cluster = $clusterRows->get($station['cluster_id']);
-            $coords = $this->coordinatesFromText($station['coordinate'] ?? null)
-                ?? $this->dummyCoordinates($cluster['province'] ?? null, $cluster['id'] ?? null);
-            $dangerSensors = $sensorRows
-                ->get($station['id'], collect())
-                ->filter(fn ($sensor) => $this->isDangerStatus($sensor['status'] ?? null)
-                    || $this->thresholdExceeded($sensor['value'] ?? null, $sensor['threshold'] ?? null))
-                ->map(fn ($sensor) => [
-                    'name' => $sensor['id'],
-                    'parameter' => $sensor['parameter'] ?? '-',
-                    'value' => $sensor['value'] ?? '-',
-                    'threshold' => $sensor['threshold'] ?? '-',
-                    'alert_level' => $sensor['alert_level'] ?? $sensor['status'] ?? 'Normal',
-                    'status' => $sensor['status'] ?? 'Normal',
-                    'last_seen' => $sensor['last_seen'] ?? '-',
-                    'threshold_exceeded' => $this->thresholdExceeded($sensor['value'] ?? null, $sensor['threshold'] ?? null),
-                ])
-                ->values();
-
-            return [
-                'name' => $station['id'] . ' - ' . $station['name'],
-                'province' => $cluster['province'] ?? '-',
-                'city' => $cluster['city'] ?? '-',
-                'status' => $station['status'] ?? 'Normal',
-                'public_warning_enabled' => $station['public_warning_enabled'] ?? false,
-                'ack_response' => $station['ack_response'] ?? '-',
-                'danger_sensors' => $dangerSensors,
-                'is_danger' => $dangerSensors->isNotEmpty(),
-                'lat' => $coords['lat'],
-                'lng' => $coords['lng'],
-            ];
-        })->values();
-    }
-
-    private function dummyCoordinates(?string $province, ?string $id): array
-    {
-        $coordinates = [
-            'Sumatera Barat' => ['lat' => -0.9200, 'lng' => 100.3600],
-            'DKI Jakarta' => ['lat' => -6.1290, 'lng' => 106.8100],
-        ];
-
-        return $coordinates[$province] ?? ['lat' => -2.6, 'lng' => 118.0];
-    }
-
-    private function coordinatesFromText(?string $coordinate): ?array
-    {
-        if (empty($coordinate)) {
-            return null;
-        }
-
-        $parts = array_map('trim', explode(',', $coordinate));
-
-        if (count($parts) !== 2 || ! is_numeric($parts[0]) || ! is_numeric($parts[1])) {
-            return null;
-        }
-
-        return [
-            'lat' => (float) $parts[0],
-            'lng' => (float) $parts[1],
-        ];
-    }
 }

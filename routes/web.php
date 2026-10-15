@@ -42,6 +42,8 @@ Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/projects/{project}/map', [DashboardController::class, 'projectMap'])->name('dashboard.projects.map');
+    Route::get('/dashboard/projects/{project}/map-data', [DashboardController::class, 'projectMapData'])->name('dashboard.projects.map-data');
     Route::get('/tde-forecast', [TdeForecastController::class, 'index'])->name('tde-forecast.index');
     Route::get('/tde-forecast/data', [TdeForecastController::class, 'data'])->name('tde-forecast.data');
     Route::post('/tde-forecast/attach-matrix', [TdeForecastController::class, 'attachMatrix'])->name('tde-forecast.attach-matrix');
