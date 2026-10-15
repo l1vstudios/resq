@@ -17,8 +17,6 @@
     .monitor-actions button:focus-visible { outline: 2px solid #556ee6; outline-offset: 2px; }
     .monitor-actions .siren-button {
         color: #fff; background: #171717; border: 1px solid #171717;
-        border-radius: 18px; padding: 12px 20px; min-height: 50px;
-        font-size: 18px; line-height: 1.3; font-weight: 700;
         box-shadow: inset 0 0 0 1px rgba(255,255,255,.8), inset 0 2px 0 rgba(255,255,255,.8), 0 4px 12px rgba(18,38,63,.12);
     }
     .monitor-actions .siren-button:hover { background: #292929; border-color: #292929; }
@@ -58,7 +56,6 @@
         .map-monitor-panel { left: 8px; right: 8px; bottom: 24px; }
         .monitor-header { padding: 8px 10px; gap: 6px; }
         .monitor-actions { gap: 5px; }
-        .monitor-actions .siren-button { padding: 10px 16px; min-height: 44px; font-size: 16px; }
         .monitor-actions > small { flex-basis: 100%; }
         .monitor-body { max-height: 35vh; overflow: auto; overscroll-behavior: contain; }
         .monitor-grid { grid-template-columns: 1fr; gap: 8px; padding: 8px; }
