@@ -9,8 +9,7 @@
     .dashboard-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
     .dashboard-search { grid-column: span 2; }
     .dashboard-filter-grid .form-label { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
-    .dashboard-filter-actions { display: flex; gap: 8px; }
-    .dashboard-filter-actions .btn { flex: 1; }
+    .dashboard-filter-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
     .dashboard-project-grid { min-width: 960px; margin: 0; }
     .dashboard-project-grid thead th { background: #f6f8fb; color: #68768a; font-size: 11px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; padding: 14px 16px; border-bottom: 1px solid #e5eaf0; }
     .dashboard-project-grid tbody td { padding: 16px; border-color: #edf0f4; }
@@ -73,32 +72,6 @@
                     @endforeach
                 </select>
             </div>
-            <div>
-                <label for="project-status" class="form-label">Status Project</label>
-                <select name="status" id="project-status" class="form-select">
-                    <option value="">Semua status</option>
-                    @foreach ($statuses as $status)
-                        <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ $status }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label for="project-client" class="form-label">Klien</label>
-                <select name="client_id" id="project-client" class="form-select">
-                    <option value="">Semua klien</option>
-                    @foreach ($clients as $clientId => $clientName)
-                        <option value="{{ $clientId }}" @selected((string) ($filters['client_id'] ?? '') === (string) $clientId)>{{ $clientName }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label for="project-per-page" class="form-label">Baris per Halaman</label>
-                <select name="per_page" id="project-per-page" class="form-select">
-                    @foreach ([10, 25, 50] as $size)
-                        <option value="{{ $size }}" @selected($projects->perPage() === $size)>{{ $size }} baris</option>
-                    @endforeach
-                </select>
-            </div>
             <div class="dashboard-filter-actions">
                 <button type="submit" class="btn btn-primary"><i class="bx bx-filter-alt me-1" aria-hidden="true"></i>Terapkan</button>
                 <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Reset</a>
@@ -146,7 +119,17 @@
         </table>
     </div>
     <div class="dashboard-grid-footer">
-        <small class="text-muted">Menampilkan {{ $projects->firstItem() ?? 0 }}–{{ $projects->lastItem() ?? 0 }} dari {{ $projects->total() }} project</small>
+        <div class="d-flex align-items-center flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <label for="project-per-page" class="text-muted small mb-0 text-nowrap">Baris per halaman</label>
+                <select name="per_page" id="project-per-page" form="dashboard-project-filters" class="form-select form-select-sm w-auto">
+                    @foreach ([10, 25, 50] as $size)
+                        <option value="{{ $size }}" @selected($projects->perPage() === $size)>{{ $size }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <small class="text-muted">Menampilkan {{ $projects->firstItem() ?? 0 }}–{{ $projects->lastItem() ?? 0 }} dari {{ $projects->total() }} project</small>
+        </div>
         {{ $projects->onEachSide(1)->links('pagination::bootstrap-5') }}
     </div>
 </div>
@@ -155,6 +138,9 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('project-per-page').addEventListener('change', function () {
+            document.getElementById('dashboard-project-filters').requestSubmit();
+        });
         document.getElementById('project-province').addEventListener('change', function () {
             document.getElementById('project-city').value = '';
             document.getElementById('dashboard-project-filters').requestSubmit();

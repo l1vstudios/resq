@@ -66,7 +66,7 @@ class DashboardProjectMapTest extends TestCase
         Project::create(['project_code' => 'OTHER', 'name' => 'Other Project', 'status' => 'Inactive']);
 
         $response = $this->actingAs($user)->get(route('dashboard', [
-            'q' => 'grid', 'status' => 'Active', 'per_page' => 10, 'page' => 2,
+            'q' => 'grid', 'per_page' => 10, 'page' => 2,
         ]))->assertOk()->assertSee('Grid Project 11')->assertSee('Grid Project 12')
             ->assertDontSee('Grid Project 01')->assertDontSee('Other Project');
 
@@ -75,10 +75,10 @@ class DashboardProjectMapTest extends TestCase
         $this->assertSame(2, $projects->count());
         $this->assertSame(11, $projects->firstItem());
         parse_str(parse_url($projects->previousPageUrl(), PHP_URL_QUERY), $query);
-        $this->assertSame(['q' => 'grid', 'status' => 'Active', 'per_page' => '10', 'page' => '1'], $query);
+        $this->assertSame(['q' => 'grid', 'per_page' => '10', 'page' => '1'], $query);
     }
 
-    public function test_dashboard_combines_search_region_status_and_client_filters(): void
+    public function test_dashboard_combines_search_and_region_filters(): void
     {
         $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
         $client = Client::create(['client_code' => 'FILTER-CLIENT', 'name' => 'Filter Client']);
@@ -91,7 +91,7 @@ class DashboardProjectMapTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('dashboard', [
             'q' => 'prj-filter', 'province' => 'DKI Jakarta', 'city' => 'Jakarta Utara',
-            'status' => 'Active', 'client_id' => $client->id, 'per_page' => 25,
+            'per_page' => 25,
         ]))->assertOk();
         $this->assertSame([$target->id], $response->viewData('projects')->getCollection()->modelKeys());
         $this->assertSame(25, $response->viewData('projects')->perPage());

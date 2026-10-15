@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Client;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
 use App\Models\Project;
@@ -35,16 +34,14 @@ class DashboardController extends Controller
             'q' => ['nullable', 'string', 'max:150'],
             'province' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'string', 'max:100'],
-            'client_id' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', Rule::in([10, 25, 50])],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
         $perPage = (int) ($filters['per_page'] ?? 10);
         $projects = new LengthAwarePaginator([], 0, $perPage, $filters['page'] ?? 1, [
-            'path' => $request->url(), 'query' => $request->query(),
+            'path' => $request->url(), 'query' => $filters,
         ]);
-        $provinces = $cities = $statuses = $clients = collect();
+        $provinces = $cities = collect();
         $totalProjects = 0;
 
         if (Schema::hasTable('resq_projects')) {
@@ -55,10 +52,6 @@ class DashboardController extends Controller
                 ->distinct()->orderBy('province')->pluck('province');
             $cities = (clone $workspaces)->when($filters['province'] ?? null, fn ($q, $province) => $q->where('province', $province))
                 ->whereNotNull('city')->where('city', '!=', '')->distinct()->orderBy('city')->pluck('city');
-            $statuses = (clone $query)->whereNotNull('status')->where('status', '!=', '')
-                ->distinct()->orderBy('status')->pluck('status');
-            $clients = Client::whereIn('id', (clone $query)->select('client_id'))->orderBy('name')->pluck('name', 'id');
-
             $search = trim($filters['q'] ?? '');
             if ($search !== '') {
                 $query->where(function (Builder $q) use ($search) {
@@ -73,10 +66,8 @@ class DashboardController extends Controller
                         ->when($filters['city'] ?? null, fn ($q, $city) => $q->where('city', $city));
                 });
             }
-            $projects = $query->when($filters['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
-                ->when($filters['client_id'] ?? null, fn ($q, $clientId) => $q->where('client_id', $clientId))
-                ->with(['client', 'workspaces'])->withCount(['workspaces', 'monitoringStations', 'warningStations'])
-                ->orderBy('name')->orderBy('id')->paginate($perPage)->withQueryString();
+            $projects = $query->with(['client', 'workspaces'])->withCount(['workspaces', 'monitoringStations', 'warningStations'])
+                ->orderBy('name')->orderBy('id')->paginate($perPage)->appends($filters);
         }
 
         return view('modules.dashboard.index', [
@@ -84,8 +75,6 @@ class DashboardController extends Controller
             'filters' => $filters,
             'provinces' => $provinces,
             'cities' => $cities,
-            'statuses' => $statuses,
-            'clients' => $clients,
             'totalProjects' => $totalProjects,
         ]);
     }
