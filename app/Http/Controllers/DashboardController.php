@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
 use App\Models\Project;
@@ -13,11 +14,13 @@ use App\Models\WarningStation;
 use App\Services\AuthorizationService;
 use App\Services\TrendDiagnosisAnalyticalFunctionRunner;
 use App\Services\TrendDiagnosisEvaluator;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -28,8 +31,62 @@ class DashboardController extends Controller
 
     public function index(Request $request): View
     {
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:150'],
+            'province' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', 'string', 'max:100'],
+            'client_id' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', Rule::in([10, 25, 50])],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $perPage = (int) ($filters['per_page'] ?? 10);
+        $projects = new LengthAwarePaginator([], 0, $perPage, $filters['page'] ?? 1, [
+            'path' => $request->url(), 'query' => $request->query(),
+        ]);
+        $provinces = $cities = $statuses = $clients = collect();
+        $totalProjects = 0;
+
+        if (Schema::hasTable('resq_projects')) {
+            $query = $this->accessibleProjectQuery($request);
+            $totalProjects = (clone $query)->count();
+            $workspaces = GeospatialWorkspace::whereIn('project_id', (clone $query)->select('resq_projects.id'));
+            $provinces = (clone $workspaces)->whereNotNull('province')->where('province', '!=', '')
+                ->distinct()->orderBy('province')->pluck('province');
+            $cities = (clone $workspaces)->when($filters['province'] ?? null, fn ($q, $province) => $q->where('province', $province))
+                ->whereNotNull('city')->where('city', '!=', '')->distinct()->orderBy('city')->pluck('city');
+            $statuses = (clone $query)->whereNotNull('status')->where('status', '!=', '')
+                ->distinct()->orderBy('status')->pluck('status');
+            $clients = Client::whereIn('id', (clone $query)->select('client_id'))->orderBy('name')->pluck('name', 'id');
+
+            $search = trim($filters['q'] ?? '');
+            if ($search !== '') {
+                $query->where(function (Builder $q) use ($search) {
+                    $q->whereLike('name', '%'.$search.'%')->orWhereLike('project_code', '%'.$search.'%')
+                        ->orWhereLike('owner', '%'.$search.'%')
+                        ->orWhereHas('client', fn ($client) => $client->whereLike('name', '%'.$search.'%'));
+                });
+            }
+            if (! empty($filters['province']) || ! empty($filters['city'])) {
+                $query->whereHas('workspaces', function (Builder $workspace) use ($filters) {
+                    $workspace->when($filters['province'] ?? null, fn ($q, $province) => $q->where('province', $province))
+                        ->when($filters['city'] ?? null, fn ($q, $city) => $q->where('city', $city));
+                });
+            }
+            $projects = $query->when($filters['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
+                ->when($filters['client_id'] ?? null, fn ($q, $clientId) => $q->where('client_id', $clientId))
+                ->with(['client', 'workspaces'])->withCount(['workspaces', 'monitoringStations', 'warningStations'])
+                ->orderBy('name')->orderBy('id')->paginate($perPage)->withQueryString();
+        }
+
         return view('modules.dashboard.index', [
-            'projects' => $this->accessibleProjects($request),
+            'projects' => $projects,
+            'filters' => $filters,
+            'provinces' => $provinces,
+            'cities' => $cities,
+            'statuses' => $statuses,
+            'clients' => $clients,
+            'totalProjects' => $totalProjects,
         ]);
     }
 
@@ -81,23 +138,27 @@ class DashboardController extends Controller
 
     public function mapData(Request $request): JsonResponse
     {
-        return $this->noStoreJson($this->mapPayload($this->accessibleProjects($request)->modelKeys()));
+        $projectIds = Schema::hasTable('resq_projects')
+            ? $this->accessibleProjectQuery($request)->pluck('id')->all()
+            : [];
+
+        return $this->noStoreJson($this->mapPayload($projectIds));
     }
 
-    private function accessibleProjects(Request $request): Collection
+    private function accessibleProjectQuery(Request $request): Builder
     {
-        if (! Schema::hasTable('resq_projects')) {
-            return new Collection();
+        $user = $request->user();
+        $query = Project::query();
+        $this->authorization->scopeProjectsForUser($user, $query);
+        if ($user->isClientUser()) {
+            if (! $user->client_id) {
+                $query->whereRaw('1=0');
+            } elseif (! $user->hasRole('ClientAdmin')) {
+                $query->whereHas('users', fn ($users) => $users->where('users.id', $user->id));
+            }
         }
 
-        $query = Project::with(['client', 'workspaces'])
-            ->withCount(['workspaces', 'monitoringStations', 'warningStations'])
-            ->orderBy('name');
-        $this->authorization->scopeProjectsForUser($request->user(), $query);
-
-        return $query->get()
-            ->filter(fn (Project $project) => $this->authorization->canAccessProject($request->user(), $project))
-            ->values();
+        return $query;
     }
 
     private function mapPayload(array $projectIds): array

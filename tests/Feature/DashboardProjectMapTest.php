@@ -28,7 +28,7 @@ class DashboardProjectMapTest extends TestCase
         ];
     }
 
-    public function test_dashboard_lists_project_cards_without_loading_a_map(): void
+    public function test_dashboard_lists_projects_in_a_grid_without_loading_a_map(): void
     {
         $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
         $project = Project::create(['project_code' => 'PRJ-CARD', 'name' => 'Project Card', 'status' => 'Active']);
@@ -37,6 +37,7 @@ class DashboardProjectMapTest extends TestCase
             $this->actingAs($user)->get(route($route))
                 ->assertOk()
                 ->assertSee('Daftar Project')
+                ->assertSee('id="dashboard-project-grid"', false)
                 ->assertSee($project->name)
                 ->assertSee(route('dashboard.projects.map', $project), false)
                 ->assertDontSee('id="sensor-cluster-map"', false)
@@ -50,6 +51,67 @@ class DashboardProjectMapTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Belum ada project');
+    }
+
+    public function test_dashboard_paginates_filtered_results_and_preserves_filters_in_page_links(): void
+    {
+        $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
+        foreach (range(1, 12) as $number) {
+            Project::create([
+                'project_code' => 'GRID-'.str_pad($number, 2, '0', STR_PAD_LEFT),
+                'name' => 'Grid Project '.str_pad($number, 2, '0', STR_PAD_LEFT),
+                'status' => 'Active',
+            ]);
+        }
+        Project::create(['project_code' => 'OTHER', 'name' => 'Other Project', 'status' => 'Inactive']);
+
+        $response = $this->actingAs($user)->get(route('dashboard', [
+            'q' => 'grid', 'status' => 'Active', 'per_page' => 10, 'page' => 2,
+        ]))->assertOk()->assertSee('Grid Project 11')->assertSee('Grid Project 12')
+            ->assertDontSee('Grid Project 01')->assertDontSee('Other Project');
+
+        $projects = $response->viewData('projects');
+        $this->assertSame(12, $projects->total());
+        $this->assertSame(2, $projects->count());
+        $this->assertSame(11, $projects->firstItem());
+        parse_str(parse_url($projects->previousPageUrl(), PHP_URL_QUERY), $query);
+        $this->assertSame(['q' => 'grid', 'status' => 'Active', 'per_page' => '10', 'page' => '1'], $query);
+    }
+
+    public function test_dashboard_combines_search_region_status_and_client_filters(): void
+    {
+        $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
+        $client = Client::create(['client_code' => 'FILTER-CLIENT', 'name' => 'Filter Client']);
+        $target = $this->projectWithLocations('FILTER');
+        $target->update(['client_id' => $client->id, 'status' => 'Active']);
+        $target->workspaces()->update(['city' => 'Jakarta Utara']);
+        $other = $this->projectWithLocations('FILTER-OTHER');
+        $other->update(['client_id' => $client->id, 'status' => 'Inactive']);
+        $other->workspaces()->update(['city' => 'Jakarta Selatan']);
+
+        $response = $this->actingAs($user)->get(route('dashboard', [
+            'q' => 'prj-filter', 'province' => 'DKI Jakarta', 'city' => 'Jakarta Utara',
+            'status' => 'Active', 'client_id' => $client->id, 'per_page' => 25,
+        ]))->assertOk();
+        $this->assertSame([$target->id], $response->viewData('projects')->getCollection()->modelKeys());
+        $this->assertSame(25, $response->viewData('projects')->perPage());
+        $this->assertSame(['Jakarta Selatan', 'Jakarta Utara'], $response->viewData('cities')->all());
+
+        $this->get(route('dashboard', ['q' => 'missing project']))->assertOk()
+            ->assertSee('Tidak ada project yang sesuai filter');
+    }
+
+    public function test_province_and_city_must_belong_to_the_same_workspace(): void
+    {
+        $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
+        $project = $this->projectWithLocations('REGION');
+        $project->workspaces()->update(['city' => 'Jakarta Utara']);
+        $project->workspaces()->create(['workspace_code' => 'OTHER-REGION', 'name' => 'Bogor Workspace', 'province' => 'Jawa Barat', 'city' => 'Bogor']);
+
+        $response = $this->actingAs($user)->get(route('dashboard', ['province' => 'DKI Jakarta', 'city' => 'Bogor']))
+            ->assertOk()->assertSee('Tidak ada project yang sesuai filter');
+        $this->assertSame(0, $response->viewData('projects')->total());
+        $this->assertSame(['Jakarta Utara'], $response->viewData('cities')->all());
     }
 
     public function test_project_opens_a_standalone_map_with_only_its_own_data(): void
@@ -93,12 +155,16 @@ class DashboardProjectMapTest extends TestCase
         $unassigned = Project::create(['project_code' => 'UNASSIGNED', 'name' => 'Unassigned Project', 'client_id' => $client->id]);
         $foreign = Project::create(['project_code' => 'FOREIGN', 'name' => 'Foreign Project', 'client_id' => $otherClient->id]);
         $user->projects()->attach($assigned->id, ['access_level' => 'viewer']);
+        $assigned->workspaces()->create(['workspace_code' => 'VISIBLE', 'name' => 'Visible', 'province' => 'Visible Province']);
+        $unassigned->workspaces()->create(['workspace_code' => 'PRIVATE', 'name' => 'Private', 'province' => 'Private Province']);
 
         $this->actingAs($user)->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Assigned Project')
             ->assertDontSee('Unassigned Project')
-            ->assertDontSee('Foreign Project');
+            ->assertDontSee('Foreign Project')
+            ->assertSee('Visible Province')->assertDontSee('Private Province')
+            ->assertViewHas('totalProjects', 1);
 
         $this->get(route('dashboard.projects.map', $assigned))->assertOk();
         foreach ([$unassigned, $foreign] as $project) {
