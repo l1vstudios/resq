@@ -122,6 +122,7 @@
                     $projectSetupMenuActive = request()->routeIs('projects.*')
                         || request()->routeIs('project-configuration')
                         || request()->routeIs('project-*');
+                    $projectSetupSection = request()->route('section') ?? 'project';
                     $configurationMenuActive = request()->routeIs('cfpe.*')
                         || request()->routeIs('canonical-database.*')
                         || request()->routeIs('canonical-mapping.*')
@@ -141,25 +142,25 @@
                     </a>
                     <ul class="sub-menu {{ $projectSetupMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $projectSetupMenuActive ? 'true' : 'false' }}">
                         <li>
-                            <a href="{{ route('projects.index') }}#project-tab-pane" data-project-setup-tab-link="#project-tab-pane">Project</a>
+                            <a href="{{ route('projects.index') }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'project' ? 'active' : '' }}">Project</a>
                         </li>
                         <li>
-                            <a href="{{ route('projects.index') }}#geospatial-tab-pane" data-project-setup-tab-link="#geospatial-tab-pane">Geospatial</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'geospatial']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'geospatial' ? 'active' : '' }}">Geospatial</a>
                         </li>
                         <li>
-                            <a href="{{ route('projects.index') }}#monitoring-tab-pane" data-project-setup-tab-link="#monitoring-tab-pane">Monitoring Station</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'monitoring-stations' ? 'active' : '' }}">Monitoring Station</a>
                         </li>
                         <li>
-                            <a href="{{ route('projects.index') }}#warning-tab-pane" data-project-setup-tab-link="#warning-tab-pane">Warning Station</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'warning-stations']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'warning-stations' ? 'active' : '' }}">Warning Station</a>
                         </li>
                         <li>
-                            <a href="{{ route('projects.index') }}#data-tab-pane" data-project-setup-tab-link="#data-tab-pane">Sensor &amp; Data</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'sensors']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'sensors' ? 'active' : '' }}">Sensor &amp; Data</a>
                         </li>
                         <li>
-                            <a href="{{ route('projects.index') }}#canonical-tab-pane" data-project-setup-tab-link="#canonical-tab-pane">Canonical Data</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'canonical']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'canonical' ? 'active' : '' }}">Canonical Data</a>
                         </li>
                         <li>
-                            <a href="{{ route('projects.index') }}#operation-tab-pane" data-project-setup-tab-link="#operation-tab-pane">Operational &amp; Response</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'operations']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'operations' ? 'active' : '' }}">Operational &amp; Response</a>
                         </li>
                     </ul>
                 </li>

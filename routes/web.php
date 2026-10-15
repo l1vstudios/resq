@@ -75,6 +75,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/client-operations/users/{user}', [ClientUserManagementController::class, 'update'])->name('client-operations.users.update');
     Route::get('/project-configuration', [ProjectSetupController::class, 'index'])->name('project-configuration');
     Route::get('/projects', [ProjectSetupController::class, 'index'])->name('projects.index');
+    Route::get('/project-setup/{section}', [ProjectSetupController::class, 'section'])
+        ->whereIn('section', ['geospatial', 'monitoring-stations', 'warning-stations', 'sensors', 'canonical', 'operations'])
+        ->name('project-setup.section');
     Route::get('/projects/{project}/spatial-resources', [ProjectSetupController::class, 'spatialResources'])->name('projects.spatial-resources');
     Route::get('/projects/{project}/corridors/{corridor}', [ProjectSetupController::class, 'projectCorridor'])->name('projects.corridors.show');
     Route::post('/projects', [ProjectSetupController::class, 'storeProject'])->name('projects.store');

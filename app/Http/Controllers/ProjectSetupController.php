@@ -46,7 +46,37 @@ class ProjectSetupController extends Controller
 
     public function index(): View
     {
-        return view('modules.projects.index', $this->viewData());
+        return view('modules.projects.index', array_merge($this->viewData(), [
+            'activeSection' => 'project', 'sectionTitle' => 'Project',
+        ]));
+    }
+
+    public function section(Request $request, string $section): View
+    {
+        $sections = [
+            'geospatial' => 'Geospatial',
+            'monitoring-stations' => 'Monitoring Station',
+            'warning-stations' => 'Warning Station',
+            'sensors' => 'Sensor & Data',
+            'canonical' => 'Canonical Data',
+            'operations' => 'Operational & Response',
+        ];
+        abort_unless(isset($sections[$section]), 404);
+        $data = $this->viewData();
+        if (in_array($section, ['monitoring-stations', 'warning-stations', 'sensors', 'operations'], true)) {
+            abort_unless($data['permissions']['canMutateAssetRegistry'] ?? false, 403);
+        }
+
+        $monitoringPreset = null;
+        if ($section === 'monitoring-stations' && $request->filled('corridor_id')) {
+            $corridor = collect($data['corridors'] ?? [])->firstWhere('db_id', (int) $request->query('corridor_id'));
+            abort_unless($corridor, 404);
+            $monitoringPreset = ['corridor_id' => $corridor['db_id'], 'station_type' => 'hydrological_monitoring'];
+        }
+
+        return view('modules.projects.index', array_merge($data, [
+            'activeSection' => $section, 'sectionTitle' => $sections[$section], 'monitoringPreset' => $monitoringPreset,
+        ]));
     }
 
     public function monitoring(): View

@@ -1,6 +1,6 @@
 @extends('layouts.master')
 
-@section('title') Project Setup @endsection
+@section('title') {{ $sectionTitle ?? 'Project' }} @endsection
 
 @section('css')
 <link href="{{ URL::asset('build/libs/leaflet/leaflet.css') }}" rel="stylesheet" type="text/css" />
@@ -94,10 +94,11 @@
 @section('content')
 @component('components.breadcrumb')
 @slot('li_1') Project Configuration @endslot
-@slot('title') Project Setup @endslot
+@slot('title') {{ $sectionTitle ?? 'Project' }} @endslot
 @endcomponent
 
 @php
+    $activeSection = $activeSection ?? 'project';
     $project = $project ?? config('resq_dummy.project');
     $projects = collect($projects ?? []);
     $clusters = collect($clusters ?? config('resq_dummy.clusters'));
@@ -190,7 +191,7 @@
     $corridorFormOpen = old('corridor_code') !== null || old('route_code') !== null;
     $referencePointFormOpen = old('point_code') !== null;
     $stationSpatialFormOpen = old('placement_role') !== null || old('station_offset') !== null;
-    $monitoringFormOpen = old('station_type') !== null || old('logger_id') !== null;
+    $monitoringFormOpen = old('station_type') !== null || old('logger_id') !== null || ! empty($monitoringPreset);
     $warningFormOpen = old('zone_id') !== null || old('controller_id') !== null;
 @endphp
 
@@ -224,7 +225,7 @@
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
                     <div>
-                        <h4 class="card-title mb-1">Project Setup Flow</h4>
+                        <h4 class="card-title mb-1">{{ $sectionTitle ?? 'Project' }}</h4>
                         <p class="text-muted mb-0">{{ $project['name'] ?? 'RESQ Project' }} - {{ $project['id'] ?? '-' }}</p>
                     </div>
                     <div>
@@ -236,26 +237,15 @@
                     </div>
                 </div>
 
-                <ul class="nav nav-tabs nav-tabs-custom flex-wrap d-none" role="tablist">
-                    <li class="nav-item" role="presentation"><button class="nav-link active" id="project-tab" data-bs-toggle="tab" data-bs-target="#project-tab-pane" type="button" role="tab">Project</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="geospatial-tab" data-bs-toggle="tab" data-bs-target="#geospatial-tab-pane" type="button" role="tab">Geospatial</button></li>
-                    @if($canMutateAssetRegistry)
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring-tab-pane" type="button" role="tab">Monitoring Station</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="warning-tab" data-bs-toggle="tab" data-bs-target="#warning-tab-pane" type="button" role="tab">Warning Station</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-tab-pane" type="button" role="tab">Sensor & Data</button></li>
-                    @endif
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="canonical-tab" data-bs-toggle="tab" data-bs-target="#canonical-tab-pane" type="button" role="tab">Canonical Data</button></li>
-                    @if($canMutateAssetRegistry)
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="operation-tab" data-bs-toggle="tab" data-bs-target="#operation-tab-pane" type="button" role="tab">Operational & Response</button></li>
-                    @endif
-                </ul>
+
             </div>
         </div>
     </div>
 </div>
 
-<div class="tab-content text-muted">
-    <div class="tab-pane fade show active" id="project-tab-pane" role="tabpanel" aria-labelledby="project-tab" tabindex="0">
+<div class="project-setup-content text-muted">
+    @if ($activeSection === 'project')
+    <section class="project-setup-section" id="project-section">
         <div class="row g-4">
             <div class="col-xl-12 order-2">
                 <div class="card h-100 collapse {{ $projectFormOpen ? 'show' : '' }}" id="project-form-collapse">
@@ -356,9 +346,11 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
 
-    <div class="tab-pane fade" id="geospatial-tab-pane" role="tabpanel" aria-labelledby="geospatial-tab" tabindex="0">
+    @if ($activeSection === 'geospatial')
+    <section class="project-setup-section" id="geospatial-section">
         <div class="row g-4">
             <div class="col-xl-12 order-2">
                 <div class="card h-100 collapse {{ $workspaceFormOpen ? 'show' : '' }}" id="geospatial-workspace-form-collapse">
@@ -652,10 +644,7 @@
                                                         <a href="{{ route('cfpe.index') }}" class="btn btn-outline-danger btn-sm">
                                                             CFPE
                                                         </a>
-                                                        <a href="#monitoring-tab-pane" class="btn btn-outline-success btn-sm"
-                                                            data-open-tab="#monitoring-tab-pane"
-                                                            data-monitoring-type="hydrological_monitoring"
-                                                            data-corridor-id="{{ $corridor['db_id'] }}">
+                                                        <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations', 'corridor_id' => $corridor['db_id']]) }}" class="btn btn-outline-success btn-sm">
                                                             Hidrologi
                                                         </a>
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
@@ -803,10 +792,12 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
 
     @if($canMutateAssetRegistry)
-    <div class="tab-pane fade" id="monitoring-tab-pane" role="tabpanel" aria-labelledby="monitoring-tab" tabindex="0">
+    @if ($activeSection === 'monitoring-stations')
+    <section class="project-setup-section" id="monitoring-section">
         <div class="row g-4">
             <div class="col-xl-12 order-2">
                 <div class="card h-100 collapse {{ $monitoringFormOpen ? 'show' : '' }}" id="monitoring-form-collapse">
@@ -941,9 +932,11 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
 
-    <div class="tab-pane fade" id="warning-tab-pane" role="tabpanel" aria-labelledby="warning-tab" tabindex="0">
+    @if ($activeSection === 'warning-stations')
+    <section class="project-setup-section" id="warning-section">
         <div class="row g-4">
             <div class="col-xl-12 order-2">
                 <div class="card h-100 collapse {{ $warningFormOpen ? 'show' : '' }}" id="warning-form-collapse">
@@ -1034,9 +1027,11 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
 
-    <div class="tab-pane fade" id="data-tab-pane" role="tabpanel" aria-labelledby="data-tab" tabindex="0">
+    @if ($activeSection === 'sensors')
+    <section class="project-setup-section" id="data-section">
         <div class="row">
             <div class="col-xl-12">
                 <div class="accordion mb-3" id="sensor-data-actions">
@@ -1409,10 +1404,12 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
     @endif
 
-    <div class="tab-pane fade" id="canonical-tab-pane" role="tabpanel" aria-labelledby="canonical-tab" tabindex="0">
+    @if ($activeSection === 'canonical')
+    <section class="project-setup-section" id="canonical-section">
         <div class="row">
             <div class="col-xl-12">
                 <div class="card">
@@ -1563,10 +1560,12 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
 
     @if($canMutateAssetRegistry)
-    <div class="tab-pane fade" id="operation-tab-pane" role="tabpanel" aria-labelledby="operation-tab" tabindex="0">
+    @if ($activeSection === 'operations')
+    <section class="project-setup-section" id="operation-section">
         <div class="row">
             <div class="col-xl-12">
                 <div class="card h-100">
@@ -1601,7 +1600,8 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    @endif
     @endif
 
 
@@ -1611,84 +1611,6 @@
 @section('script')
 <script>
     window.SentinelProjectSpatialResources = @json($spatialResources);
-
-    (function () {
-        const storageKey = 'resq.projectSetup.activeTab';
-        const tabs = Array.from(document.querySelectorAll('[data-bs-toggle="tab"][data-bs-target]'));
-
-        function tabForTarget(target) {
-            return tabs.find((tab) => tab.getAttribute('data-bs-target') === target);
-        }
-
-        function validTarget(target) {
-            return typeof target === 'string' && target.startsWith('#') && tabForTarget(target);
-        }
-
-        function currentTarget() {
-            return document.querySelector('[data-bs-toggle="tab"].active')?.getAttribute('data-bs-target')
-                || '#project-tab-pane';
-        }
-
-        function storeTarget(target) {
-            if (!validTarget(target)) {
-                return;
-            }
-
-            localStorage.setItem(storageKey, target);
-        }
-
-        function showTarget(target) {
-            const tab = validTarget(target) ? tabForTarget(target) : null;
-            if (!tab) {
-                return;
-            }
-
-            if (window.bootstrap?.Tab) {
-                window.bootstrap.Tab.getOrCreateInstance(tab).show();
-                return;
-            }
-
-            tabs.forEach((item) => {
-                const pane = document.querySelector(item.getAttribute('data-bs-target'));
-                const active = item === tab;
-                item.classList.toggle('active', active);
-                pane?.classList.toggle('show', active);
-                pane?.classList.toggle('active', active);
-            });
-        }
-
-        const initialTarget = validTarget(window.location.hash)
-            ? window.location.hash
-            : localStorage.getItem(storageKey);
-
-        showTarget(initialTarget);
-
-        tabs.forEach((tab) => {
-            tab.addEventListener('shown.bs.tab', function (event) {
-                const target = event.target.getAttribute('data-bs-target');
-                storeTarget(target);
-                if (validTarget(target)) {
-                    history.replaceState(null, '', target);
-                }
-            });
-
-            tab.addEventListener('click', function () {
-                storeTarget(tab.getAttribute('data-bs-target'));
-            });
-        });
-
-        document.querySelectorAll('.tab-content form').forEach((form) => {
-            form.addEventListener('submit', function () {
-                storeTarget(currentTarget());
-            });
-        });
-
-        window.addEventListener('hashchange', function () {
-            if (validTarget(window.location.hash)) {
-                showTarget(window.location.hash);
-            }
-        });
-    })();
 
     (function () {
         function showCollapse(selector) {
@@ -1717,23 +1639,6 @@
             }
 
             element.classList.remove('show');
-        }
-
-        function showTab(selector) {
-            const tab = selector
-                ? document.querySelector('[data-bs-toggle="tab"][data-bs-target="' + selector + '"]')
-                : null;
-
-            if (!tab) {
-                return;
-            }
-
-            if (window.bootstrap?.Tab) {
-                window.bootstrap.Tab.getOrCreateInstance(tab).show();
-                return;
-            }
-
-            tab.click();
         }
 
         function fillForm(form, values) {
@@ -1781,24 +1686,11 @@
             });
         });
 
-        document.querySelectorAll('[data-open-tab]').forEach((button) => {
-            button.addEventListener('click', function (event) {
-                event.preventDefault();
-                showTab(button.dataset.openTab);
-                showCollapse('#monitoring-form-collapse');
-
-                const monitoringForm = document.getElementById('monitoring-form');
-                if (!monitoringForm) {
-                    return;
-                }
-
-                fillForm(monitoringForm, {
-                    station_type: button.dataset.monitoringType || 'hydrological_monitoring',
-                    corridor_id: button.dataset.corridorId || '',
-                });
-                monitoringForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-        });
+        const monitoringPreset = @json($errors->any() ? null : ($monitoringPreset ?? null));
+        const monitoringForm = document.getElementById('monitoring-form');
+        if (monitoringPreset && monitoringForm) {
+            fillForm(monitoringForm, monitoringPreset);
+        }
     })();
 
     (function () {
