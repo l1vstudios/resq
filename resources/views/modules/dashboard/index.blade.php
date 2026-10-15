@@ -696,8 +696,11 @@
         var coordinateReadout = document.getElementById('map-coordinate-readout');
         var measureReadout = document.getElementById('map-measure-readout');
         var hillshadeOpacity = document.getElementById('map-hillshade-opacity');
+        // Match the monitoring zoom range used by the CFPE map.
+        var mapMinZoom = 12;
+        var mapMaxZoom = 16;
         var defaultMapCenter = [-2.6, 118.0];
-        var defaultMapZoom = 5;
+        var defaultMapZoom = mapMinZoom;
         var regionPresets = {
             'DKI Jakarta': {
                 center: [-6.2088, 106.8456],
@@ -988,7 +991,7 @@
                     return;
                 }
                 if (bounds && bounds.isValid()) {
-                    map.fitBounds(bounds.pad(0.25), { maxZoom: 9 });
+                    map.fitBounds(bounds.pad(0.25), { maxZoom: mapMinZoom });
                 } else {
                     map.setView(defaultMapCenter, defaultMapZoom);
                 }
@@ -1017,7 +1020,7 @@
 
             if (shouldMoveMap) {
                 map.fitBounds(bounds.pad(0.08), {
-                    maxZoom: preset ? preset.zoom : 12
+                    maxZoom: Math.max(mapMinZoom, Math.min(mapMaxZoom, preset ? preset.zoom : mapMinZoom))
                 });
             }
 
@@ -1074,7 +1077,9 @@
         }
 
         var map = L.map('sensor-cluster-map', {
-            scrollWheelZoom: false
+            scrollWheelZoom: true,
+            minZoom: mapMinZoom,
+            maxZoom: mapMaxZoom
         }).setView(defaultMapCenter, defaultMapZoom);
 
         L.control.scale({
@@ -1084,23 +1089,28 @@
         }).addTo(map);
 
         var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
+            minZoom: mapMinZoom,
+            maxZoom: mapMaxZoom,
             attribution: '&copy; OpenStreetMap contributors'
         });
         var topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            maxZoom: 17,
+            minZoom: mapMinZoom,
+            maxZoom: mapMaxZoom,
             attribution: '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap'
         });
         var esriTopoLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 18,
+            minZoom: mapMinZoom,
+            maxZoom: mapMaxZoom,
             attribution: 'Tiles &copy; Esri'
         });
         var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 18,
+            minZoom: mapMinZoom,
+            maxZoom: mapMaxZoom,
             attribution: 'Tiles &copy; Esri'
         });
         var hillshadeLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 16,
+            minZoom: mapMinZoom,
+            maxZoom: mapMaxZoom,
             opacity: 0.36,
             attribution: 'Hillshade &copy; Esri'
         });
