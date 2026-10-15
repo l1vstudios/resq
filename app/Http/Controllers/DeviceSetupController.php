@@ -1928,6 +1928,7 @@ class DeviceSetupController extends Controller
                 'id' => $logger->id,
                 'logger_code' => $logger->logger_code,
                 'device_label' => $logger->device_label,
+                'serial_number' => $logger->serial_number,
                 'station' => $logger->monitoringStation?->station_code,
                 'online' => (bool) $online,
                 'status' => $online ? 'Online' : ($connectivity?->connectivity_status ?? 'Offline'),
@@ -2062,6 +2063,7 @@ class DeviceSetupController extends Controller
                     return [
                         'logger_code' => $logger->logger_code,
                         'model' => $logger->logger_model,
+                        'serial_number' => $logger->serial_number,
                         'status' => $logger->logger_status,
                         'online' => (bool) ($loggerStatus['online'] ?? false),
                         'sensors' => $loggerSensors->map(fn ($s) => [

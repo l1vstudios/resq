@@ -161,9 +161,6 @@
                         <li>
                             <a href="{{ route('projects.index') }}#operation-tab-pane" data-project-setup-tab-link="#operation-tab-pane">Operational &amp; Response</a>
                         </li>
-                        <li>
-                            <a href="{{ route('projects.index') }}#user-setup-tab-pane" data-project-setup-tab-link="#user-setup-tab-pane">User Setup</a>
-                        </li>
                     </ul>
                 </li>
 
@@ -299,6 +296,7 @@
                     </a>
                 </li>
 
+                @if($sidebarUser?->hasRole('SentinelAdmin'))
                 <li class="menu-title">Administration</li>
 
                 <li class="{{ request()->routeIs('admins.*') ? 'mm-active' : '' }}">
@@ -307,6 +305,7 @@
                         <span>Admin Management</span>
                     </a>
                 </li>
+                @endif
                 @endif
 
             </ul>

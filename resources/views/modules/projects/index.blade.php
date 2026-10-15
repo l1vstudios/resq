@@ -248,7 +248,6 @@
                     @if($canMutateAssetRegistry)
                     <li class="nav-item" role="presentation"><button class="nav-link" id="operation-tab" data-bs-toggle="tab" data-bs-target="#operation-tab-pane" type="button" role="tab">Operational & Response</button></li>
                     @endif
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="user-setup-tab" data-bs-toggle="tab" data-bs-target="#user-setup-tab-pane" type="button" role="tab">User Setup</button></li>
                 </ul>
             </div>
         </div>
@@ -1605,15 +1604,7 @@
     </div>
     @endif
 
-    <div class="tab-pane fade" id="user-setup-tab-pane" role="tabpanel" aria-labelledby="user-setup-tab" tabindex="0">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4">User Setup</h4>
-                <p class="text-muted mb-0">Account setup masih memakai modul Admin yang sudah ada. Data project scope dapat diarahkan ke project/workspace yang dibuat di tab sebelumnya.</p>
-                <a href="{{ route('admins.index') }}" class="btn btn-primary mt-3">Open Account Registry</a>
-            </div>
-        </div>
-    </div>
+
 </div>
 @endsection
 

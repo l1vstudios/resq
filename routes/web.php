@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CanonicalDatabaseController;
+use App\Http\Controllers\AdminManagementController;
 use App\Http\Controllers\AssetManagementController;
 use App\Http\Controllers\CfpeController;
 use App\Http\Controllers\ClientFunctionConfigurationController;
@@ -164,7 +165,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/command-test', [RegisteredDataController::class, 'commandTest'])->name('command-test.index');
     Route::delete('/device-setup/{type}/{id}', [DeviceSetupController::class, 'destroy'])->name('device-setup.destroy');
     Route::view('/production-setup-guide', 'modules.production-guide.index')->name('production-guide.index');
-    Route::view('/admins', 'modules.admins.index')->name('admins.index');
+    Route::get('/admins', [AdminManagementController::class, 'index'])->name('admins.index');
+    Route::post('/admins', [AdminManagementController::class, 'store'])->name('admins.store');
 
     // CFPE & Geospatial Workspace
     Route::get('/cfpe', [CfpeController::class, 'index'])->name('cfpe.index');
@@ -180,8 +182,6 @@ Route::middleware('auth')->group(function () {
 // customers route
 Route::get('/customers', [CustomerController::class, 'index'])->name('customers.list');
 
-// Update User Details
-Route::post('/update-profile/{id}', [HomeController::class, 'updateProfile'])->name('updateProfile');
 Route::post('/update-password/{id}', [HomeController::class, 'updatePassword'])->name('updatePassword');
 
 Route::get('{any}', [HomeController::class, 'index'])->name('index');

@@ -240,13 +240,6 @@
                     <i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end">
-                    <a class="dropdown-item" href="contacts-profile">
-                        <i class="bx bx-user font-size-16 align-middle me-1"></i> Profile
-                    </a>
-                    <a class="dropdown-item d-block" href="#" data-bs-toggle="modal" data-bs-target=".change-password">
-                        <i class="bx bx-wrench font-size-16 align-middle me-1"></i> Settings
-                    </a>
-                    <div class="dropdown-divider"></div>
                     <a class="dropdown-item text-danger" href="javascript:void();"
                         onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                         <i class="bx bx-power-off font-size-16 align-middle me-1 text-danger"></i> Logout
@@ -259,50 +252,3 @@
         </div>
     </div>
 </header>
-
-<div class="modal fade change-password" tabindex="-1" role="dialog"
-    aria-labelledby="myLargeModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="myLargeModalLabel">Change Password</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form method="POST" id="change-password">
-                    @csrf
-                    <input type="hidden" value="{{ Auth::user()->id }}" id="data_id">
-
-                    <div class="mb-3">
-                        <label for="current_password">Current Password <span class="text-danger">*</span></label>
-                        <input id="current-password" type="password"
-                            class="form-control @error('current_password') is-invalid @enderror"
-                            name="current_password" autocomplete="current_password"
-                            placeholder="Enter Current Password" value="{{ old('current_password') }}">
-                        <div class="text-danger" id="current_passwordError" data-ajax-feedback="current_password"></div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="newpassword">New Password <span class="text-danger">*</span></label>
-                        <input id="password" type="password"
-                            class="form-control @error('password') is-invalid @enderror" name="password"
-                            autocomplete="new_password" placeholder="Enter New Password">
-                        <div class="text-danger" id="passwordError" data-ajax-feedback="password"></div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="userpassword">Confirm Password <span class="text-danger">*</span></label>
-                        <input id="password-confirm" type="password" class="form-control" name="password_confirmation"
-                            autocomplete="new_password" placeholder="Enter New Confirm Password">
-                        <div class="text-danger" id="password_confirmError" data-ajax-feedback="password-confirm"></div>
-                    </div>
-
-                    <div class="mt-3 d-grid">
-                        <button class="btn btn-primary waves-effect waves-light UpdatePassword" data-id="{{ Auth::user()->id }}"
-                            type="submit">Update Password</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>

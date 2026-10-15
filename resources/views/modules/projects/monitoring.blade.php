@@ -285,6 +285,8 @@
                 stations.map(function (station) {
                     const stationBadge = '<span class="badge bg-primary-subtle text-primary me-1">' + escapeHtml(station.station_type || 'station') + '</span>';
                     const loggers = (station.loggers || []).map(function (logger) {
+                        const serialNumber = String(logger.serial_number ?? '').trim();
+                        const serialLabel = '<small class="text-muted ms-2">SN: <span class="font-monospace">' + escapeHtml(serialNumber || 'Belum diisi') + '</span></small>';
                         const onlineBadge = logger.online
                             ? '<span class="badge bg-success ms-1">Online</span>'
                             : '<span class="badge bg-secondary ms-1">' + escapeHtml(logger.status || 'Offline') + '</span>';
@@ -292,7 +294,7 @@
                             const paramCount = sensor.parameter_count > 1 ? ' <span class="text-muted">(' + sensor.parameter_count + ' param)</span>' : '';
                             return '<div class="ms-4 text-muted"><i class="bx bx-chip me-1"></i>' + escapeHtml(sensor.sensor_code) + ' — ' + escapeHtml(sensor.type || sensor.parameter || '-') + paramCount + '</div>';
                         }).join('');
-                        return '<div class="ms-3 mb-1"><i class="bx bx-server me-1 text-info"></i><strong>' + escapeHtml(logger.logger_code) + '</strong> <small class="text-muted">' + escapeHtml(logger.model || '') + '</small>' + onlineBadge + '</div>' + sensors;
+                        return '<div class="ms-3 mb-1"><i class="bx bx-server me-1 text-info"></i><strong>' + escapeHtml(logger.logger_code) + '</strong>' + serialLabel + ' <small class="text-muted">' + escapeHtml(logger.model || '') + '</small>' + onlineBadge + '</div>' + sensors;
                     }).join('');
 
                     const warnings = (station.warning_stations || []).map(function (ws) {
