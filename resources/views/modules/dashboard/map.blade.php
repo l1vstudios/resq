@@ -257,7 +257,9 @@
         </div>
         <button type="button" id="map-fit-filtered" class="btn btn-sm btn-light" aria-label="Fokus ke project" title="Fokus ke project"><i class="bx bx-target-lock fs-5" aria-hidden="true"></i></button>
     </header>
+@include('modules.dashboard.partials.monitoring-panel')
 <script src="{{ URL::asset('build/libs/leaflet/leaflet.js') }}"></script>
+<script src="{{ asset('build/js/pages/project-map-monitoring.js') }}?v={{ filemtime(public_path('build/js/pages/project-map-monitoring.js')) }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         var mapElement = document.getElementById('sensor-cluster-map');
@@ -271,9 +273,6 @@
         var warningStations = @json($mapWarningStations ?? []);
         var initialAlertActive = @json($dashboardAlertActive ?? false);
         var mapDataUrl = @json(route('dashboard.projects.map-data', $project, false));
-        var sirenAudio = new Audio(@json('/sound/sirene.mp3'));
-        var sirenShouldPlay = false;
-        var sirenIsPlaying = false;
         var hasAppliedInitialFocus = false;
         var latestMapData = {
             clusters: clusters,
@@ -288,8 +287,6 @@
         var defaultMapCenter = [-2.6, 118.0];
         var defaultMapZoom = mapMinZoom;
 
-        sirenAudio.loop = true;
-        sirenAudio.preload = 'auto';
 
         var statusColors = {
             Normal: '#34c38f',
@@ -322,58 +319,6 @@
                 item.alert_level === 'Siaga'
             ));
         }
-
-        function hasDangerState(data) {
-            if (typeof data.alert_active === 'boolean') {
-                return data.alert_active;
-            }
-
-            var clusters = data.clusters || [];
-            var sensorPoints = data.sensors || [];
-            var warningStations = data.warningStations || [];
-
-            return clusters.some(isDanger)
-                || sensorPoints.some(isDanger)
-                || warningStations.some(function (station) {
-                    return Boolean(station.is_danger) || (station.danger_sensors || []).some(isDanger);
-                });
-        }
-
-        function syncSiren(shouldPlay) {
-            sirenShouldPlay = shouldPlay;
-
-            if (!shouldPlay) {
-                sirenAudio.pause();
-                sirenAudio.currentTime = 0;
-                sirenIsPlaying = false;
-                return;
-            }
-
-            if (sirenIsPlaying) {
-                return;
-            }
-
-            sirenAudio.play()
-                .then(function () {
-                    if (!sirenShouldPlay) {
-                        sirenAudio.pause();
-                        sirenAudio.currentTime = 0;
-                        sirenIsPlaying = false;
-                        return;
-                    }
-
-                    sirenIsPlaying = true;
-                })
-                .catch(function () {
-                    sirenIsPlaying = false;
-                });
-        }
-
-        document.addEventListener('click', function () {
-            if (sirenShouldPlay && !sirenIsPlaying) {
-                syncSiren(true);
-            }
-        });
 
         function dangerPopup(title, bodyHtml) {
             return '<div class="map-danger-popup">' +
@@ -424,11 +369,15 @@
                 .concat(data.warningStations || []);
         }
 
+        function hasCoordinate(item) {
+            return item.lat != null && item.lng != null &&
+                Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lng)) &&
+                Math.abs(Number(item.lat)) <= 90 && Math.abs(Number(item.lng)) <= 180;
+        }
+
         function boundsFromItems(items) {
             var latLngs = items
-                .filter(function (item) {
-                    return item.lat !== null && item.lng !== null;
-                })
+                .filter(hasCoordinate)
                 .map(function (item) {
                     return [Number(item.lat), Number(item.lng)];
                 });
@@ -450,7 +399,11 @@
                 return;
             }
 
-            map.fitBounds(bounds.pad(0.15), { padding: [40, 40], maxZoom: mapMinZoom });
+            map.fitBounds(bounds.pad(0.15), {
+                paddingTopLeft: [40, 90],
+                paddingBottomRight: [40, Math.min(window.innerHeight / 2, document.getElementById('map-monitor-panel').offsetHeight + 40)],
+                maxZoom: mapMinZoom
+            });
             hasAppliedInitialFocus = true;
         }
 
@@ -523,6 +476,33 @@
         var sensorLayer = L.layerGroup().addTo(map);
         var warningLayer = L.layerGroup().addTo(map);
         var spatialLayer = L.featureGroup().addTo(map);
+        var tdeLayer = L.layerGroup().addTo(map);
+        var monitoring = new ProjectMapMonitoring({
+            panel: document.getElementById('map-monitor-panel'),
+            sirenUrl: @json(asset('sound/sirene.mp3')),
+            tdeUrl: @json(route('dashboard.projects.tde-data', $project, false)),
+            onTdeData: function (stations, presentation) {
+                tdeLayer.clearLayers();
+                stations.filter(hasCoordinate).forEach(function (station) {
+                    var result = presentation(station.tde);
+                    L.circleMarker([Number(station.lat), Number(station.lng)], {
+                        radius: 9, color: '#ffffff', weight: 2,
+                        fillColor: result.tone === 'info' ? '#1849a9' : '#b7791f', fillOpacity: 0.95
+                    }).bindTooltip('TDE · ' + escapeHtml(station.station_code), { direction: 'top', offset: [0, -10] })
+                        .bindPopup('<strong>TDE · ' + escapeHtml(station.station_code) + '</strong><br>' +
+                            escapeHtml(result.summary) + '<br>Kondisi: ' + escapeHtml(result.condition) +
+                            '<br>Pola: ' + escapeHtml(result.pattern) + '<br>Perkiraan waktu: ' + escapeHtml(result.estimate))
+                        .addTo(tdeLayer);
+                });
+            }
+        });
+        window.addEventListener('pagehide', function () { monitoring.destroy(); });
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                monitoring.destroyed = false;
+                monitoring.start();
+            }
+        });
 
         function renderMapData(data) {
             latestMapData = data;
@@ -532,7 +512,7 @@
             var sensorPoints = visibleData.sensors || [];
             var warningStations = visibleData.warningStations || [];
 
-            syncSiren(hasDangerState(visibleData));
+            monitoring.updateSensors(data);
             clusterLayer.clearLayers();
             sensorLayer.clearLayers();
             warningLayer.clearLayers();
@@ -568,7 +548,7 @@
             });
 
             var sensorIndexByCoordinate = {};
-            sensorPoints.forEach(function (sensor) {
+            sensorPoints.filter(hasCoordinate).forEach(function (sensor) {
                 var sensorDanger = isDanger(sensor);
                 var color = sensorDanger ? '#f46a6a' : (statusColors[sensor.status] || '#50a5f1');
                 var statusClass = sensorDanger
@@ -693,7 +673,8 @@
             'Klaster': clusterLayer,
             'Sensor Pemantauan': sensorLayer,
             'Stasiun Peringatan': warningLayer,
-            'Koridor & Route': spatialLayer
+            'Koridor & Route': spatialLayer,
+            'Hasil TDE': tdeLayer
         }, {
             collapsed: true
         }).addTo(map);
@@ -725,7 +706,7 @@
             })
                 .then(function (response) {
                     if (!response.ok) {
-                        syncSiren(false);
+                        monitoring.showSensorError();
                         return null;
                     }
 
@@ -737,13 +718,14 @@
                     }
                 })
                 .catch(function () {
-                    syncSiren(false);
+                    monitoring.showSensorError();
                 })
                 .finally(function () {
                     mapRefreshInFlight = false;
                 });
         }
 
+        monitoring.start();
         refreshMapData();
         setInterval(refreshMapData, 1000);
 

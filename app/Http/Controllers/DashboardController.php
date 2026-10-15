@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\GeospatialWorkspace;
+use App\Models\MonitoringStation;
 use App\Models\Project;
 use App\Models\Province;
 use App\Models\Sensor;
+use App\Models\StationFunctionConfiguration;
 use App\Models\TelemetryReading;
 use App\Models\WarningStation;
 use App\Services\AuthorizationService;
+use App\Services\TrendDiagnosisAnalyticalFunctionRunner;
+use App\Services\TrendDiagnosisEvaluator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +52,31 @@ class DashboardController extends Controller
         abort_unless($this->authorization->canAccessProject($request->user(), $project), 403);
 
         return $this->noStoreJson($this->mapPayload([$project->id]));
+    }
+
+    public function projectTdeData(Request $request, Project $project, TrendDiagnosisEvaluator $evaluator): JsonResponse
+    {
+        abort_unless($this->authorization->canAccessProject($request->user(), $project), 403);
+
+        $stations = MonitoringStation::where('project_id', $project->id)
+            ->with(['workspace', 'functionConfigurations', 'sensors.mappingProfile.canonicalParameter', 'sensors.mappingProfiles.canonicalParameter'])
+            ->orderBy('station_code')->get();
+
+        return $this->noStoreJson([
+            'stations' => $stations->map(function (MonitoringStation $station) use ($evaluator) {
+                $configuration = $station->functionConfigurations->firstWhere('function_name', StationFunctionConfiguration::FUNCTION_TDE);
+
+                return [
+                    'id' => $station->id,
+                    'station_code' => $station->station_code,
+                    'name' => $station->name,
+                    'lat' => $station->latitude ?? $station->workspace?->latitude,
+                    'lng' => $station->longitude ?? $station->workspace?->longitude,
+                    'tde' => (new TrendDiagnosisAnalyticalFunctionRunner($evaluator, $configuration))->run($station),
+                ];
+            })->values(),
+            'generated_at' => now()->toISOString(),
+        ]);
     }
 
     public function mapData(Request $request): JsonResponse
@@ -216,7 +245,6 @@ class DashboardController extends Controller
                     'lng' => $lng ? (float) $lng : null,
                 ];
             })
-            ->filter(fn ($item) => $item['lat'] !== null && $item['lng'] !== null)
             ->values();
     }
 

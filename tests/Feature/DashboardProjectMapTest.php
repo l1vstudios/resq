@@ -7,6 +7,7 @@ use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
 use App\Models\Project;
 use App\Models\Sensor;
+use App\Models\TelemetryReading;
 use App\Models\User;
 use App\Models\WarningStation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -103,6 +104,7 @@ class DashboardProjectMapTest extends TestCase
         foreach ([$unassigned, $foreign] as $project) {
             $this->get(route('dashboard.projects.map', $project))->assertForbidden();
             $this->getJson(route('dashboard.projects.map-data', $project))->assertForbidden();
+            $this->getJson(route('dashboard.projects.tde-data', $project))->assertForbidden();
         }
     }
 
@@ -111,9 +113,79 @@ class DashboardProjectMapTest extends TestCase
         $project = Project::create(['project_code' => 'AUTH', 'name' => 'Authenticated Project']);
         $this->get(route('dashboard.projects.map', $project))->assertRedirect(route('login'));
         $this->getJson(route('dashboard.projects.map-data', $project))->assertUnauthorized();
+        $this->getJson(route('dashboard.projects.tde-data', $project))->assertUnauthorized();
 
         $this->actingAs(User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']))
             ->get(route('dashboard.projects.map', 999999))->assertNotFound();
+    }
+
+    public function test_overlay_receives_latest_sensor_values_units_and_warning_status(): void
+    {
+        $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
+        $project = $this->projectWithLocations('LIVE');
+        $sensor = Sensor::where('sensor_code', 'SENSOR-LIVE')->firstOrFail();
+        $sensor->update(['unit' => 'm']);
+        TelemetryReading::create([
+            'sensor_id' => $sensor->id, 'value' => '2.5',
+            'status' => 'Normal', 'alert_level' => 'Waspada', 'received_at' => now(),
+        ]);
+
+        $this->actingAs($user)->get(route('dashboard.projects.map', $project))
+            ->assertOk()->assertSee('Sensor &amp; Status', false)->assertSee('Hasil TDE')
+            ->assertSee('Aktifkan sirene')->assertSee('data-monitor="siren-toggle"', false);
+        $this->getJson(route('dashboard.projects.map-data', $project))
+            ->assertOk()->assertJsonPath('sensors.0.value', '2.5 m')
+            ->assertJsonPath('sensors.0.alert_level', 'Waspada');
+
+        TelemetryReading::create([
+            'sensor_id' => $sensor->id, 'value' => '12.5',
+            'status' => 'Normal', 'alert_level' => 'Normal', 'received_at' => now(),
+        ]);
+        $this->getJson(route('dashboard.projects.map-data', $project))
+            ->assertOk()->assertJsonPath('sensors.0.value', '12.5 m')
+            ->assertJsonPath('sensors.0.status', 'Awas');
+    }
+
+    public function test_sensors_without_coordinates_remain_available_to_the_overlay(): void
+    {
+        $project = $this->projectWithLocations('NO-GPS');
+        $project->workspaces()->update(['province' => 'Unmapped', 'latitude' => null, 'longitude' => null]);
+        $project->monitoringStations()->update(['latitude' => null, 'longitude' => null]);
+        $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
+
+        $this->actingAs($user)->getJson(route('dashboard.projects.map-data', $project))
+            ->assertOk()->assertJsonCount(1, 'sensors')->assertJsonPath('sensors.0.lat', null)
+            ->assertJsonPath('sensors.0.name', 'SENSOR-NO-GPS');
+    }
+
+    public function test_tde_results_are_calculated_for_the_selected_project_and_report_insufficient_data(): void
+    {
+        $project = $this->projectWithLocations('TDE');
+        $this->projectWithLocations('OTHER');
+        $user = User::factory()->state(['dob' => '2000-01-01', 'avatar' => 'images/avatar-1.jpg'])->create(['type' => 'sentinel']);
+
+        $this->actingAs($user)->getJson(route('dashboard.projects.tde-data', $project))
+            ->assertOk()->assertJsonCount(1, 'stations')
+            ->assertJsonPath('stations.0.station_code', 'MON-TDE')
+            ->assertJsonPath('stations.0.tde.execution_state', 'insufficient_data');
+
+        $sensor = Sensor::where('sensor_code', 'SENSOR-TDE')->firstOrFail();
+        foreach ([[30, 30, 60, 1006.8], [1, 28, 80, 1007.2]] as [$minutes, $temperature, $humidity, $pressure]) {
+            TelemetryReading::create([
+                'sensor_id' => $sensor->id, 'value' => 'Weather Station',
+                'parameter_values' => [
+                    ['parameter' => 'Temperature', 'value' => $temperature, 'unit' => 'degC'],
+                    ['parameter' => 'Humidity', 'value' => $humidity, 'unit' => '%RH'],
+                    ['parameter' => 'Pressure', 'value' => $pressure, 'unit' => 'hPa'],
+                    ['parameter' => 'Rainfall', 'value' => 0, 'unit' => 'mm'],
+                ],
+                'received_at' => now()->subMinutes($minutes),
+            ]);
+        }
+        $this->getJson(route('dashboard.projects.tde-data', $project))
+            ->assertOk()->assertJsonPath('stations.0.tde.execution_state', 'evaluated')
+            ->assertJsonPath('stations.0.tde.output.combination_pattern.key', '<>><=')
+            ->assertJsonPath('stations.0.tde.output.diagnosis.fallback_interpretation.summary', 'Arah Kering -> Basah');
     }
 
     private function projectWithLocations(string $suffix): Project
