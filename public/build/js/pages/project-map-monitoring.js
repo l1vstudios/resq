@@ -70,7 +70,7 @@
             var body = this.elements['panel-body'];
             body.hidden = !body.hidden;
             this.elements['panel-toggle'].setAttribute('aria-expanded', String(!body.hidden));
-            this.elements['panel-toggle'].textContent = body.hidden ? 'Tampilkan' : 'Ciutkan';
+            this.elements['panel-toggle'].textContent = body.hidden ? 'Tampilkan' : 'Minimize';
         }.bind(this));
     }
 
@@ -109,11 +109,13 @@
         this.elements['sensor-count'].textContent = sensors.length + ' sensor';
         this.elements['sensor-rows'].innerHTML = sensors.length ? sensors.map(function (sensor) {
             var state = sensorState(sensor);
+            var warningStation = [sensor.warning_station, sensor.warning_station_name].filter(Boolean).join(' · ');
             var parameters = Array.isArray(sensor.parameter_values) ? sensor.parameter_values : [];
             var values = parameters.length ? parameters.map(function (parameter) {
                 return '<div><span class="monitor-muted">' + escapeHtml(parameter.parameter || parameter.name) + ':</span> <strong>' + escapeHtml(parameter.value_text == null ? parameter.value : parameter.value_text) + '</strong></div>';
             }).join('') : '<strong class="monitor-value">' + escapeHtml(sensor.value) + '</strong>';
-            return '<tr><td><strong>' + escapeHtml(sensor.name) + '</strong><small>' + escapeHtml(sensor.station || 'Tanpa station') + ' · ' + escapeHtml(sensor.parameter || sensor.type) + '</small></td>' +
+            return '<tr><td><strong>' + escapeHtml(sensor.name) + '</strong><small>' + escapeHtml(sensor.station || 'Tanpa station') + ' · ' + escapeHtml(sensor.parameter || sensor.type) + '</small>' +
+                '<small class="monitor-warning-station"><i class="bx bx-bell" aria-hidden="true"></i> Warning Station: ' + escapeHtml(warningStation || 'Belum terhubung') + '</small></td>' +
                 '<td>' + values + '<small>' + escapeHtml(sensor.last_seen || 'Belum ada waktu pembacaan') + '</small></td>' +
                 '<td><span class="monitor-badge tone-' + state.tone + '">' + escapeHtml(state.label) + '</span></td></tr>';
         }).join('') : '<tr><td colspan="3" class="monitor-empty">Belum ada sensor pada project ini.</td></tr>';

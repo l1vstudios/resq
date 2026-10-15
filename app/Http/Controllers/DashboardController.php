@@ -234,6 +234,7 @@ class DashboardController extends Controller
                     'alert_level' => $alertLevel,
                     'station' => $station?->station_code,
                     'warning_station' => $sensor->warningStation?->station_code,
+                    'warning_station_name' => $sensor->warningStation?->name,
                     'province' => $workspace?->province,
                     'city' => $workspace?->city,
                     'status' => $status,
