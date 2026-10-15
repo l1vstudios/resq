@@ -6,10 +6,11 @@
 <style>
     .dashboard-grid-surface { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; overflow: hidden; }
     .dashboard-filters { padding: 20px; border-bottom: 1px solid #e5eaf0; }
-    .dashboard-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
-    .dashboard-search { grid-column: span 2; }
+    .dashboard-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto; gap: 16px; align-items: end; }
+    .dashboard-search { min-width: 0; }
     .dashboard-filter-grid .form-label { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
-    .dashboard-filter-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+    .dashboard-filter-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; }
+    .dashboard-filter-actions .btn { white-space: nowrap; }
     .dashboard-project-grid { min-width: 960px; margin: 0; }
     .dashboard-project-grid thead th { background: #f6f8fb; color: #68768a; font-size: 11px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; padding: 14px 16px; border-bottom: 1px solid #e5eaf0; }
     .dashboard-project-grid tbody td { padding: 16px; border-color: #edf0f4; }
@@ -20,7 +21,10 @@
     .dashboard-grid-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 20px; border-top: 1px solid #e5eaf0; }
     .dashboard-grid-footer nav { margin-left: auto; }
     .dashboard-grid-footer .pagination { margin: 0; }
-    @media (max-width: 991px) { .dashboard-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 991px) {
+        .dashboard-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dashboard-search, .dashboard-filter-actions { grid-column: 1 / -1; }
+    }
     @media (max-width: 575px) {
         .dashboard-filter-grid { grid-template-columns: 1fr; gap: 12px; }
         .dashboard-search { grid-column: auto; }
