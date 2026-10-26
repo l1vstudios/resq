@@ -1871,6 +1871,7 @@ class DeviceSetupController extends Controller
             'project_id' => ['required', 'exists:resq_projects,id'],
         ]);
         $project = Project::findOrFail($data['project_id']);
+        abort_unless($this->authorizationService->canAccessProject($request->user(), $project), 403);
         $freshAfter = now()->subSeconds((int) env('PROJECT_MONITORING_FRESH_SECONDS', 90));
         $loggerFreshAfter = now()->subSeconds((int) env('PROJECT_MONITORING_LOGGER_GRACE_SECONDS', 180));
         $sensorFreshAfter = now()->subSeconds((int) env('PROJECT_MONITORING_SENSOR_GRACE_SECONDS', 180));

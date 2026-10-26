@@ -99,6 +99,8 @@
 
 @php
     $activeSection = $activeSection ?? 'project';
+    $setupProject = $setupProject ?? null;
+    $setupProjectId = $setupProject?->id;
     $project = $project ?? config('resq_dummy.project');
     $projects = collect($projects ?? []);
     $clusters = collect($clusters ?? config('resq_dummy.clusters'));
@@ -184,15 +186,15 @@
     ];
     $loggerSectionOpen = old('logger_code') !== null;
     $mqttSectionOpen = old('configuration_code') !== null;
-    $sensorSectionOpen = old('sensor_code') !== null;
+    $sensorSectionOpen = old('sensor_code') !== null || ($setupProjectId && $sensors->isEmpty());
     $projectFormOpen = old('project_code') !== null;
-    $workspaceFormOpen = old('workspace_code') !== null;
+    $workspaceFormOpen = old('workspace_code') !== null || ($setupProjectId && $clusters->isEmpty());
     $informationLayerFormOpen = old('layer_code') !== null;
     $corridorFormOpen = old('corridor_code') !== null || old('route_code') !== null;
     $referencePointFormOpen = old('point_code') !== null;
     $stationSpatialFormOpen = old('placement_role') !== null || old('station_offset') !== null;
-    $monitoringFormOpen = old('station_type') !== null || old('logger_id') !== null || ! empty($monitoringPreset);
-    $warningFormOpen = old('zone_id') !== null || old('controller_id') !== null;
+    $monitoringFormOpen = old('station_type') !== null || old('logger_id') !== null || ! empty($monitoringPreset) || ($setupProjectId && $monitoringStations->isEmpty());
+    $warningFormOpen = old('zone_id') !== null || old('controller_id') !== null || ($setupProjectId && $warningStations->isEmpty());
 @endphp
 
 @if (session('message'))
@@ -243,6 +245,8 @@
     </div>
 </div>
 
+@include('modules.projects.partials.setup-navigation')
+
 <div class="project-setup-content text-muted">
     @if ($activeSection === 'project')
     <section class="project-setup-section" id="project-section">
@@ -277,7 +281,7 @@
                                 </div>
                                 <input type="hidden" name="status" value="Active">
                                 <button type="submit" class="btn btn-primary" @disabled(! $databaseReady)>
-                                    <i class="bx bx-save me-1"></i> Save / Update Project
+                                    <i class="bx bx-save me-1"></i> Simpan &amp; Lanjut ke Geospatial
                                 </button>
                             </form>
                         </div>
@@ -317,6 +321,7 @@
                                             <td class="text-end">
                                                 @isset($item['db_id'])
                                                     <div class="d-inline-flex gap-1">
+                                                        <a href="{{ route('project-setup.section', ['section' => 'geospatial', 'project_id' => $item['db_id']]) }}" class="btn btn-primary btn-sm">Lanjut Setup</a>
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
                                                             data-open-collapse="#project-form-collapse"
                                                             data-edit-form="#project-form"
@@ -422,6 +427,7 @@
                             </div>
                             <input type="hidden" name="status" value="Normal">
                             <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $projects->isEmpty() || ! $canWriteSpatial)>Save / Update Workspace</button>
+                            <button type="submit" name="setup_next" value="1" class="btn btn-success" @disabled(! $databaseReady || $projects->isEmpty() || ! $canWriteSpatial)>Simpan &amp; Next <i class="bx bx-right-arrow-alt ms-1" aria-hidden="true"></i></button>
                         </form>
                     </div>
                 </div>
@@ -644,7 +650,7 @@
                                                         <a href="{{ route('cfpe.index') }}" class="btn btn-outline-danger btn-sm">
                                                             CFPE
                                                         </a>
-                                                        <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations', 'corridor_id' => $corridor['db_id']]) }}" class="btn btn-outline-success btn-sm">
+                                                        <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations', 'corridor_id' => $corridor['db_id']] + ($setupProjectId ? ['project_id' => $setupProjectId] : [])) }}" class="btn btn-outline-success btn-sm">
                                                             Hidrologi
                                                         </a>
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
@@ -829,8 +835,8 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Station ID</label>
-                                <select name="station_code" class="form-select" id="monitoring-station-code" required @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>
-                                    <option value="">Pilih Station ID</option>
+                                <input name="station_code" class="form-control" id="monitoring-station-code" list="monitoring-station-codes" value="{{ old('station_code') }}" placeholder="Masukkan Station ID baru atau pilih yang terdaftar" required @disabled(! $databaseReady)>
+                                <datalist id="monitoring-station-codes">
                                     @foreach ($monitoringStations->whereNotNull('db_id') as $station)
                                         <option value="{{ $station['id'] }}"
                                             data-name="{{ $station['name'] ?? '' }}"
@@ -839,14 +845,13 @@
                                             data-longitude="{{ $station['longitude'] ?? '' }}"
                                             data-logger-id="{{ $station['logger_id'] ?? '' }}"
                                             data-connectivity-status="{{ $station['connectivity_status'] ?? 'Online' }}"
-                                            data-station-type="{{ $station['station_type'] ?? 'hydrological_monitoring' }}"
-                                            @selected(old('station_code') === ($station['id'] ?? null))>
+                                            data-station-type="{{ $station['station_type'] ?? 'hydrological_monitoring' }}">
                                             {{ $station['id'] }} - {{ $station['name'] }}
                                         </option>
                                     @endforeach
-                                </select>
+                                </datalist>
                             </div>
-                            <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" value="{{ old('name') }}" readonly required @disabled(! $databaseReady)></div>
+                            <div class="mb-3"><label class="form-label">Station Name</label><input name="name" class="form-control" value="{{ old('name') }}" required @disabled(! $databaseReady)></div>
                             <div class="mb-3">
                                 <label class="form-label">Station Type</label>
                                 <select name="station_type" class="form-select" id="monitoring-station-type" required @disabled(! $databaseReady)>
@@ -874,6 +879,7 @@
                             <input type="hidden" name="registration_status" value="registered">
                             <input type="hidden" name="status" value="Normal">
                             <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>Save / Update Monitoring</button>
+                            <button type="submit" name="setup_next" value="1" class="btn btn-success" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>Simpan &amp; Next <i class="bx bx-right-arrow-alt ms-1" aria-hidden="true"></i></button>
                         </form>
                     </div>
                 </div>
@@ -970,6 +976,7 @@
                             <input type="hidden" name="controller_status" value="Standby">
                             <input type="hidden" name="status" value="Normal">
                             <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>Save / Update Warning</button>
+                            <button type="submit" name="setup_next" value="1" class="btn btn-success" @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>Simpan &amp; Next <i class="bx bx-right-arrow-alt ms-1" aria-hidden="true"></i></button>
                         </form>
                     </div>
                 </div>
@@ -1268,6 +1275,7 @@
                             <input type="hidden" name="reading_method" value="Absolute">
                             <input type="hidden" name="status" value="Normal">
 	                            <button type="submit" class="btn btn-primary" @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty() || $mstPrefixes->whereNotNull('id')->isEmpty())>Save / Update Sensor</button>
+                            <button type="submit" name="setup_next" value="1" class="btn btn-success" @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty() || $mstPrefixes->whereNotNull('id')->isEmpty())>Simpan &amp; Next <i class="bx bx-right-arrow-alt ms-1" aria-hidden="true"></i></button>
                         </form>
                             </div>
                         </div>
@@ -1686,6 +1694,14 @@
             });
         });
 
+        const registrationInput = @json(session()->getOldInput());
+        if (@json($errors->any())) {
+            const registrationForms = { project: 'project-form', geospatial: 'workspace-form', 'monitoring-stations': 'monitoring-form', 'warning-stations': 'warning-form', sensors: 'sensor-form' };
+            const failedForm = document.getElementById(registrationForms[@json($activeSection)]);
+            const identityFields = { project: 'project_code', geospatial: 'workspace_code', 'monitoring-stations': 'station_code', 'warning-stations': 'station_code', sensors: 'sensor_code' };
+            if (failedForm && registrationInput[identityFields[@json($activeSection)]] !== undefined) fillForm(failedForm, registrationInput);
+        }
+
         const monitoringPreset = @json($errors->any() ? null : ($monitoringPreset ?? null));
         const monitoringForm = document.getElementById('monitoring-form');
         if (monitoringPreset && monitoringForm) {
@@ -1720,7 +1736,7 @@
         syncCorridorBinding();
 
         function syncStationIdentity() {
-            const selected = stationCode?.selectedOptions[0];
+            const selected = Array.from(document.querySelectorAll('#monitoring-station-codes option')).find(option => option.value === stationCode?.value);
 
             if (!selected || !selected.value) {
                 return;

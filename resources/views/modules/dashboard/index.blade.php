@@ -4,7 +4,7 @@
 
 @section('css')
 <style>
-    .dashboard-grid-surface { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; overflow: hidden; }
+    .dashboard-grid-surface { background: #fff; border: 1px solid #e5eaf0; border-radius: 5px; overflow: hidden; }
     .dashboard-filters { padding: 20px; border-bottom: 1px solid #e5eaf0; }
     .dashboard-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto; gap: 16px; align-items: end; }
     .dashboard-search { min-width: 0; }
@@ -42,9 +42,9 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
     <div>
         <h4 class="mb-1">Daftar Project</h4>
-        <p class="text-muted mb-0">Cari project atau filter wilayah untuk membuka peta monitoring.</p>
+        <p class="text-muted mb-0">Project diurutkan berdasarkan kondisi sensor paling kritis: Awas, Siaga, Waspada, lalu Normal.</p>
     </div>
-    <span class="badge bg-primary-subtle text-primary px-3 py-2">{{ $projects->total() }} dari {{ $totalProjects }} Project</span>
+    <span id="dashboard-project-count" class="badge bg-primary-subtle text-primary px-3 py-2">{{ $projects->total() }} dari {{ $totalProjects }} Project</span>
 </div>
 
 @if ($errors->any())
@@ -82,69 +82,30 @@
             </div>
         </div>
     </form>
+    <p id="dashboard-project-refresh" class="text-muted small px-3 pt-3 mb-0" role="status">Urutan diperbarui otomatis setiap 5 detik.</p>
 
-    <div class="table-responsive" tabindex="0" aria-label="Daftar project">
-        <table id="dashboard-project-grid" class="table table-hover align-middle dashboard-project-grid">
-            <caption class="visually-hidden">Daftar project beserta wilayah, klien, jumlah station, dan tautan peta.</caption>
-            <thead>
-                <tr>
-                    <th scope="col">No.</th><th scope="col">Project</th><th scope="col">Wilayah</th><th scope="col">Klien / Pemilik</th>
-                    <th scope="col" class="text-center">Workspace</th><th scope="col" class="text-center">Monitoring</th><th scope="col" class="text-center">Peringatan</th><th scope="col">Status</th><th scope="col">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($projects as $project)
-                    @php
-                        $locations = $project->workspaces->map(fn ($workspace) => collect([$workspace->city, $workspace->province])->filter()->unique()->implode(', '))->filter()->unique();
-                        $active = in_array(strtolower($project->status ?? ''), ['active', 'aktif'], true);
-                    @endphp
-                    <tr>
-                        <td class="text-muted">{{ $projects->firstItem() + $loop->index }}</td>
-                        <td><a href="{{ route('dashboard.projects.map', $project) }}" class="project-name">{{ $project->name }}</a><span class="project-code">{{ $project->project_code }}</span></td>
-                        <td class="project-region">{{ $locations->implode(' · ') ?: 'Lokasi belum ditentukan' }}</td>
-                        <td>{{ $project->client?->name ?: ($project->owner ?: '—') }}</td>
-                        <td class="text-center">{{ $project->workspaces_count }}</td>
-                        <td class="text-center">{{ $project->monitoring_stations_count }}</td>
-                        <td class="text-center">{{ $project->warning_stations_count }}</td>
-                        <td><span class="badge {{ $active ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ $project->status ?: 'Belum aktif' }}</span></td>
-                        <td><a href="{{ route('dashboard.projects.map', $project) }}" class="btn btn-sm btn-outline-primary text-nowrap" aria-label="Buka peta {{ $project->name }}"><i class="bx bx-map-alt me-1" aria-hidden="true"></i>Buka Peta</a></td>
-                    </tr>
-                @empty
-                    <tr><td colspan="9" class="text-center py-5">
-                        <i class="bx bx-search-alt display-4 text-muted" aria-hidden="true"></i>
-                        <h5 class="mt-3">{{ $totalProjects === 0 ? 'Belum ada project' : ($projects->total() === 0 ? 'Tidak ada project yang sesuai filter' : 'Tidak ada project pada halaman ini') }}</h5>
-                        <p class="text-muted mb-0">{{ $totalProjects === 0 ? 'Project yang tersedia untuk akun Anda akan tampil di sini.' : 'Sesuaikan filter atau kembali ke halaman pertama.' }}</p>
-                        @if ($totalProjects > 0)
-                            <a href="{{ request()->fullUrlWithQuery(['page' => 1]) }}" class="btn btn-sm btn-outline-primary mt-3">Halaman Pertama</a>
-                        @endif
-                    </td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-    <div class="dashboard-grid-footer">
-        <div class="d-flex align-items-center flex-wrap gap-3">
-            <div class="d-flex align-items-center gap-2">
-                <label for="project-per-page" class="text-muted small mb-0 text-nowrap">Baris per halaman</label>
-                <select name="per_page" id="project-per-page" form="dashboard-project-filters" class="form-select form-select-sm w-auto">
-                    @foreach ([10, 25, 50] as $size)
-                        <option value="{{ $size }}" @selected($projects->perPage() === $size)>{{ $size }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <small class="text-muted">Menampilkan {{ $projects->firstItem() ?? 0 }}–{{ $projects->lastItem() ?? 0 }} dari {{ $projects->total() }} project</small>
-        </div>
-        {{ $projects->onEachSide(1)->links('pagination::bootstrap-5') }}
+    <div id="dashboard-project-results">
+        @include('modules.dashboard.partials.project-list')
     </div>
 </div>
 @endsection
 
 @section('script')
+<script src="{{ asset('build/js/pages/dashboard-project-list.js') }}?v={{ filemtime(public_path('build/js/pages/dashboard-project-list.js')) }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        document.getElementById('project-per-page').addEventListener('change', function () {
-            document.getElementById('dashboard-project-filters').requestSubmit();
+        document.getElementById('dashboard-project-results').addEventListener('change', function (event) {
+            if (event.target.id === 'project-per-page') document.getElementById('dashboard-project-filters').requestSubmit();
         });
+        var listing = new DashboardProjectList({
+            container: document.getElementById('dashboard-project-results'),
+            count: document.getElementById('dashboard-project-count'),
+            status: document.getElementById('dashboard-project-refresh'),
+            url: window.location.href
+        });
+        listing.start();
+        window.addEventListener('pagehide', function () { listing.destroy(); });
+        window.addEventListener('pageshow', function (event) { if (event.persisted) listing.start(); });
         document.getElementById('project-province').addEventListener('change', function () {
             document.getElementById('project-city').value = '';
             document.getElementById('dashboard-project-filters').requestSubmit();

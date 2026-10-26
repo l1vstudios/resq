@@ -27,6 +27,7 @@
                 <div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
                     <div>
                         <h4 class="card-title mb-1">Project Live Monitoring</h4>
+                        <p id="project-monitor-identity" class="fw-semibold mb-1">{{ $projects->first()['name'] ?? 'Belum ada project' }}</p>
                         <p class="text-muted mb-0">Pantau nilai sensor terbaru. Start/Stop gateway dari halaman Data Loggers.</p>
                     </div>
                     <div class="d-flex flex-wrap align-items-end gap-2">
@@ -62,7 +63,9 @@
                     <table class="table table-sm align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Logger / Station</th>
+                                <th>Nama Project</th>
+                                <th>ID Monitoring Station</th>
+                                <th>Logger</th>
                                 <th>Sensor</th>
                                 <th>Value</th>
                                 <th>Multi Parameter</th>
@@ -71,7 +74,7 @@
                             </tr>
                         </thead>
                         <tbody id="project-monitor-rows">
-                            <tr><td colspan="6" class="text-center text-muted py-3">Pilih project lalu klik Start Monitoring.</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3">Memuat data project…</td></tr>
                         </tbody>
                     </table>
                     </div>
@@ -132,6 +135,7 @@
         const csrfToken = @json(csrf_token());
         const liveUrl = root.dataset.liveUrl;
         const select = document.getElementById('project-monitor-select');
+        const identityEl = document.getElementById('project-monitor-identity');
         const rowsEl = document.getElementById('project-monitor-rows');
         const logRowsEl = document.getElementById('project-monitor-log-rows');
         const messageEl = document.getElementById('project-monitor-message');
@@ -307,6 +311,8 @@
         }
 
         function renderLiveData(data) {
+            const project = data.project || {};
+            identityEl.textContent = [project.name, project.project_code].filter(Boolean).join(' · ') || 'Belum ada project';
             const summary = data.summary || {};
             const sensors = Array.isArray(data.sensors) ? data.sensors : [];
 
@@ -342,7 +348,9 @@
                     const valueClass = sensor.fresh ? (changed ? 'text-primary fw-bold' : 'fw-bold') : 'text-muted fw-bold';
 
                     return '<tr>' +
-                        '<td><div class="fw-bold">' + escapeHtml(sensor.logger_code || '-') + '</div><small class="text-muted">' + escapeHtml(sensor.station || '-') + '</small></td>' +
+                        '<td>' + escapeHtml(project.name || '-') + '</td>' +
+                        '<td><strong>' + escapeHtml(sensor.station || '-') + '</strong></td>' +
+                        '<td><div class="fw-bold">' + escapeHtml(sensor.logger_code || '-') + '</div></td>' +
                         '<td><div class="fw-bold">' + escapeHtml(sensor.sensor_code || '-') + '</div><small class="text-muted">' + escapeHtml(sensor.sensor_label || sensor.sensor_type || '-') + '</small></td>' +
                         '<td><span class="' + valueClass + '">' + escapeHtml(sensor.value ?? '-') + '</span></td>' +
                         '<td>' + renderParameterValues(sensor.parameter_values) + '</td>' +
@@ -350,7 +358,7 @@
                         '<td><span class="badge ' + badge + '">' + escapeHtml(sensor.status || '-') + '</span></td>' +
                     '</tr>';
                 }).join('')
-                : '<tr><td colspan="6" class="text-center text-muted py-3">Belum ada sensor pada project ini.</td></tr>';
+                : '<tr><td colspan="8" class="text-center text-muted py-3">Belum ada sensor pada project ini.</td></tr>';
 
             renderAuditRows(data.mapping_audit || []);
             renderInfrastructure(data.infrastructure || []);
@@ -428,6 +436,10 @@
         if (select) {
             select.addEventListener('change', () => {
                 previousValues.clear();
+                identityEl.textContent = select.selectedOptions[0]?.textContent || 'Belum ada project';
+                rowsEl.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Memuat data project…</td></tr>';
+                renderAuditRows([]);
+                renderInfrastructure([]);
                 startPolling();
             });
             startPolling();

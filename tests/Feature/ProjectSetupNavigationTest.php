@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\CorridorMonitoring;
+use App\Models\Client;
 use App\Models\GeospatialWorkspace;
+use App\Models\MonitoringStation;
+use App\Models\MstPrefix;
 use App\Models\Permission;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WarningStation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -100,6 +104,112 @@ class ProjectSetupNavigationTest extends TestCase
             $this->get(route('project-setup.section', $section))->assertForbidden();
         }
         $this->get('/project-setup/invalid')->assertNotFound();
+    }
+
+    public function test_registration_can_continue_from_a_new_project_through_every_setup_step(): void
+    {
+        $this->actingAs($this->manager());
+        $response = $this->from(route('projects.index'))->post(route('projects.store'), [
+            'project_code' => 'FLOW', 'name' => 'Flow Project', 'status' => 'Active',
+        ])->assertSessionHasNoErrors();
+        $project = Project::where('project_code', 'FLOW')->firstOrFail();
+        $url = fn ($section) => route('project-setup.section', ['section' => $section, 'project_id' => $project->id]);
+        $response->assertRedirect($url('geospatial'));
+        $this->get($url('geospatial'))->assertOk()->assertViewHas('setupProject', fn ($selected) => $selected->is($project))
+            ->assertSee('collapse show', false)->assertSee('Simpan &amp; Next', false)
+            ->assertSee('href="'.route('projects.index', ['project_id' => $project->id]).'" class="btn btn-outline-secondary" data-setup-previous', false)
+            ->assertSee('href="'.$url('monitoring-stations').'" class="btn btn-primary" data-setup-next', false)
+            ->assertSee('href="'.route('projects.index').'" class="btn btn-light">Daftar Project', false)
+            ->assertDontSee('aria-label="Alur registrasi project"', false)
+            ->assertDontSee('aria-current="step"', false);
+
+        $this->from($url('geospatial'))->post(route('project-workspaces.store'), [
+            'project_id' => $project->id, 'workspace_code' => 'FLOW-GWS', 'name' => 'Flow Workspace',
+            'province' => 'DKI Jakarta', 'status' => 'Normal', 'setup_next' => 1,
+        ])->assertSessionHasNoErrors()->assertRedirect($url('monitoring-stations'));
+        $workspace = GeospatialWorkspace::where('workspace_code', 'FLOW-GWS')->firstOrFail();
+        $this->get($url('monitoring-stations'))->assertOk()->assertSee('<input name="station_code"', false)
+            ->assertSee('collapse show', false);
+        $this->from($url('monitoring-stations'))->post(route('project-monitoring-stations.store'), [
+            'workspace_id' => $workspace->id, 'station_code' => 'FLOW-MON', 'name' => 'Flow Monitoring',
+            'station_type' => 'environmental_monitoring', 'logger_status' => 'Active',
+            'connectivity_status' => 'Offline', 'status' => 'Normal', 'setup_next' => 1,
+        ])->assertSessionHasNoErrors()->assertRedirect($url('warning-stations'));
+        $station = MonitoringStation::where('station_code', 'FLOW-MON')->firstOrFail();
+        $this->from($url('warning-stations'))->post(route('project-warning-stations.store'), [
+            'workspace_id' => $workspace->id, 'monitoring_station_id' => $station->id,
+            'station_code' => 'FLOW-WARN', 'name' => 'Flow Warning', 'controller_status' => 'Standby',
+            'status' => 'Normal', 'setup_next' => 1,
+        ])->assertSessionHasNoErrors()->assertRedirect($url('sensors'));
+        $warning = WarningStation::where('station_code', 'FLOW-WARN')->firstOrFail();
+        $prefix = MstPrefix::create(['prefix_code' => 'FLOW-PFX', 'name' => 'Flow Prefix', 'status' => 'Active']);
+        $this->from($url('sensors'))->post(route('project-sensors.store'), [
+            'workspace_id' => $workspace->id, 'monitoring_station_id' => $station->id, 'warning_station_id' => $warning->id,
+            'mst_prefix_id' => $prefix->id, 'sensor_code' => 'FLOW-SENSOR', 'type' => 'water_level',
+            'slave_id' => '1', 'address' => '0', 'function_code' => 'FC03', 'quantity' => 1,
+            'poll_interval_ms' => 1000, 'data_type' => 'float32', 'scale_factor' => 1, 'offset' => 0,
+            'reading_method' => 'Polling', 'alert_level' => 'Normal', 'status' => 'Normal', 'setup_next' => 1,
+        ])->assertSessionHasNoErrors()->assertRedirect($url('canonical'));
+        $this->get($url('canonical'))->assertOk()
+            ->assertSee('href="'.$url('operations').'" class="btn btn-primary" data-setup-next', false);
+        $this->get($url('operations'))->assertOk()->assertSee('Buka Dashboard')
+            ->assertSee(route('dashboard.projects.map', $project), false);
+        $this->assertDatabaseHas('sensors', ['sensor_code' => 'FLOW-SENSOR', 'workspace_id' => $workspace->id]);
+    }
+
+    public function test_next_links_keep_the_selected_project_and_only_its_resources(): void
+    {
+        $this->actingAs($this->user());
+        $selected = Project::create(['project_code' => 'SELECTED', 'name' => 'Selected Project']);
+        $other = Project::create(['project_code' => 'OTHER', 'name' => 'Other Project']);
+        foreach ([$selected, $other] as $project) {
+            GeospatialWorkspace::create([
+                'project_id' => $project->id, 'workspace_code' => $project->project_code.'-GWS',
+                'name' => $project->name.' Workspace', 'province' => 'DKI Jakarta',
+            ]);
+        }
+        $this->get(route('project-setup.section', ['section' => 'geospatial', 'project_id' => $selected->id]))
+            ->assertOk()->assertSee('Selected Project Workspace')->assertDontSee('Other Project Workspace')
+            ->assertViewHas('projects', fn ($projects) => $projects->pluck('db_id')->all() === [$selected->id])
+            ->assertSee('href="'.route('project-setup.section', ['section' => 'monitoring-stations', 'project_id' => $selected->id]).'" class="btn btn-primary" data-setup-next', false);
+        $this->get(route('projects.index'))->assertOk()->assertSee('Selected Project')->assertSee('Other Project')->assertSee('Lanjut Setup');
+    }
+
+    public function test_invalid_registration_stays_on_its_step_and_does_not_advance(): void
+    {
+        $this->actingAs($this->manager());
+        $this->from(route('projects.index'))->post(route('projects.store'), ['project_code' => 'INVALID', 'setup_next' => 1])
+            ->assertRedirect(route('projects.index'))->assertSessionHasErrors(['name', 'status']);
+        $this->assertDatabaseMissing('resq_projects', ['project_code' => 'INVALID']);
+        $project = Project::create(['project_code' => 'VALIDATION', 'name' => 'Validation Project']);
+        $url = route('project-setup.section', ['section' => 'geospatial', 'project_id' => $project->id]);
+        $this->from($url)->post(route('project-workspaces.store'), [
+            'project_id' => $project->id, 'workspace_code' => 'INVALID-GWS', 'setup_next' => 1,
+        ])->assertRedirect($url)->assertSessionHasErrors(['name', 'province', 'status'])
+            ->assertSessionHasInput('workspace_code', 'INVALID-GWS');
+        $this->assertDatabaseMissing('geospatial_workspaces', ['workspace_code' => 'INVALID-GWS']);
+    }
+
+    public function test_project_context_cannot_open_an_inaccessible_or_missing_project(): void
+    {
+        $client = Client::create(['client_code' => 'NAV-CLIENT', 'name' => 'Navigation Client']);
+        $project = Project::create(['project_code' => 'PRIVATE', 'name' => 'Private Project']);
+        $user = $this->user('client');
+        $user->update(['client_id' => $client->id]);
+        $this->actingAs($user)->get(route('project-setup.section', ['section' => 'geospatial', 'project_id' => $project->id]))->assertForbidden();
+        $this->get(route('projects.index', ['project_id' => $project->id]))->assertForbidden();
+        $this->get(route('project-setup.section', ['section' => 'geospatial', 'project_id' => 999999]))->assertNotFound();
+    }
+
+    private function manager(): User
+    {
+        $user = $this->user();
+        $permission = Permission::create(['name' => 'project.create', 'resource' => 'project', 'action' => 'create']);
+        $role = Role::create(['name' => 'SetupManager', 'type' => 'system']);
+        $role->permissions()->attach($permission);
+        $user->assignRole($role);
+
+        return $user;
     }
 
     private function user(string $type = 'sentinel'): User

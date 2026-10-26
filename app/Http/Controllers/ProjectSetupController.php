@@ -38,31 +38,34 @@ use Illuminate\View\View;
 
 class ProjectSetupController extends Controller
 {
+    private const SETUP_STEPS = [
+        'project' => 'Project',
+        'geospatial' => 'Geospatial',
+        'monitoring-stations' => 'Monitoring Station',
+        'warning-stations' => 'Warning Station',
+        'sensors' => 'Sensor & Data',
+        'canonical' => 'Canonical Data',
+        'operations' => 'Operational & Response',
+    ];
+
     public function __construct(
         private readonly CanonicalMappingService $canonicalMapping,
         private readonly \App\Services\AuthorizationService $authorizationService
     ) {
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        return view('modules.projects.index', array_merge($this->viewData(), [
+        return view('modules.projects.index', array_merge($this->viewData($request), [
             'activeSection' => 'project', 'sectionTitle' => 'Project',
         ]));
     }
 
     public function section(Request $request, string $section): View
     {
-        $sections = [
-            'geospatial' => 'Geospatial',
-            'monitoring-stations' => 'Monitoring Station',
-            'warning-stations' => 'Warning Station',
-            'sensors' => 'Sensor & Data',
-            'canonical' => 'Canonical Data',
-            'operations' => 'Operational & Response',
-        ];
+        $sections = self::SETUP_STEPS;
         abort_unless(isset($sections[$section]), 404);
-        $data = $this->viewData();
+        $data = $this->viewData($request);
         if (in_array($section, ['monitoring-stations', 'warning-stations', 'sensors', 'operations'], true)) {
             abort_unless($data['permissions']['canMutateAssetRegistry'] ?? false, 403);
         }
@@ -425,9 +428,10 @@ class ProjectSetupController extends Controller
         $existing = Project::where('project_code', $data['project_code'])->first();
         $this->authorizeProjectConfigurationMutation($request, $existing, $existing ? 'edit' : 'create');
 
-        Project::updateOrCreate(['project_code' => $data['project_code']], $data);
+        $project = Project::updateOrCreate(['project_code' => $data['project_code']], $data);
 
-        return back()->with('message', 'Project berhasil disimpan.');
+        return redirect()->route('project-setup.section', ['section' => 'geospatial', 'project_id' => $project->id])
+            ->with('message', 'Project berhasil disimpan. Lanjutkan registrasi Geospatial.');
     }
 
     public function storeWorkspace(Request $request): RedirectResponse
@@ -460,7 +464,7 @@ class ProjectSetupController extends Controller
 
         GeospatialWorkspace::updateOrCreate(['workspace_code' => $data['workspace_code']], $data);
 
-        return back()->with('message', 'Geospatial workspace berhasil disimpan.');
+        return $this->setupSaveResponse($request, $project, 'geospatial', 'Geospatial workspace berhasil disimpan.');
     }
 
     public function storeInformationLayer(Request $request): RedirectResponse
@@ -669,7 +673,7 @@ class ProjectSetupController extends Controller
 
         MonitoringStation::updateOrCreate(['station_code' => $data['station_code']], $data);
 
-        return back()->with('message', 'Monitoring station berhasil disimpan.');
+        return $this->setupSaveResponse($request, $workspace->project, 'monitoring-stations', 'Monitoring station berhasil disimpan.');
     }
 
     public function storeWarningStation(Request $request): RedirectResponse
@@ -714,7 +718,7 @@ class ProjectSetupController extends Controller
 
         WarningStation::updateOrCreate(['station_code' => $data['station_code']], $data);
 
-        return back()->with('message', 'Warning station berhasil disimpan.');
+        return $this->setupSaveResponse($request, $workspace->project, 'warning-stations', 'Warning station berhasil disimpan.');
     }
 
     public function storeSensor(Request $request): RedirectResponse
@@ -832,7 +836,7 @@ class ProjectSetupController extends Controller
         $sensor = Sensor::updateOrCreate(['sensor_code' => $data['sensor_code']], $data);
         $this->upsertSensorMappingFromRegistration($sensor, $mappingData);
 
-        return back()->with('message', 'Sensor berhasil disimpan.');
+        return $this->setupSaveResponse($request, $workspace->project, 'sensors', 'Sensor berhasil disimpan.');
     }
 
     public function storeResponsePlan(Request $request): RedirectResponse
@@ -852,6 +856,27 @@ class ProjectSetupController extends Controller
         ]);
 
         return back()->with('message', 'Response plan berhasil ditambahkan.');
+    }
+
+    private function setupSteps(): array
+    {
+        return $this->authorizationService->canMutateAssetRegistry(auth()->user())
+            ? self::SETUP_STEPS
+            : array_intersect_key(self::SETUP_STEPS, array_flip(['project', 'geospatial', 'canonical']));
+    }
+
+    private function setupSaveResponse(Request $request, Project $project, string $section, string $message): RedirectResponse
+    {
+        if ($request->boolean('setup_next')) {
+            $steps = array_keys($this->setupSteps());
+            $next = $steps[array_search($section, $steps, true) + 1] ?? null;
+            if ($next) {
+                return redirect()->route('project-setup.section', ['section' => $next, 'project_id' => $project->id])
+                    ->with('message', $message);
+            }
+        }
+
+        return back()->with('message', $message);
     }
 
     private function authorizeProjectAccess(Request $request, Project $project): void
@@ -1137,7 +1162,7 @@ class ProjectSetupController extends Controller
         }
     }
 
-    private function viewData(): array
+    private function viewData(?Request $request = null): array
     {
         $provinces = $this->provinces();
 
@@ -1173,6 +1198,8 @@ class ProjectSetupController extends Controller
                 ],
                 'provinces' => $provinces,
                 'databaseReady' => false,
+                'setupProject' => null,
+                'setupSteps' => $this->setupSteps(),
             ];
         }
 
@@ -1182,6 +1209,15 @@ class ProjectSetupController extends Controller
         if ($user) {
             $this->authorizationService->scopeProjectsForUser($user, $projectQuery);
             $this->authorizationService->scopeWorkspacesForUser($user, $workspaceQuery);
+        }
+
+        $setupProject = null;
+        if ($request?->query('project_id') !== null) {
+            $request->validate(['project_id' => ['required', 'integer']]);
+            $setupProject = Project::findOrFail($request->query('project_id'));
+            $this->authorizeProjectAccess($request, $setupProject);
+            $projectQuery->whereKey($setupProject->id);
+            $workspaceQuery->where('project_id', $setupProject->id);
         }
 
         $projectModels = $projectQuery->latest()->get();
@@ -1232,7 +1268,11 @@ class ProjectSetupController extends Controller
             : collect();
         $mstPrefixes = Schema::hasTable('mst_prefixes') ? MstPrefix::latest()->get() : collect();
         $dataLoggerModels = Schema::hasTable('data_loggers')
-            ? DataLogger::with('monitoringStation')->latest()->get()
+            ? DataLogger::with('monitoringStation')
+                ->when($setupProject, fn ($query) => $query->where(fn ($query) => $query
+                    ->whereNull('monitoring_station_id')
+                    ->orWhereIn('monitoring_station_id', $monitoringModels->pluck('id'))))
+                ->latest()->get()
             : collect();
         $connectivityModels = Schema::hasTable('connectivity_configs')
             ? ConnectivityConfig::with('dataLogger')->latest()->get()
@@ -1496,7 +1536,12 @@ class ProjectSetupController extends Controller
             'mqttConfigurations' => $mqttConfigurations,
             'telemetryReadings' => $this->telemetryFromModels($telemetryModels),
             'mstPrefixes' => $mstPrefixes,
-            'responsePlans' => ResponsePlan::latest()->get(),
+            'responsePlans' => ResponsePlan::query()
+                ->when($setupProject, fn ($query) => $query->where(fn ($query) => $query
+                    ->whereIn('workspace_id', $accessibleWorkspaceIds)
+                    ->orWhereIn('sensor_id', $sensorModels->pluck('id'))
+                    ->orWhereIn('warning_station_id', $warningModels->pluck('id'))))
+                ->latest()->get(),
             'informationLayers' => $informationLayers,
             'referenceRoutes' => $referenceRoutes,
             'corridors' => $corridors,
@@ -1508,7 +1553,11 @@ class ProjectSetupController extends Controller
             'permissions' => $permissions,
             'provinces' => $provinces,
             'canonicalParameters' => Schema::hasTable('canonical_parameters') ? CanonicalParameter::orderBy('domain')->orderBy('field_identity')->get() : collect(),
-            'sensorMappingProfiles' => Schema::hasTable('sensor_mapping_profiles') ? SensorMappingProfile::with(['sensor', 'canonicalParameter'])->latest()->get() : collect(),
+            'sensorMappingProfiles' => Schema::hasTable('sensor_mapping_profiles') ? SensorMappingProfile::with(['sensor', 'canonicalParameter'])
+                ->when($setupProject, fn ($query) => $query->whereIn('sensor_id', $sensorModels->pluck('id')))
+                ->latest()->get() : collect(),
+            'setupProject' => $setupProject,
+            'setupSteps' => $this->setupSteps(),
             'databaseReady' => true,
         ];
     }

@@ -43,6 +43,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/tde-data', [DashboardController::class, 'dashboardTdeData'])->name('dashboard.tde-data');
     Route::get('/dashboard/projects/{project}/map', [DashboardController::class, 'projectMap'])->name('dashboard.projects.map');
     Route::get('/dashboard/projects/{project}/map-data', [DashboardController::class, 'projectMapData'])->name('dashboard.projects.map-data');
     Route::get('/dashboard/projects/{project}/tde-data', [DashboardController::class, 'projectTdeData'])->name('dashboard.projects.tde-data');

@@ -28,7 +28,7 @@ class DashboardController extends Controller
     {
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): View|JsonResponse
     {
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:150'],
@@ -66,8 +66,33 @@ class DashboardController extends Controller
                         ->when($filters['city'] ?? null, fn ($q, $city) => $q->where('city', $city));
                 });
             }
+            $projectPriorities = $this->mapSensors((clone $query)->pluck('resq_projects.id')->all())
+                ->groupBy('project_id')
+                ->map(fn ($sensors) => $sensors->max(fn ($sensor) => $this->sensorPriority($sensor)));
+            $prioritySql = 'CASE';
+            $priorityBindings = [];
+            foreach ($projectPriorities->groupBy(fn ($priority) => $priority, preserveKeys: true) as $priority => $group) {
+                $prioritySql .= ' WHEN resq_projects.id IN ('.implode(',', array_fill(0, $group->count(), '?')).') THEN ?';
+                array_push($priorityBindings, ...$group->keys()->all());
+                $priorityBindings[] = (int) $priority;
+            }
+            if ($priorityBindings) {
+                $query->orderByRaw($prioritySql.' ELSE -1 END DESC', $priorityBindings);
+            }
             $projects = $query->with(['client', 'workspaces'])->withCount(['workspaces', 'monitoringStations', 'warningStations'])
                 ->orderBy('name')->orderBy('id')->paginate($perPage)->appends($filters);
+            $labels = [3 => ['Awas', 'danger'], 2 => ['Siaga', 'warning'], 1 => ['Waspada', 'warning'], 0 => ['Normal', 'success'], -1 => ['Belum diketahui', 'secondary']];
+            foreach ($projects as $project) {
+                [$project->monitoring_status, $project->monitoring_tone] = $labels[$projectPriorities->get($project->id, -1)];
+            }
+        }
+
+        if ($request->expectsJson()) {
+            return $this->noStoreJson([
+                'html' => view('modules.dashboard.partials.project-list', compact('projects', 'totalProjects'))->render(),
+                'count_label' => $projects->total().' dari '.$totalProjects.' Project',
+                'project_ids' => $projects->getCollection()->modelKeys(),
+            ]);
         }
 
         return view('modules.dashboard.index', [
@@ -90,6 +115,12 @@ class DashboardController extends Controller
             'mapSensors' => $payload['sensors'],
             'mapWarningStations' => $payload['warningStations'],
             'dashboardAlertActive' => $payload['alert_active'],
+            'projectMonitoringStations' => MonitoringStation::where('project_id', $project->id)->orderBy('station_code')->pluck('station_code'),
+            'projectWeatherLocations' => $project->workspaces()->orderBy('id')->get(['city', 'latitude', 'longitude'])
+                ->map(fn ($workspace) => ['city' => $workspace->city, 'lat' => $workspace->latitude, 'lng' => $workspace->longitude])
+                ->concat($project->monitoringStations()->orderBy('id')->get(['latitude', 'longitude'])
+                    ->map(fn ($station) => ['city' => null, 'lat' => $station->latitude, 'lng' => $station->longitude]))
+                ->values(),
         ]);
     }
 
@@ -104,25 +135,48 @@ class DashboardController extends Controller
     {
         abort_unless($this->authorization->canAccessProject($request->user(), $project), 403);
 
-        $stations = MonitoringStation::where('project_id', $project->id)
-            ->with(['workspace', 'functionConfigurations', 'sensors.mappingProfile.canonicalParameter', 'sensors.mappingProfiles.canonicalParameter'])
-            ->orderBy('station_code')->get();
+        return $this->noStoreJson([
+            'stations' => $this->tdeStations([$project->id], $evaluator),
+            'generated_at' => now()->toISOString(),
+        ]);
+    }
+
+    public function dashboardTdeData(Request $request, TrendDiagnosisEvaluator $evaluator): JsonResponse
+    {
+        $data = $request->validate([
+            'project_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'project_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+        $ids = array_map('intval', $data['project_ids']);
+        abort_unless($this->accessibleProjectQuery($request)->whereIn('id', $ids)->count() === count($ids), 403);
 
         return $this->noStoreJson([
-            'stations' => $stations->map(function (MonitoringStation $station) use ($evaluator) {
+            'stations' => $this->tdeStations($ids, $evaluator),
+            'generated_at' => now()->toISOString(),
+        ]);
+    }
+
+    private function tdeStations(array $projectIds, TrendDiagnosisEvaluator $evaluator)
+    {
+        return MonitoringStation::whereIn('project_id', $projectIds)
+            ->with(['project', 'workspace', 'functionConfigurations', 'sensors.mappingProfile.canonicalParameter', 'sensors.mappingProfiles.canonicalParameter'])
+            ->orderBy('project_id')->orderBy('station_code')->get()
+            ->map(function (MonitoringStation $station) use ($evaluator) {
                 $configuration = $station->functionConfigurations->firstWhere('function_name', StationFunctionConfiguration::FUNCTION_TDE);
 
                 return [
                     'id' => $station->id,
                     'station_code' => $station->station_code,
                     'name' => $station->name,
+                    'project_id' => $station->project_id,
+                    'project_name' => $station->project?->name,
+                    'project_code' => $station->project?->project_code,
+                    'forecast_url' => route('tde-forecast.index', ['station_id' => $station->id], false),
                     'lat' => $station->latitude ?? $station->workspace?->latitude,
                     'lng' => $station->longitude ?? $station->workspace?->longitude,
                     'tde' => (new TrendDiagnosisAnalyticalFunctionRunner($evaluator, $configuration))->run($station),
                 ];
-            })->values(),
-            'generated_at' => now()->toISOString(),
-        ]);
+            })->values();
     }
 
     public function mapData(Request $request): JsonResponse
@@ -269,6 +323,7 @@ class DashboardController extends Controller
                     : $alertValue;
 
                 return [
+                    'project_id' => $workspace?->project_id ?? $station?->project_id ?? $sensor->warningStation?->project_id,
                     'name' => $sensor->sensor_code,
                     'type' => $sensor->type,
                     'parameter' => $sensor->parameter,
@@ -296,14 +351,33 @@ class DashboardController extends Controller
                     'lng' => $lng ? (float) $lng : null,
                 ];
             })
+            ->sort(fn ($a, $b) => ($this->sensorPriority($b) <=> $this->sensorPriority($a)) ?: strnatcasecmp($a['name'], $b['name']))
             ->values();
+    }
+
+    private function sensorPriority(array $sensor): int
+    {
+        $ranks = ['AWAS' => 3, 'BAHAYA' => 3, 'DANGER' => 3, 'CRITICAL' => 3, 'SIAGA' => 2, 'WASPADA' => 1, 'WARNING' => 1, 'NORMAL' => 0, 'SIAP' => 0];
+
+        $priority = max(
+            $ranks[strtoupper(trim($sensor['status'] ?? ''))] ?? -1,
+            $ranks[strtoupper(trim($sensor['alert_level'] ?? ''))] ?? -1,
+            ($sensor['threshold_exceeded'] ?? false) ? 3 : -1
+        );
+
+        if ($priority <= 0 && collect([$sensor['status'] ?? '', $sensor['alert_level'] ?? ''])
+            ->contains(fn ($status) => in_array(strtoupper(trim($status)), ['OFFLINE', 'UNKNOWN'], true))) {
+            return -1;
+        }
+
+        return $priority;
     }
 
     private function mapWarningStations(array $projectIds)
     {
         $provinceCoordinates = $this->provinceCoordinates();
 
-        return WarningStation::with(['workspace', 'sensors'])
+        return WarningStation::with(['workspace', 'sensors', 'monitoringStation'])
             ->whereIn('project_id', $projectIds)
             ->get()
             ->map(function (WarningStation $station) use ($provinceCoordinates) {
@@ -336,7 +410,15 @@ class DashboardController extends Controller
                     ->values();
 
                 return [
+                    'id' => $station->id,
+                    'station_code' => $station->station_code,
                     'name' => $station->station_code . ' - ' . $station->name,
+                    'workspace' => $workspace?->name,
+                    'monitoring_station' => $station->monitoringStation?->station_code,
+                    'zone_id' => $station->zone_id,
+                    'administrative_location' => $station->administrative_location,
+                    'controller_id' => $station->controller_id,
+                    'controller_status' => $station->controller_status,
                     'province' => $workspace?->province,
                     'city' => $workspace?->city,
                     'status' => $station->status,

@@ -232,14 +232,19 @@
         .project-map-header {
             position: absolute; z-index: 1000; top: 16px; left: 60px;
             display: flex; align-items: center; gap: 12px;
-            max-width: calc(100% - 132px); padding: 10px 14px;
-            background: #fff; border-radius: 10px; box-shadow: 0 4px 18px rgba(18, 38, 63, .16);
+            max-width: calc(100% - clamp(360px, 32vw, 460px) - 100px); padding: 10px 14px;
+            background: #fff; border-radius: 5px; box-shadow: 0 4px 18px rgba(18, 38, 63, .16);
         }
         .project-map-title { min-width: 0; }
         .project-map-title h1 { font-size: 15px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .project-map-title p { font-size: 12px; color: #74788d; margin: 3px 0 0; }
         .project-map-back { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; color: #343a40; border-radius: 6px; }
         .project-map-back:hover, .project-map-back:focus-visible { background: #f1f4f8; }
+        .warning-station-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #b7791f; border-radius: 50%; color: #854d0e; box-shadow: 0 3px 12px rgba(18,38,63,.25); font-size: 22px; }
+        .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
+        @media (max-width: 767px) {
+            .project-map-header { max-width: calc(100% - 132px); }
+        }
         @media (max-width: 575px) {
             .project-map-header { top: 10px; gap: 6px; padding: 8px; }
             .project-map-title h1 { font-size: 13px; }
@@ -255,13 +260,17 @@
             <h1>{{ $project->name }}</h1>
             <p>{{ $project->project_code }}</p>
         </div>
-        <button type="button" id="map-fit-filtered" class="btn btn-sm btn-light" aria-label="Fokus ke project" title="Fokus ke project"><i class="bx bx-target-lock fs-5" aria-hidden="true"></i></button>
+        <button type="button" id="map-fit-filtered" class="btn btn-sm btn-light" aria-label="Kembali ke area Semeru" title="Kembali ke area Semeru"><i class="bx bx-target-lock fs-5" aria-hidden="true"></i></button>
     </header>
 @include('modules.dashboard.partials.monitoring-panel')
 <script src="{{ URL::asset('build/libs/leaflet/leaflet.js') }}"></script>
+<script src="{{ asset('build/js/pages/dashboard-weather-widget.js') }}?v={{ filemtime(public_path('build/js/pages/dashboard-weather-widget.js')) }}"></script>
 <script src="{{ asset('build/js/pages/project-map-monitoring.js') }}?v={{ filemtime(public_path('build/js/pages/project-map-monitoring.js')) }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        DashboardWeatherWidget.mount(document.getElementById('dashboard-weather-widget'), {
+            projectLocations: @json($projectWeatherLocations)
+        });
         var mapElement = document.getElementById('sensor-cluster-map');
 
         if (!mapElement || typeof L === 'undefined') {
@@ -281,11 +290,22 @@
             alert_active: initialAlertActive
         };
         var fitFilteredButton = document.getElementById('map-fit-filtered');
-        // Match the monitoring zoom range used by the CFPE map.
+        // Keep the same Semeru region and zoom limits as the original monitoring map.
         var mapMinZoom = 12;
+        var initialMapZoom = 12;
+        var userAdjustedView = false;
+        var isApplyingMapFocus = false;
         var mapMaxZoom = 16;
-        var defaultMapCenter = [-2.6, 118.0];
-        var defaultMapZoom = mapMinZoom;
+        var defaultMapCenter = [-8.1724, 112.9716];
+        var semeruMapBounds = L.latLngBounds(
+            [-8.371469032, 112.783198121],
+            [-8.055529857, 113.249208404]
+        );
+        var semeruFocusBounds = L.latLngBounds(
+            [-8.2390, 112.9220],
+            [-8.1080, 113.0185]
+        );
+        var defaultMapZoom = initialMapZoom;
 
 
         var statusColors = {
@@ -362,48 +382,25 @@
             return sensor.value || sensor.status || '-';
         }
 
-        function allMapItems(data) {
-            return []
-                .concat(data.clusters || [])
-                .concat(data.sensors || [])
-                .concat(data.warningStations || []);
-        }
-
         function hasCoordinate(item) {
             return item.lat != null && item.lng != null &&
                 Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lng)) &&
                 Math.abs(Number(item.lat)) <= 90 && Math.abs(Number(item.lng)) <= 180;
         }
 
-        function boundsFromItems(items) {
-            var latLngs = items
-                .filter(hasCoordinate)
-                .map(function (item) {
-                    return [Number(item.lat), Number(item.lng)];
-                });
-
-            return latLngs.length ? L.latLngBounds(latLngs) : null;
-        }
-
-        function applyMapFocus(data) {
+        function applyMapFocus() {
             if (hasAppliedInitialFocus) {
                 return;
             }
 
-            var bounds = boundsFromItems(allMapItems(data));
-            var spatialBounds = spatialLayer.getBounds();
-            if (spatialBounds.isValid()) {
-                bounds = bounds ? bounds.extend(spatialBounds) : spatialBounds;
-            }
-            if (!bounds || !bounds.isValid()) {
-                return;
-            }
-
-            map.fitBounds(bounds.pad(0.15), {
-                paddingTopLeft: [40, 90],
-                paddingBottomRight: [40, Math.min(window.innerHeight / 2, document.getElementById('map-monitor-panel').offsetHeight + 40)],
-                maxZoom: mapMinZoom
-            });
+            var padding = projectMapViewportPadding(
+                mapElement.getBoundingClientRect(),
+                document.getElementById('map-monitor-panel').getBoundingClientRect(),
+                document.querySelector('.project-map-header').getBoundingClientRect()
+            );
+            isApplyingMapFocus = true;
+            map.fitBounds(semeruFocusBounds, Object.assign(padding, { maxZoom: initialMapZoom, animate: false }));
+            isApplyingMapFocus = false;
             hasAppliedInitialFocus = true;
         }
 
@@ -433,8 +430,20 @@
         var map = L.map('sensor-cluster-map', {
             scrollWheelZoom: true,
             minZoom: mapMinZoom,
-            maxZoom: mapMaxZoom
+            maxZoom: mapMaxZoom,
+            maxBounds: semeruMapBounds,
+            maxBoundsViscosity: 1
         }).setView(defaultMapCenter, defaultMapZoom);
+        map.createPane('warning-stations').style.zIndex = 625;
+        map.on('movestart', function () {
+            if (!isApplyingMapFocus) userAdjustedView = true;
+        });
+        map.on('resize', function () {
+            if (!userAdjustedView) {
+                hasAppliedInitialFocus = false;
+                applyMapFocus();
+            }
+        });
 
         L.control.scale({
             imperial: false,
@@ -479,6 +488,8 @@
         var tdeLayer = L.layerGroup().addTo(map);
         var monitoring = new ProjectMapMonitoring({
             panel: document.getElementById('map-monitor-panel'),
+            openButton: document.getElementById('map-monitor-open'),
+            sensorDialog: document.getElementById('map-sensor-detail'),
             sirenUrl: @json(asset('sound/sirene.mp3')),
             tdeUrl: @json(route('dashboard.projects.tde-data', $project, false)),
             onTdeData: function (stations, presentation) {
@@ -548,7 +559,10 @@
             });
 
             var sensorIndexByCoordinate = {};
-            sensorPoints.filter(hasCoordinate).forEach(function (sensor) {
+            // Keep colocated marker offsets stable while the sensor listing changes priority.
+            sensorPoints.filter(hasCoordinate).sort(function (a, b) {
+                return String(a.name).localeCompare(String(b.name), 'id', { numeric: true });
+            }).forEach(function (sensor) {
                 var sensorDanger = isDanger(sensor);
                 var color = sensorDanger ? '#f46a6a' : (statusColors[sensor.status] || '#50a5f1');
                 var statusClass = sensorDanger
@@ -599,24 +613,9 @@
                 ).addTo(sensorLayer);
             });
 
-            warningStations.forEach(function (station) {
+            warningStations.filter(hasCoordinate).forEach(function (station) {
                 var stationDanger = Boolean(station.is_danger);
                 var color = stationDanger ? '#f46a6a' : (statusColors[station.status] || '#f1b44c');
-                var warningReadings = '';
-
-                (station.danger_sensors || []).forEach(function (sensor) {
-                    warningReadings += sensorReadingHtml(sensor)
-                        .replace('<div class="map-danger-reading">', '<div class="map-danger-reading"><strong>' + escapeHtml(sensor.name) + '</strong>');
-                });
-
-                var stationPopupBody =
-                    '<br>Provinsi: ' + escapeHtml(station.province) +
-                    '<br>Kab/Kota: ' + escapeHtml(station.city) +
-                    '<br>Status: ' + escapeHtml(station.status) +
-                    '<br>Public Warning: ' + (station.public_warning_enabled ? 'Aktif' : 'Standby') +
-                    '<br>ACK: ' + escapeHtml(station.ack_response) +
-                    (warningReadings || '<div class="map-danger-reading">Belum ada bacaan sensor bahaya.</div>');
-
                 if (stationDanger) {
                     L.circle([station.lat, station.lng], {
                         radius: 150000,
@@ -624,31 +623,28 @@
                         fillColor: '#f46a6a',
                         fillOpacity: 0.24,
                         weight: 5,
-                        className: 'danger-map-radius'
+                        className: 'danger-map-radius',
+                        interactive: false
                     }).addTo(warningLayer);
                 }
 
-                var warningIcon = stationDanger
-                    ? L.divIcon({
-                        className: 'sensor-live-icon',
-                        html: '<span class="danger-warning-icon"><i class="bx bxs-error"></i></span>',
-                        iconSize: [60, 60],
-                        iconAnchor: [30, 30],
-                        popupAnchor: [0, -26]
-                    })
-                    : undefined;
-                var warningMarkerOptions = {
-                    title: station.name
-                };
-
-                if (warningIcon) {
-                    warningMarkerOptions.icon = warningIcon;
-                }
-
-                L.marker([station.lat, station.lng], warningMarkerOptions).bindPopup(stationDanger
-                    ? dangerPopup(station.name, stationPopupBody)
-                    : '<strong>' + escapeHtml(station.name) + '</strong>' + stationPopupBody
-                ).addTo(warningLayer);
+                var warningIcon = L.divIcon({
+                    className: 'sensor-live-icon warning-station-marker',
+                    html: stationDanger
+                        ? '<span class="danger-warning-icon"><i class="bx bxs-error" aria-hidden="true"></i></span>'
+                        : '<span class="warning-station-icon"><i class="bx bxs-bell-ring" aria-hidden="true"></i></span>',
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18]
+                });
+                L.marker([station.lat, station.lng], {
+                    title: 'Detail Warning Station: ' + station.name,
+                    alt: 'Detail Warning Station: ' + station.name,
+                    pane: 'warning-stations',
+                    icon: warningIcon,
+                    keyboard: true
+                }).on('click', function () {
+                    monitoring.selectWarningStation(station.id);
+                }).addTo(warningLayer);
 
                 L.circleMarker([station.lat, station.lng], {
                     radius: stationDanger ? 16 : 11,
@@ -656,11 +652,12 @@
                     fillColor: stationDanger ? color : '#ffffff',
                     fillOpacity: stationDanger ? 0.45 : 0.2,
                     weight: stationDanger ? 4 : 3,
-                    className: stationDanger ? 'danger-map-radius' : ''
+                    className: stationDanger ? 'danger-map-radius' : '',
+                    interactive: false
                 }).addTo(warningLayer);
             });
 
-            applyMapFocus(visibleData);
+            applyMapFocus();
         }
 
         L.control.layers({
@@ -676,12 +673,14 @@
             'Koridor & Route': spatialLayer,
             'Hasil TDE': tdeLayer
         }, {
-            collapsed: true
+            collapsed: true,
+            position: 'topleft'
         }).addTo(map);
 
         fitFilteredButton.addEventListener('click', function () {
+            userAdjustedView = false;
             hasAppliedInitialFocus = false;
-            applyMapFocus(latestMapData);
+            applyMapFocus();
         });
 
         renderMapData(latestMapData);
@@ -854,24 +853,9 @@
                     ).addTo(spatialLayer);
                 });
 
-                // Draw warning stations with siren icon
-                (data.warning_stations || []).forEach(function (station) {
-                    if (!station.latitude || !station.longitude) return;
-                    L.marker([station.latitude, station.longitude], {
-                        icon: L.divIcon({
-                            html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🚨</span>',
-                            className: '',
-                            iconSize: [26, 26],
-                            iconAnchor: [13, 13]
-                        })
-                    }).bindPopup(
-                        '<strong>🚨 Warning Station</strong><br>' +
-                        escapeHtml(station.station_code) + '<br>' +
-                        escapeHtml(station.name) + '<br>' +
-                        '<span class="badge bg-danger">' + escapeHtml(station.status || 'Active') + '</span>'
-                    ).addTo(spatialLayer);
-                });
-                applyMapFocus(latestMapData);
+                // Warning stations use the live warningLayer so every icon opens the same details.
+                // Overlay geometry must never expand the locked Semeru viewport.
+                applyMapFocus();
             })
             .catch(function () {});
         }

@@ -123,6 +123,7 @@
                         || request()->routeIs('project-configuration')
                         || request()->routeIs('project-*');
                     $projectSetupSection = request()->route('section') ?? 'project';
+                    $projectSetupContext = isset($setupProject) ? ['project_id' => $setupProject->id] : [];
                     $configurationMenuActive = request()->routeIs('cfpe.*')
                         || request()->routeIs('canonical-database.*')
                         || request()->routeIs('canonical-mapping.*')
@@ -142,25 +143,25 @@
                     </a>
                     <ul class="sub-menu {{ $projectSetupMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $projectSetupMenuActive ? 'true' : 'false' }}">
                         <li>
-                            <a href="{{ route('projects.index') }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'project' ? 'active' : '' }}">Project</a>
+                            <a href="{{ route('projects.index', $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'project' ? 'active' : '' }}">Project</a>
                         </li>
                         <li>
-                            <a href="{{ route('project-setup.section', ['section' => 'geospatial']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'geospatial' ? 'active' : '' }}">Geospatial</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'geospatial'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'geospatial' ? 'active' : '' }}">Geospatial</a>
                         </li>
                         <li>
-                            <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'monitoring-stations' ? 'active' : '' }}">Monitoring Station</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'monitoring-stations' ? 'active' : '' }}">Monitoring Station</a>
                         </li>
                         <li>
-                            <a href="{{ route('project-setup.section', ['section' => 'warning-stations']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'warning-stations' ? 'active' : '' }}">Warning Station</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'warning-stations'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'warning-stations' ? 'active' : '' }}">Warning Station</a>
                         </li>
                         <li>
-                            <a href="{{ route('project-setup.section', ['section' => 'sensors']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'sensors' ? 'active' : '' }}">Sensor &amp; Data</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'sensors'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'sensors' ? 'active' : '' }}">Sensor &amp; Data</a>
                         </li>
                         <li>
-                            <a href="{{ route('project-setup.section', ['section' => 'canonical']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'canonical' ? 'active' : '' }}">Canonical Data</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'canonical'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'canonical' ? 'active' : '' }}">Canonical Data</a>
                         </li>
                         <li>
-                            <a href="{{ route('project-setup.section', ['section' => 'operations']) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'operations' ? 'active' : '' }}">Operational &amp; Response</a>
+                            <a href="{{ route('project-setup.section', ['section' => 'operations'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'operations' ? 'active' : '' }}">Operational &amp; Response</a>
                         </li>
                     </ul>
                 </li>
