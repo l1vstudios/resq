@@ -737,6 +737,7 @@ class ProjectSetupController extends Controller
             'function_code' => ['required', Rule::in(['FC01', 'FC02', 'FC03', 'FC04'])],
             'quantity' => ['required', 'integer', 'min:1', 'max:125'],
             'poll_interval_ms' => ['required', 'integer', 'min:250', 'max:60000'],
+            'sensor_id' => ['nullable', 'integer', Rule::exists('sensors', 'id')],
             'sensor_code' => ['required', 'string', 'max:255'],
             'type' => ['required', 'string', 'max:100'],
             'parameter' => ['nullable', 'string', 'max:255'],
@@ -798,8 +799,20 @@ class ProjectSetupController extends Controller
             $this->assertNullableDataLoggerForStation($data['data_logger_id'] ?? null, $data['monitoring_station_id']);
             $data['mqtt_configuration_id'] = null;
         }
-        $existing = Sensor::where('sensor_code', $data['sensor_code'])->first();
+        $sensorId = $data['sensor_id'] ?? null;
+        unset($data['sensor_id']);
+        $existing = $sensorId
+            ? Sensor::findOrFail($sensorId)
+            : Sensor::where('sensor_code', $data['sensor_code'])->first();
         abort_if($existing && (int) $existing->workspace?->project_id !== (int) $workspace->project_id, 403);
+
+        if ($existing && Sensor::query()
+            ->where('sensor_code', $data['sensor_code'])
+            ->whereKeyNot($existing->id)
+            ->exists()) {
+            return back()->withInput()->withErrors(['sensor_code' => 'Sensor ID sudah dipakai sensor lain.']);
+        }
+
         $this->authorizeAssetRegistryMutation($request);
         $this->authorizeSpatialMutation($request, $workspace->project, $existing ? 'edit' : 'create');
 
@@ -824,7 +837,7 @@ class ProjectSetupController extends Controller
             ->where('mst_prefix_id', $data['mst_prefix_id'])
             ->where('slave_id', $data['slave_id'])
             ->where('address', $data['address'])
-            ->where('sensor_code', '!=', $data['sensor_code'])
+            ->when($existing, fn ($query) => $query->whereKeyNot($existing->id))
             ->exists();
 
         if ($addressAlreadyUsed) {
@@ -833,7 +846,9 @@ class ProjectSetupController extends Controller
                 ->withInput();
         }
 
-        $sensor = Sensor::updateOrCreate(['sensor_code' => $data['sensor_code']], $data);
+        $sensor = $existing
+            ? tap($existing)->update($data)
+            : Sensor::create($data);
         $this->upsertSensorMappingFromRegistration($sensor, $mappingData);
 
         return $this->setupSaveResponse($request, $workspace->project, 'sensors', 'Sensor berhasil disimpan.');
@@ -1728,17 +1743,18 @@ class ProjectSetupController extends Controller
                         [$latitude, $longitude] = $this->sensorMapCoordinate($sensor, $index);
 
                         return [
-                            'id' => $sensor->id,
+                            'db_id' => $sensor->id,
+                            'id' => $sensor->sensor_code,
                             'project_id' => $sensor->monitoringStation?->project_id
                                 ?? $sensor->warningStation?->project_id
                                 ?? $sensor->workspace?->project_id,
-                            'workspace_id' => $sensor->workspace_id,
-                            'monitoring_station_id' => $sensor->monitoring_station_id,
-                            'warning_station_id' => $sensor->warning_station_id,
-                            'data_logger_id' => $sensor->data_logger_id,
+                            'workspace_db_id' => $sensor->workspace_id,
+                            'monitoring_station_db_id' => $sensor->monitoring_station_id,
+                            'warning_station_db_id' => $sensor->warning_station_id,
+                            'data_logger_db_id' => $sensor->data_logger_id,
                             'input_source' => $sensor->input_source ?? 'data_logger',
-                            'mqtt_configuration_id' => $sensor->mqtt_configuration_id,
-                            'mst_prefix_id' => $sensor->mst_prefix_id,
+                            'mqtt_configuration_db_id' => $sensor->mqtt_configuration_id,
+                            'mst_prefix_db_id' => $sensor->mst_prefix_id,
                             'station_code' => $sensor->monitoringStation?->station_code
                                 ?? $sensor->warningStation?->station_code,
                             'logger_code' => $sensor->dataLogger?->logger_code,

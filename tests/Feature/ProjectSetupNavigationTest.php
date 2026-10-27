@@ -10,6 +10,7 @@ use App\Models\MstPrefix;
 use App\Models\Permission;
 use App\Models\Project;
 use App\Models\Role;
+use App\Models\Sensor;
 use App\Models\User;
 use App\Models\WarningStation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -155,6 +156,7 @@ class ProjectSetupNavigationTest extends TestCase
         $this->get($url('operations'))->assertOk()->assertSee('Buka Dashboard')
             ->assertSee(route('dashboard.projects.map', $project), false);
         $this->assertDatabaseHas('sensors', ['sensor_code' => 'FLOW-SENSOR', 'workspace_id' => $workspace->id]);
+
     }
 
     public function test_next_links_keep_the_selected_project_and_only_its_resources(): void
@@ -173,6 +175,41 @@ class ProjectSetupNavigationTest extends TestCase
             ->assertViewHas('projects', fn ($projects) => $projects->pluck('db_id')->all() === [$selected->id])
             ->assertSee('href="'.route('project-setup.section', ['section' => 'monitoring-stations', 'project_id' => $selected->id]).'" class="btn btn-primary" data-setup-next', false);
         $this->get(route('projects.index'))->assertOk()->assertSee('Selected Project')->assertSee('Other Project')->assertSee('Lanjut Setup');
+    }
+
+    public function test_updating_a_sensor_ignores_its_own_prefix_slave_and_address(): void
+    {
+        $user = $this->user();
+        $user->update(['status' => 'active']);
+        $role = Role::create(['name' => 'SensorEditor', 'type' => 'system', 'is_super_admin' => true]);
+        $user->assignRole($role);
+        $project = Project::create(['project_code' => 'SENSOR-EDIT', 'name' => 'Sensor Edit Project']);
+        $workspace = GeospatialWorkspace::create([
+            'project_id' => $project->id, 'workspace_code' => 'SENSOR-EDIT-GWS', 'name' => 'Sensor Edit Workspace', 'province' => 'DKI Jakarta',
+        ]);
+        $station = MonitoringStation::create([
+            'project_id' => $project->id, 'workspace_id' => $workspace->id,
+            'station_code' => 'SENSOR-EDIT-MON', 'name' => 'Sensor Edit Monitoring',
+        ]);
+        $prefix = MstPrefix::create(['prefix_code' => 'SENSOR-EDIT-PFX', 'name' => 'Sensor Edit Prefix', 'status' => 'Active']);
+        $sensor = Sensor::create([
+            'workspace_id' => $workspace->id, 'monitoring_station_id' => $station->id,
+            'mst_prefix_id' => $prefix->id, 'sensor_code' => 'SENSOR-EDIT-01', 'type' => 'water_level',
+            'slave_id' => '1', 'address' => '0', 'function_code' => 'FC03', 'quantity' => 1,
+            'poll_interval_ms' => 1000, 'data_type' => 'float32', 'scale_factor' => 1, 'offset' => 0,
+            'reading_method' => 'Polling', 'alert_level' => 'Normal', 'status' => 'Normal',
+        ]);
+
+        $this->actingAs($user)->from(route('project-setup.section', 'sensors'))->post(route('project-sensors.store'), [
+            'sensor_id' => $sensor->id,
+            'workspace_id' => $workspace->id, 'monitoring_station_id' => $station->id,
+            'mst_prefix_id' => $prefix->id, 'sensor_code' => $sensor->sensor_code, 'type' => 'water_level',
+            'slave_id' => '1', 'address' => '0', 'function_code' => 'FC03', 'quantity' => 1,
+            'poll_interval_ms' => 1000, 'data_type' => 'float32', 'scale_factor' => 1, 'offset' => 0,
+            'parameter' => 'Updated water level', 'reading_method' => 'Polling', 'alert_level' => 'Normal', 'status' => 'Normal',
+        ])->assertSessionHasNoErrors()->assertRedirect(route('project-setup.section', 'sensors'));
+
+        $this->assertDatabaseHas('sensors', ['id' => $sensor->id, 'parameter' => 'Updated water level']);
     }
 
     public function test_invalid_registration_stays_on_its_step_and_does_not_advance(): void

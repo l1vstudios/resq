@@ -1143,6 +1143,7 @@
                             <div class="accordion-body">
                         <form method="POST" action="{{ route('project-sensors.store') }}" id="sensor-form">
                             @csrf
+                            <input type="hidden" name="sensor_id">
                             <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}" data-project-id="{{ $cluster['project_db_id'] ?? '' }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
                             <div class="mb-3"><label class="form-label">Monitoring Station</label><select name="monitoring_station_id" class="form-select" required @disabled(! $databaseReady || $monitoringStations->whereNotNull('db_id')->isEmpty())>@foreach ($monitoringStations->whereNotNull('db_id') as $station)<option value="{{ $station['db_id'] }}">{{ $station['id'] }} - {{ $station['name'] }}</option>@endforeach</select></div>
 	                            <div class="row">
@@ -1366,6 +1367,7 @@
                                                         <button type="button" class="btn btn-outline-primary btn-sm"
                                                             data-edit-form="#sensor-form"
                                                             data-edit-fields="{{ base64_encode(json_encode([
+                                                                'sensor_id' => $sensor['db_id'] ?? '',
                                                                 'workspace_id' => $sensor['workspace_db_id'] ?? '',
                                                                 'monitoring_station_id' => $sensor['monitoring_station_db_id'] ?? '',
                                                                 'input_source' => $sensor['input_source'] ?? 'data_logger',
