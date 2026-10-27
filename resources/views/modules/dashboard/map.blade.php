@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $project->name }} | Peta Project</title>
+    <title>{{ $project->displayLabel() }} | Peta Project</title>
     <link rel="shortcut icon" href="{{ asset('build/images/favicon.ico') }}">
     <link href="{{ asset('build/css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ asset('build/css/icons.min.css') }}" rel="stylesheet">
@@ -253,12 +253,11 @@
     </style>
 </head>
 <body>
-    <div id="sensor-cluster-map" role="region" aria-label="Peta {{ $project->name }}"></div>
+    <div id="sensor-cluster-map" role="region" aria-label="Peta {{ $project->displayLabel() }}"></div>
     <header class="project-map-header">
         <a href="{{ route('dashboard') }}" class="project-map-back" aria-label="Kembali ke daftar project" title="Kembali ke daftar project"><i class="bx bx-arrow-back fs-4" aria-hidden="true"></i></a>
         <div class="project-map-title">
-            <h1>{{ $project->name }}</h1>
-            <p>{{ $project->project_code }}</p>
+            <h1>{{ $project->displayLabel() }}</h1>
         </div>
         <button type="button" id="map-fit-filtered" class="btn btn-sm btn-light" aria-label="Kembali ke area Semeru" title="Kembali ke area Semeru"><i class="bx bx-target-lock fs-5" aria-hidden="true"></i></button>
     </header>

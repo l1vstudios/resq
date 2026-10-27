@@ -224,7 +224,7 @@ class RegisteredDataController extends Controller
         return [
             'project' => $project ? [
                 'id' => $project->project_code,
-                'name' => $project->name,
+                'name' => $project->displayName(),
                 'owner' => $project->owner,
                 'date' => $project->project_date,
             ] : config('resq_dummy.project'),

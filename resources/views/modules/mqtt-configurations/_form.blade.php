@@ -7,7 +7,7 @@
 <form method="POST" action="{{ route('mqtt-configurations.store') }}" id="{{ $mqttFormId }}">
     @csrf
     <div class="row">
-        <div class="col-md-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required>@foreach($mqttProjects as $project)<option value="{{ $project->id }}" @selected((string) old('project_id') === (string) $project->id)>{{ $project->project_code }} - {{ $project->name }}</option>@endforeach</select></div>
+        <div class="col-md-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required>@foreach($mqttProjects as $project)<option value="{{ $project->id }}" @selected((string) old('project_id') === (string) $project->id)>{{ $project->displayLabel() }}</option>@endforeach</select></div>
         <div class="col-md-6 mb-3"><label class="form-label">Configuration Code</label><input name="configuration_code" class="form-control" value="{{ old('configuration_code') }}" placeholder="MQTT-PROJECT-01" required></div>
     </div>
     <div class="mb-3"><label class="form-label">Name</label><input name="name" class="form-control" value="{{ old('name') }}" required></div>

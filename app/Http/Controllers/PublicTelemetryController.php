@@ -96,7 +96,7 @@ class PublicTelemetryController extends Controller
         $payload['project'] = [
             'id' => $project->id,
             'project_code' => $project->project_code,
-            'name' => $project->name,
+            'name' => $project->displayName(),
             'status' => $project->status,
         ];
 

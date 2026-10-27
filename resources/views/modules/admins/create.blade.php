@@ -86,7 +86,7 @@
                                 @forelse ($projects as $project)
                                     <label class="form-check project-option" data-client-id="{{ $project->client_id }}">
                                         <input class="form-check-input project-check" type="checkbox" name="project_ids[]" value="{{ $project->id }}" @checked(in_array($project->id, $projectIds, true))>
-                                        <span class="form-check-label"><strong>{{ $project->project_code }}</strong><span class="d-block text-muted small">{{ $project->name }}{{ $project->client ? ' · '.$project->client->name : '' }}</span></span>
+                                        <span class="form-check-label"><strong>{{ $project->project_code }}</strong><span class="d-block text-muted small">{{ collect([$project->displayName(), $project->client?->name])->filter()->implode(' · ') }}</span></span>
                                     </label>
                                 @empty
                                     <p class="text-muted small p-3 mb-0">Belum ada project.</p>

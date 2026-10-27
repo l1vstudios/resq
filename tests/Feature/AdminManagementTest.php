@@ -74,6 +74,17 @@ class AdminManagementTest extends TestCase
             ->assertSee('>Monitoring<', false);
     }
 
+    public function test_default_project_brand_name_is_hidden_but_its_code_remains_available(): void
+    {
+        $project = new Project([
+            'project_code' => 'EMP-DEMO-001',
+            'name' => 'Sentinal Project',
+        ]);
+
+        $this->assertNull($project->displayName());
+        $this->assertSame('EMP-DEMO-001', $project->displayLabel());
+    }
+
     public function test_admin_can_create_an_internal_account_with_a_hashed_password_and_role(): void
     {
         $this->admin();

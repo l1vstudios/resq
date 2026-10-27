@@ -111,8 +111,8 @@
 <section id="map-monitor-panel" class="map-monitor-panel" aria-label="Informasi monitoring project">
     <div class="monitor-header">
         <div class="monitor-header-main">
-            <div class="monitor-heading"><h2>Monitoring Project</h2><span class="monitor-badge tone-info" data-monitor="sensor-count">Memuat sensor…</span></div>
-            <div class="monitor-project-identity"><strong>{{ $project->name }}</strong><small class="monitor-muted">{{ $project->project_code }}</small><small class="monitor-muted">ID Monitoring Station: {{ ($projectMonitoringStations ?? collect())->implode(', ') ?: 'Belum ada monitoring station' }}</small></div>
+            <div class="monitor-heading"><h2>Monitoring</h2><span class="monitor-badge tone-info" data-monitor="sensor-count">Memuat sensor…</span></div>
+            <div class="monitor-project-identity">@if($project->displayName())<strong>{{ $project->displayName() }}</strong>@endif<small class="monitor-muted">{{ $project->project_code }}</small><small class="monitor-muted">ID Monitoring Station: {{ ($projectMonitoringStations ?? collect())->implode(', ') ?: 'Belum ada monitoring station' }}</small></div>
         </div>
         <button type="button" class="monitor-minimize" data-monitor="panel-toggle" aria-expanded="true" aria-controls="map-monitor-panel">Minimize</button>
         <div class="monitor-actions">

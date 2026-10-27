@@ -90,7 +90,7 @@
                             <select name="project_id" class="form-select">
                                 <option value="">Global</option>
                                 @foreach($projects ?? [] as $project)
-                                    <option value="{{ $project->id }}" @selected((int) old('project_id') === (int) $project->id)>{{ $project->project_code }} - {{ $project->name }}</option>
+                                    <option value="{{ $project->id }}" @selected((int) old('project_id') === (int) $project->id)>{{ $project->displayLabel() }}</option>
                                 @endforeach
                             </select>
                         </div>

@@ -194,7 +194,7 @@
                             <select id="cfpe-project" class="form-select">
                                 <option value="">-- Select Project --</option>
                                 @foreach ($projects as $project)
-                                    <option value="{{ $project->id }}">{{ $project->name }}</option>
+                                    <option value="{{ $project->id }}">{{ $project->displayLabel() }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -310,7 +310,7 @@
                                     <select id="import-project" class="form-select" required>
                                         <option value="">-- Select Project --</option>
                                         @foreach ($projects as $project)
-                                            <option value="{{ $project->id }}">{{ $project->name }}</option>
+                                            <option value="{{ $project->id }}">{{ $project->displayLabel() }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -372,7 +372,7 @@
                                     <select id="gpkg-project" class="form-select" required>
                                         <option value="">-- Select Project --</option>
                                         @foreach ($projects as $project)
-                                            <option value="{{ $project->id }}">{{ $project->name }}</option>
+                                            <option value="{{ $project->id }}">{{ $project->displayLabel() }}</option>
                                         @endforeach
                                     </select>
                                 </div>

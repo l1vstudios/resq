@@ -27,7 +27,7 @@
 @include('modules.platform-operations.partials.page-hero', [
     'eyebrow' => $operationsTitle ?? 'Platform Operations',
     'title' => $project->project_code.' Operational Page',
-    'subtitle' => $project->name.' active project context with spatial operational map and corridor monitoring list.',
+    'subtitle' => $project->displayLabel().' active project context with spatial operational map and corridor monitoring list.',
     'steps' => [
         ['label' => 'Active Project Context', 'icon' => 'bx bx-folder-open', 'url' => '#station-context', 'active' => true],
         ['label' => 'Spatial Map', 'icon' => 'bx bx-map', 'url' => '#ops-project-map'],
@@ -42,7 +42,7 @@
 
 	<div class="row" id="station-context">
     <div class="col-xl-3 col-md-6">
-        <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Project</p><h4>{{ $project->project_code }}</h4><div class="ops-context-line">{{ $project->name }}</div></div></div>
+        <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Project</p><h4>{{ $project->project_code }}</h4>@if($project->displayName())<div class="ops-context-line">{{ $project->displayName() }}</div>@endif</div></div>
     </div>
     <div class="col-xl-3 col-md-6">
         <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Stations</p><h4>{{ $stations->count() }}</h4><div class="ops-context-line">{{ $criticalStations }} need attention</div></div></div>

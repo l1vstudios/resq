@@ -152,7 +152,7 @@
                                 <option value="">Pilih project</option>
                                 @foreach($projects as $project)
                                     <option value="{{ $project->id }}" @selected((string) old('project_id') === (string) $project->id)>
-                                        {{ $project->project_code }} - {{ $project->name }}
+                                        {{ $project->displayLabel() }}
                                     </option>
                                 @endforeach
                             </select>

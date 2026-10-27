@@ -1,11 +1,11 @@
 @extends('layouts.master')
 
-@section('title') Project Monitoring @endsection
+@section('title') Monitoring @endsection
 
 @section('content')
 @component('components.breadcrumb')
 @slot('li_1') Project Configuration @endslot
-@slot('title') Project Monitoring @endslot
+@slot('title') Monitoring @endslot
 @endcomponent
 
 @php
@@ -26,8 +26,8 @@
             <div class="card-body">
                 <div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
                     <div>
-                        <h4 class="card-title mb-1">Project Live Monitoring</h4>
-                        <p id="project-monitor-identity" class="fw-semibold mb-1">{{ $projects->first()['name'] ?? 'Belum ada project' }}</p>
+                        <h4 class="card-title mb-1">Monitoring</h4>
+                        <p id="project-monitor-identity" class="fw-semibold mb-1">{{ $projects->first()['label'] ?? 'Belum ada project' }}</p>
                         <p class="text-muted mb-0">Pantau nilai sensor terbaru. Start/Stop gateway dari halaman Data Loggers.</p>
                     </div>
                     <div class="d-flex flex-wrap align-items-end gap-2">
@@ -35,7 +35,7 @@
                             <label class="form-label mb-1">Project</label>
                             <select class="form-select" id="project-monitor-select" @disabled(! $databaseReady || $projects->whereNotNull('db_id')->isEmpty())>
                                 @foreach ($projects->whereNotNull('db_id') as $item)
-                                    <option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>
+                                    <option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -312,7 +312,7 @@
 
         function renderLiveData(data) {
             const project = data.project || {};
-            identityEl.textContent = [project.name, project.project_code].filter(Boolean).join(' · ') || 'Belum ada project';
+            identityEl.textContent = project.label || project.id || 'Belum ada project';
             const summary = data.summary || {};
             const sensors = Array.isArray(data.sensors) ? data.sensors : [];
 
@@ -348,7 +348,7 @@
                     const valueClass = sensor.fresh ? (changed ? 'text-primary fw-bold' : 'fw-bold') : 'text-muted fw-bold';
 
                     return '<tr>' +
-                        '<td>' + escapeHtml(project.name || '-') + '</td>' +
+                        '<td>' + escapeHtml(project.label || project.id || '-') + '</td>' +
                         '<td><strong>' + escapeHtml(sensor.station || '-') + '</strong></td>' +
                         '<td><div class="fw-bold">' + escapeHtml(sensor.logger_code || '-') + '</div></td>' +
                         '<td><div class="fw-bold">' + escapeHtml(sensor.sensor_code || '-') + '</div><small class="text-muted">' + escapeHtml(sensor.sensor_label || sensor.sensor_type || '-') + '</small></td>' +

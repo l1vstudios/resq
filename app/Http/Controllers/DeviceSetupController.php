@@ -1752,7 +1752,7 @@ class DeviceSetupController extends Controller
             'project' => [
                 'id' => $project->id,
                 'project_code' => $project->project_code,
-                'name' => $project->name,
+                'name' => $project->displayName(),
             ],
             'loggers' => $results,
         ], $successCount > 0 ? 200 : 422);
@@ -1859,7 +1859,7 @@ class DeviceSetupController extends Controller
             'project' => [
                 'id' => $project->id,
                 'project_code' => $project->project_code,
-                'name' => $project->name,
+                'name' => $project->displayName(),
             ],
             'loggers' => $results,
         ], $successCount > 0 ? 200 : 422);
@@ -2090,7 +2090,7 @@ class DeviceSetupController extends Controller
             'project' => [
                 'id' => $project->id,
                 'project_code' => $project->project_code,
-                'name' => $project->name,
+                'name' => $project->displayName(),
             ],
             'summary' => [
                 'loggers' => $loggerRows->count(),

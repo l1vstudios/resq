@@ -204,7 +204,7 @@ class PlatformOperationsController extends Controller
         return [
             'id' => $project->id,
             'project_code' => $project->project_code,
-            'name' => $project->name,
+            'name' => $project->displayName(),
             'area' => $this->projectArea($project),
             'station_count' => $stations->count(),
             'warning_station_count' => $project->warningStations->count(),
@@ -224,7 +224,7 @@ class PlatformOperationsController extends Controller
 
         return [
             'project_code' => $project->project_code,
-            'name' => $project->name,
+            'name' => $project->displayName(),
             'lat' => (float) $workspace->latitude,
             'lng' => (float) $workspace->longitude,
             'state' => $this->projectState($project->monitoringStations),

@@ -98,7 +98,7 @@
                                         <a href="{{ route('platform-operations.projects.show', $project['id']) }}" class="fw-semibold">
                                             {{ $project['project_code'] }}
                                         </a>
-                                        <div class="text-muted small">{{ $project['name'] }}</div>
+                                        @if($project['name'])<div class="text-muted small">{{ $project['name'] }}</div>@endif
                                     </td>
                                     <td>{{ $project['area'] }}</td>
                                     <td>{{ $project['station_count'] }}</td>

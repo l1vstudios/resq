@@ -43,7 +43,7 @@
 
 <div class="row">
     <div class="col-md-4">
-        <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Project</p><h4>{{ $project->project_code }}</h4><div class="ops-context-line">{{ $project->name }}</div></div></div>
+        <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Project</p><h4>{{ $project->project_code }}</h4>@if($project->displayName())<div class="ops-context-line">{{ $project->displayName() }}</div>@endif</div></div>
     </div>
     <div class="col-md-4">
         <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Corridor</p><h4>{{ $corridor->corridor_code }}</h4><div class="ops-context-line">{{ $corridor->name }}</div></div></div>

@@ -95,7 +95,7 @@ class ProjectSetupController extends Controller
             'project' => [
                 'id' => $project->id,
                 'project_code' => $project->project_code,
-                'name' => $project->name,
+                'name' => $project->displayName(),
             ],
             'resources' => $this->spatialResourcesForProjects(collect([$project])),
         ]);
@@ -1291,6 +1291,7 @@ class ProjectSetupController extends Controller
             'db_id' => $project->id,
             'id' => $project->project_code,
             'name' => $project->name,
+            'label' => $project->displayLabel(),
             'owner' => $project->owner,
             'date' => $project->project_date,
             'status' => $project->status,

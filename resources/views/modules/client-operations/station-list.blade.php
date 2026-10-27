@@ -37,7 +37,7 @@
 
 <div class="row">
     <div class="col-xl-4 col-md-6">
-        <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Active Project</p><h4>{{ $project->project_code }}</h4><div class="ops-context-line">{{ $project->name }}</div></div></div>
+        <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Active Project</p><h4>{{ $project->project_code }}</h4>@if($project->displayName())<div class="ops-context-line">{{ $project->displayName() }}</div>@endif</div></div>
     </div>
     <div class="col-xl-4 col-md-6">
         <div class="card ops-kpi"><div class="card-body"><p class="text-muted">Perspective</p><h4>{{ $isAdministrative ? 'Administrative' : 'Integrity' }}</h4><div class="ops-context-line">Project-scoped stations only</div></div></div>

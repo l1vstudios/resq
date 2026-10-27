@@ -24,6 +24,25 @@ class Project extends Model
         'client_id' => 'integer',
     ];
 
+    /**
+     * The seeded demo project's internal name is not part of the public UI.
+     */
+    public function displayName(): ?string
+    {
+        $name = trim((string) ($this->getRawOriginal('name') ?? $this->attributes['name'] ?? ''));
+
+        return in_array(strtolower($name), ['sentinal project', 'sentinel project'], true)
+            ? null
+            : $name;
+    }
+
+    public function displayLabel(): string
+    {
+        return $this->displayName()
+            ? $this->project_code.' — '.$this->displayName()
+            : $this->project_code;
+    }
+
     public function workspaces()
     {
         return $this->hasMany(GeospatialWorkspace::class);

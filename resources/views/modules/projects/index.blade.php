@@ -228,7 +228,7 @@
                 <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
                     <div>
                         <h4 class="card-title mb-1">{{ $sectionTitle ?? 'Project' }}</h4>
-                        <p class="text-muted mb-0">{{ $project['name'] ?? 'RESQ Project' }} - {{ $project['id'] ?? '-' }}</p>
+                        <p class="text-muted mb-0">{{ $project['label'] ?? 'RESQ Project' }}</p>
                     </div>
                     <div>
                         <span class="badge bg-primary-subtle text-primary">{{ $projects->count() }} project</span>
@@ -314,7 +314,7 @@
                                     @forelse ($projects as $item)
                                         <tr>
                                             <td>{{ $item['id'] }}</td>
-                                            <td>{{ $item['name'] }}</td>
+                                            <td>{{ $item['label'] }}</td>
                                             <td>{{ $item['owner'] }}</td>
                                             <td>{{ $item['date'] }}</td>
                                             <td><span class="badge bg-success">{{ $item['status'] }}</span></td>
@@ -372,7 +372,7 @@
                                 <label class="form-label">Project</label>
                                 <select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>
                                     @foreach ($projects as $item)
-                                        <option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>
+                                        <option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -516,7 +516,7 @@
                         <form method="POST" action="{{ route('project-information-layers.store') }}" id="information-layer-form">
                             @csrf
                             <div class="row">
-                                <div class="col-md-4 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                <div class="col-md-4 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>@endforeach</select></div>
                                 <div class="col-md-4 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Shared Project Layer</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
                                 <div class="col-md-4 mb-3"><label class="form-label">Layer ID</label><input name="layer_code" class="form-control" placeholder="LYR-FLOOD-PDG" required @disabled(! $databaseReady)></div>
                             </div>
@@ -595,7 +595,7 @@
                             <div class="col-lg-6">
                                 <form method="POST" action="{{ route('project-reference-routes.store') }}" id="reference-route-form">
                                     @csrf
-                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>@endforeach</select></div>
                                     <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Shared Reference Route</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
                                     <div class="mb-3">
                                         <label class="form-label">Route ID</label>
@@ -625,7 +625,7 @@
                             <div class="col-lg-6">
                                 <form method="POST" action="{{ route('project-corridors.store') }}" id="corridor-form">
                                     @csrf
-                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                    <div class="mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>@endforeach</select></div>
                                     <div class="mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
                                     <div class="mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referenceRoutes as $route)<option value="{{ $route['db_id'] }}">{{ $route['id'] }}</option>@endforeach</select></div>
                                     <div class="mb-3"><label class="form-label">Corridor ID</label><input name="corridor_code" class="form-control" placeholder="COR-PDG-001" required @disabled(! $databaseReady)></div>
@@ -698,7 +698,7 @@
                                 <form method="POST" action="{{ route('project-reference-points.store') }}" id="reference-point-form">
                                     @csrf
                                     <div class="row">
-                                        <div class="col-lg-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>@endforeach</select></div>
                                         <div class="col-lg-6 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" @disabled(! $databaseReady)><option value="">Project Reference Point</option>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
                                         <div class="col-lg-6 mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
                                         <div class="col-lg-6 mb-3"><label class="form-label">Point ID</label><input name="point_code" class="form-control" placeholder="REF-PDG-001" required @disabled(! $databaseReady)></div>
@@ -767,7 +767,7 @@
                                 <form method="POST" action="{{ route('project-station-spatial-references.store') }}" id="station-spatial-reference-form">
                                     @csrf
                                     <div class="row">
-                                        <div class="col-lg-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['id'] }} - {{ $item['name'] }}</option>@endforeach</select></div>
+                                        <div class="col-lg-6 mb-3"><label class="form-label">Project</label><select name="project_id" class="form-select" required @disabled(! $databaseReady || $projects->isEmpty())>@foreach ($projects as $item)<option value="{{ $item['db_id'] }}">{{ $item['label'] }}</option>@endforeach</select></div>
                                         <div class="col-lg-6 mb-3"><label class="form-label">Workspace</label><select name="workspace_id" class="form-select" required @disabled(! $databaseReady || $clusters->whereNotNull('db_id')->isEmpty())>@foreach ($clusters->whereNotNull('db_id') as $cluster)<option value="{{ $cluster['db_id'] }}">{{ $cluster['id'] }}</option>@endforeach</select></div>
                                         <div class="col-lg-6 mb-3"><label class="form-label">Corridor</label><select name="corridor_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($corridors as $corridor)<option value="{{ $corridor['db_id'] }}">{{ $corridor['id'] }}</option>@endforeach</select></div>
                                         <div class="col-lg-6 mb-3"><label class="form-label">Reference Route</label><select name="reference_route_id" class="form-select" @disabled(! $databaseReady)><option value="">-</option>@foreach ($referenceRoutes as $route)<option value="{{ $route['db_id'] }}">{{ $route['id'] }}</option>@endforeach</select></div>

@@ -51,7 +51,7 @@
                 <div class="col-md-3 mb-3"><label class="form-label">Status</label><select name="status" class="form-select"><option value="active">Active</option><option value="suspended">Suspended</option><option value="inactive">Inactive</option></select></div>
                 <div class="col-md-3 mb-3"><label class="form-label">Role</label><select name="role" class="form-select">@foreach($roles as $role)<option value="{{ $role->name }}">{{ $role->display_name ?? $role->name }}</option>@endforeach</select></div>
                 <div class="col-md-3 mb-3"><label class="form-label">Access Level</label><select name="access_level" class="form-select"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="manager">Manager</option></select></div>
-                <div class="col-md-4 mb-3"><label class="form-label">Projects</label><select name="project_ids[]" class="form-select" multiple>@foreach($projects as $project)<option value="{{ $project->id }}">{{ $project->project_code }} - {{ $project->name }}</option>@endforeach</select></div>
+                <div class="col-md-4 mb-3"><label class="form-label">Projects</label><select name="project_ids[]" class="form-select" multiple>@foreach($projects as $project)<option value="{{ $project->id }}">{{ $project->displayLabel() }}</option>@endforeach</select></div>
                 <div class="col-md-2 mb-3 d-flex align-items-end"><button class="btn btn-primary w-100" @disabled($operationalUserCount >= $maxOperationalUsers)>Create</button></div>
             </div>
         </form>
