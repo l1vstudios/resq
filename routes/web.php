@@ -174,6 +174,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/admins', [AdminManagementController::class, 'store'])->name('admins.store');
     Route::get('/admins/{user}/edit', [AdminManagementController::class, 'edit'])->name('admins.edit');
     Route::put('/admins/{user}', [AdminManagementController::class, 'update'])->name('admins.update');
+    Route::delete('/admins/{user}', [AdminManagementController::class, 'destroy'])->name('admins.destroy');
 
     // CFPE & Geospatial Workspace
     Route::get('/cfpe', [CfpeController::class, 'index'])->name('cfpe.index');

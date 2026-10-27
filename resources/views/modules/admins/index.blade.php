@@ -40,7 +40,18 @@
                         <td>{{ $user->client?->name ?: '—' }}</td>
                         <td>{{ $user->isSentinel() ? 'Semua project' : ($user->projects->pluck('project_code')->implode(', ') ?: ($user->roles->contains('name', 'ClientAdmin') ? 'Semua project klien' : 'Belum ditugaskan')) }}</td>
                         <td><span class="badge {{ $user->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ ucfirst($user->status ?? 'unknown') }}</span></td>
-                        <td class="text-end pe-3"><a href="{{ route('admins.edit', $user) }}" class="btn btn-sm btn-outline-primary"><i class="bx bx-pencil me-1"></i>Edit</a></td>
+                        <td class="text-end pe-3">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Aksi {{ $user->name }}">
+                                <a href="{{ route('admins.edit', $user) }}" class="btn btn-outline-primary"><i class="bx bx-pencil me-1"></i>Edit</a>
+                                @if(!auth()->user()->is($user))
+                                    <form method="POST" action="{{ route('admins.destroy', $user) }}" class="d-inline" onsubmit="return confirm('Hapus akun {{ addslashes($user->name) }}? Akses project dan role akun ini akan dicabut.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-outline-danger"><i class="bx bx-trash me-1"></i>Hapus</button>
+                                    </form>
+                                @endif
+                            </div>
+                        </td>
                     </tr>
                 @empty
                     <tr><td colspan="8" class="text-center text-muted py-5">{{ $search !== '' ? 'Tidak ada akun yang sesuai pencarian.' : 'Belum ada akun.' }}</td></tr>

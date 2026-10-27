@@ -131,6 +131,24 @@ class AdminManagementTest extends TestCase
         $this->assertTrue($role->fresh()->givesPermission('project.edit'));
     }
 
+    public function test_admin_can_delete_another_account_but_not_their_own_account(): void
+    {
+        $admin = $this->admin();
+        $target = $this->user(['email' => 'delete-target@example.test']);
+
+        $this->get(route('admins.index'))->assertOk()
+            ->assertSee('action="'.route('admins.destroy', $target).'"', false)
+            ->assertDontSee('action="'.route('admins.destroy', $admin).'"', false);
+
+        $this->delete(route('admins.destroy', $target))
+            ->assertRedirect(route('admins.index'))
+            ->assertSessionHas('message');
+        $this->assertDatabaseMissing('users', ['id' => $target->id]);
+
+        $this->delete(route('admins.destroy', $admin))->assertStatus(422);
+        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    }
+
     public function test_invalid_admin_input_does_not_create_an_account(): void
     {
         $this->admin();

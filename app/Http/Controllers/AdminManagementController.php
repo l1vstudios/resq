@@ -239,6 +239,16 @@ class AdminManagementController extends Controller
         return redirect()->route('admins.index')->with('message', 'Admin dan hak akses berhasil diperbarui.');
     }
 
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        abort_if($request->user()->is($user), 422, 'Akun yang sedang digunakan tidak dapat dihapus.');
+
+        $user->delete();
+
+        return redirect()->route('admins.index')->with('message', 'Admin berhasil dihapus.');
+    }
+
     private function editorData(array $overrides = []): array
     {
         return array_merge([
