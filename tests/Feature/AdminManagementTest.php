@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
+use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,22 +24,35 @@ class AdminManagementTest extends TestCase
         ];
     }
 
-    public function test_admin_management_shows_database_users_with_the_grid_before_the_add_modal(): void
+    public function test_admin_management_shows_database_users_and_links_to_the_full_access_form(): void
     {
         $this->admin();
         $user = $this->user(['name' => 'Database User', 'email' => 'real-user@example.test']);
         $response = $this->get(route('admins.index'))->assertOk()
             ->assertSee($user->name)->assertSee($user->email)
             ->assertSee('Tambah Admin')->assertSee('id="admin-user-grid"', false)
+            ->assertSee('href="'.route('admins.create').'"', false)
             ->assertDontSee('ops@resq.id')->assertDontSee('User Setup')
             ->assertDontSee('href="contacts-profile"', false)
             ->assertDontSee('change-password')->assertSee('Logout');
 
         $html = $response->getContent();
-        $this->assertLessThan(strpos($html, 'id="admin-user-grid"'), strpos($html, 'data-bs-target="#add-admin-modal"'));
-        $this->assertLessThan(strpos($html, 'id="add-admin-modal"'), strpos($html, 'id="admin-user-grid"'));
+        $this->assertLessThan(strpos($html, 'id="admin-user-grid"'), strpos($html, 'href="'.route('admins.create').'"'));
+        $this->assertStringNotContainsString('add-admin-modal', $html);
         $this->get(route('admins.index', ['q' => 'real-user']))->assertOk()
             ->assertViewHas('users', fn ($users) => $users->total() === 1 && $users->first()->id === $user->id);
+    }
+
+    public function test_full_access_form_has_scope_and_crud_matrix_tabs(): void
+    {
+        $this->admin();
+
+        $this->get(route('admins.create'))->assertOk()
+            ->assertSee('Client &amp; Project', false)
+            ->assertSee('Matriks Menu &amp; CRUD', false)
+            ->assertSee('Akses penuh')
+            ->assertSee('name="permissions[project][]"', false)
+            ->assertSee('name="menu_ids[]"', false);
     }
 
     public function test_admin_can_create_an_internal_account_with_a_hashed_password_and_role(): void
@@ -52,6 +67,37 @@ class AdminManagementTest extends TestCase
         $this->assertSame('active', $user->status);
         $this->assertTrue(Hash::check('ExamplePassword123', $user->password));
         $this->assertTrue($user->hasRole('PlatformOperator'));
+    }
+
+    public function test_admin_can_create_a_project_scoped_full_crud_role_from_the_full_page(): void
+    {
+        $this->admin();
+        $client = Client::create(['client_code' => 'RBAC-CLIENT', 'name' => 'RBAC Client']);
+        $project = Project::create(['project_code' => 'RBAC-PROJECT', 'name' => 'RBAC Project', 'client_id' => $client->id]);
+
+        $this->post(route('admins.store'), [
+            'name' => 'Scoped Operator',
+            'email' => 'scoped-operator@example.test',
+            'password' => 'ExamplePassword123',
+            'password_confirmation' => 'ExamplePassword123',
+            'account_type' => 'client',
+            'client_id' => $client->id,
+            'project_ids' => [$project->id],
+            'role_mode' => 'new',
+            'role_name' => 'rbac-client-operator',
+            'role_display_name' => 'RBAC Client Operator',
+            'full_access' => '1',
+            'status' => 'active',
+        ])->assertRedirect(route('admins.index'));
+
+        $user = User::where('email', 'scoped-operator@example.test')->firstOrFail();
+        $role = Role::where('name', 'rbac-client-operator')->firstOrFail();
+        $this->assertTrue($user->projects()->whereKey($project->id)->exists());
+        $this->assertTrue($user->projectRoles()->whereKey($role->id)->wherePivot('project_id', $project->id)->exists());
+        $this->assertTrue($user->canAccessProject($project));
+        $this->assertTrue($user->hasPermissionForProject('project.edit', $project));
+        $this->assertGreaterThan(0, $role->menus()->count());
+        $this->assertContains('dashboard', $user->visibleMenuCodes());
     }
 
     public function test_invalid_admin_input_does_not_create_an_account(): void

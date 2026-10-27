@@ -12,6 +12,9 @@ class User extends Authenticatable implements MustVerifyEmail
 {
     use HasFactory, HasRolesAndPermissions, Notifiable;
 
+    /** @var array<int, array<int, string>> */
+    protected static array $visibleMenuCodesCache = [];
+
     protected $fillable = [
         'name',
         'email',
@@ -169,7 +172,11 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         if ($project === null) {
-            return false;
+            return $this->projectRoles()
+                ->whereHas('menus', function ($query) use ($menuId) {
+                    $query->where('navigation_menus.id', $menuId)->where('role_has_menu_access.can_view', true);
+                })
+                ->exists();
         }
 
         $projectId = is_int($project) ? $project : $project->id;
@@ -180,5 +187,51 @@ class User extends Authenticatable implements MustVerifyEmail
                 $query->where('navigation_menus.id', $menuId)->where('role_has_menu_access.can_view', true);
             })
             ->exists();
+    }
+
+    public function hasConfiguredMenuAccess(): bool
+    {
+        return $this->visibleMenuCodes() !== []
+            || $this->roles()->where('type', 'custom')->exists()
+            || $this->projectRoles()->where('type', 'custom')->exists();
+    }
+
+    public function canViewMenuCode(string $code, Project|int|null $project = null): bool
+    {
+        if ($project === null) {
+            return in_array($code, $this->visibleMenuCodes(), true);
+        }
+
+        $menu = NavigationMenu::query()->where('code', $code)->first();
+
+        return $menu !== null && $this->canViewMenu($menu, $project);
+    }
+
+    /** @return array<int, string> */
+    public function visibleMenuCodes(): array
+    {
+        if ($this->getKey() && isset(static::$visibleMenuCodesCache[$this->getKey()])) {
+            return static::$visibleMenuCodesCache[$this->getKey()];
+        }
+
+        $roleIds = $this->roles()->pluck('roles.id')
+            ->merge($this->projectRoles()->pluck('roles.id'))
+            ->unique()
+            ->values();
+
+        $codes = $roleIds->isEmpty()
+            ? []
+            : NavigationMenu::query()
+                ->whereHas('roles', fn ($query) => $query
+                    ->whereIn('roles.id', $roleIds)
+                    ->where('role_has_menu_access.can_view', true))
+                ->pluck('code')
+                ->all();
+
+        if ($this->getKey()) {
+            static::$visibleMenuCodesCache[$this->getKey()] = $codes;
+        }
+
+        return $codes;
     }
 }

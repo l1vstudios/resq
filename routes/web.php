@@ -170,6 +170,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/device-setup/{type}/{id}', [DeviceSetupController::class, 'destroy'])->name('device-setup.destroy');
     Route::view('/production-setup-guide', 'modules.production-guide.index')->name('production-guide.index');
     Route::get('/admins', [AdminManagementController::class, 'index'])->name('admins.index');
+    Route::get('/admins/create', [AdminManagementController::class, 'create'])->name('admins.create');
     Route::post('/admins', [AdminManagementController::class, 'store'])->name('admins.store');
 
     // CFPE & Geospatial Workspace

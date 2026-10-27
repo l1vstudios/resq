@@ -40,6 +40,11 @@
 @php
     $sidebarUser = auth()->user();
     $sidebarIsClient = $sidebarUser?->isClientUser();
+    $sidebarVisibleMenus = $sidebarUser?->visibleMenuCodes() ?? [];
+    $sidebarHasMenuPolicy = $sidebarUser?->hasConfiguredMenuAccess() ?? false;
+    $canMenu = fn (string $code) => ! $sidebarHasMenuPolicy || in_array($code, $sidebarVisibleMenus, true);
+    $canAnyMenu = fn (array $codes) => collect($codes)->contains(fn ($code) => $canMenu($code));
+    $clientOperationCodes = ['client-operational-state', 'client-operational-integrity', 'client-administrative-monitoring', 'client-function-configuration', 'client-reporting', 'client-inbox', 'client-users'];
 @endphp
 
 <div class="vertical-menu">
@@ -48,14 +53,14 @@
             <ul class="metismenu list-unstyled" id="side-menu">
                 <li class="menu-title">{{ $sidebarIsClient ? 'Client Operations' : 'Project Configuration' }}</li>
 
-                <li class="{{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : '' }}">
+                @if($canMenu('dashboard'))<li class="{{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'mm-active' : '' }}">
                     <a href="{{ route('dashboard') }}" class="waves-effect {{ request()->routeIs('root') || request()->routeIs('dashboard') || request()->routeIs('project-configuration') ? 'active' : '' }}">
                         <i class="bx bx-home-circle"></i>
                         <span>Dashboard</span>
                     </a>
-                </li>
+                </li>@endif
 
-                @if($sidebarIsClient)
+                @if($sidebarIsClient && $canMenu('tde-forecast'))
                     <li class="{{ request()->routeIs('tde-forecast.*') ? 'mm-active' : '' }}">
                         <a href="{{ route('tde-forecast.index') }}" class="waves-effect {{ request()->routeIs('tde-forecast.*') ? 'active' : '' }}">
                             <i class="bx bx-cloud-lightning"></i>
@@ -65,56 +70,57 @@
                 @endif
 
                 @if($sidebarIsClient)
+                    @if($canAnyMenu($clientOperationCodes))
                     <li class="{{ request()->routeIs('client-operations.*') ? 'mm-active' : '' }}">
                         <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ request()->routeIs('client-operations.*') ? 'true' : 'false' }}">
                             <i class="bx bx-radar"></i>
                             <span>Client Operations</span>
                         </a>
                         <ul class="sub-menu {{ request()->routeIs('client-operations.*') ? 'mm-show' : '' }}" aria-expanded="{{ request()->routeIs('client-operations.*') ? 'true' : 'false' }}">
-                            <li>
+                            @if($canMenu('client-operational-state'))<li>
                                 <a href="{{ route('client-operations.index') }}" class="{{ (request()->routeIs('client-operations.index') && ! request()->query('tab')) || request()->routeIs('client-operations.projects.show') || request()->routeIs('client-operations.corridors.*') || (request()->routeIs('client-operations.stations.show') && in_array(request()->query('tab'), [null, 'state'], true)) ? 'active' : '' }}">
                                     Operational State
                                 </a>
-                            </li>
-                            <li>
+                            </li>@endif
+                            @if($canMenu('client-operational-integrity'))<li>
                                 <a href="{{ route('client-operations.index', ['tab' => 'integrity']) }}" class="{{ request()->query('tab') === 'integrity' ? 'active' : '' }}">
                                     Operational Integrity
                                 </a>
-                            </li>
-                            <li>
+                            </li>@endif
+                            @if($canMenu('client-administrative-monitoring'))<li>
                                 <a href="{{ route('client-operations.index', ['tab' => 'administrative']) }}" class="{{ request()->query('tab') === 'administrative' ? 'active' : '' }}">
                                     Administrative Monitoring
                                 </a>
-                            </li>
-                            <li>
+                            </li>@endif
+                            @if($canMenu('client-function-configuration'))<li>
                                 <a href="{{ route('client-operations.function-configuration.index') }}" class="{{ request()->routeIs('client-operations.function-configuration.*') ? 'active' : '' }}">
                                     Function Configuration
                                 </a>
-                            </li>
-                            <li>
+                            </li>@endif
+                            @if($canMenu('client-reporting'))<li>
                                 <a href="{{ route('client-operations.reporting.index') }}" class="{{ request()->routeIs('client-operations.reporting.*') ? 'active' : '' }}">
                                     Reporting &amp; Export
                                 </a>
-                            </li>
-                            <li>
+                            </li>@endif
+                            @if($canMenu('client-inbox'))<li>
                                 <a href="{{ route('client-operations.inbox.index') }}" class="{{ request()->routeIs('client-operations.inbox.*') ? 'active' : '' }}">
                                     Inbox
                                 </a>
-                            </li>
-                            <li>
+                            </li>@endif
+                            @if($canMenu('client-users'))<li>
                                 <a href="{{ route('client-operations.users.index') }}" class="{{ request()->routeIs('client-operations.users.*') ? 'active' : '' }}">
                                     Client Users
                                 </a>
-                            </li>
+                            </li>@endif
                         </ul>
-                    </li>
+                    </li>@endif
                 @else
-                <li class="{{ request()->routeIs('monitoring.*') ? 'mm-active' : '' }}">
+                @if($canMenu('monitoring'))<li class="{{ request()->routeIs('monitoring.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('monitoring.index') }}" class="waves-effect {{ request()->routeIs('monitoring.*') ? 'active' : '' }}">
                         <i class="bx bx-pulse"></i>
                         <span>Monitoring</span>
                     </a>
-                </li>
+                </li>@endif
 
                 {{-- Platform Operations hidden from sidebar --}}
 
@@ -134,109 +140,115 @@
                         || request()->routeIs('monitoring-stations.*')
                         || request()->routeIs('warning-stations.*')
                         || request()->routeIs('tde-forecast.*');
+                    $projectSetupCodes = ['project', 'geospatial', 'monitoring-station', 'warning-station', 'sensor-data', 'canonical-data', 'operations-response'];
+                    $configurationCodes = ['cfpe-corridor', 'canonical-data', 'data-loggers', 'asset-management', 'master-data-tde'];
+                    $listDataCodes = ['geospatial', 'monitoring-station', 'warning-station', 'tde-forecast'];
                 @endphp
 
+                @if($canAnyMenu($projectSetupCodes))
                 <li class="{{ $projectSetupMenuActive ? 'mm-active' : '' }}">
                     <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $projectSetupMenuActive ? 'true' : 'false' }}">
                         <i class="bx bx-folder-open"></i>
                         <span>Project Setup</span>
                     </a>
                     <ul class="sub-menu {{ $projectSetupMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $projectSetupMenuActive ? 'true' : 'false' }}">
-                        <li>
+                        @if($canMenu('project'))<li>
                             <a href="{{ route('projects.index', $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'project' ? 'active' : '' }}">Project</a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('geospatial'))<li>
                             <a href="{{ route('project-setup.section', ['section' => 'geospatial'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'geospatial' ? 'active' : '' }}">Geospatial</a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('monitoring-station'))<li>
                             <a href="{{ route('project-setup.section', ['section' => 'monitoring-stations'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'monitoring-stations' ? 'active' : '' }}">Monitoring Station</a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('warning-station'))<li>
                             <a href="{{ route('project-setup.section', ['section' => 'warning-stations'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'warning-stations' ? 'active' : '' }}">Warning Station</a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('sensor-data'))<li>
                             <a href="{{ route('project-setup.section', ['section' => 'sensors'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'sensors' ? 'active' : '' }}">Sensor &amp; Data</a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('canonical-data'))<li>
                             <a href="{{ route('project-setup.section', ['section' => 'canonical'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'canonical' ? 'active' : '' }}">Canonical Data</a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('operations-response'))<li>
                             <a href="{{ route('project-setup.section', ['section' => 'operations'] + $projectSetupContext) }}" class="{{ $projectSetupMenuActive && $projectSetupSection === 'operations' ? 'active' : '' }}">Operational &amp; Response</a>
-                        </li>
+                        </li>@endif
                     </ul>
-                </li>
+                </li>@endif
 
+                @if($canAnyMenu($configurationCodes))
                 <li class="{{ $configurationMenuActive ? 'mm-active' : '' }}">
                     <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $configurationMenuActive ? 'true' : 'false' }}">
                         <i class="bx bx-cog"></i>
                         <span>Configuration</span>
                     </a>
                     <ul class="sub-menu {{ $configurationMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $configurationMenuActive ? 'true' : 'false' }}">
-                        <li class="{{ request()->routeIs('cfpe.*') ? 'mm-active' : '' }}">
+                        @if($canMenu('cfpe-corridor'))<li class="{{ request()->routeIs('cfpe.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('cfpe.index') }}" class="{{ request()->routeIs('cfpe.*') ? 'active' : '' }}">
                                 CFPE Corridor
                             </a>
-                        </li>
-                        <li class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'mm-active' : '' }}">
+                        </li>@endif
+                        @if($canMenu('canonical-data'))<li class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('canonical-database.index') }}" class="{{ request()->routeIs('canonical-database.*') || request()->routeIs('canonical-mapping.*') ? 'active' : '' }}">
                                 Canonical Database
                             </a>
-                        </li>
-                        <li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
+                        </li>@endif
+                        @if($canMenu('data-loggers'))<li class="{{ request()->routeIs('data-loggers.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('data-loggers.index') }}" class="{{ request()->routeIs('data-loggers.*') ? 'active' : '' }}">
                                 Data Loggers
                             </a>
-                        </li>
-                        <li class="{{ request()->routeIs('asset-management.*') ? 'mm-active' : '' }}">
+                        </li>@endif
+                        @if($canMenu('asset-management'))<li class="{{ request()->routeIs('asset-management.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('asset-management.index') }}" class="{{ request()->routeIs('asset-management.*') ? 'active' : '' }}">
                                 Manajemen Assets
                             </a>
-                        </li>
-                        <li class="{{ request()->routeIs('master-data-tde.*') ? 'mm-active' : '' }}">
+                        </li>@endif
+                        @if($canMenu('master-data-tde'))<li class="{{ request()->routeIs('master-data-tde.*') ? 'mm-active' : '' }}">
                             <a href="{{ route('master-data-tde.index') }}" class="{{ request()->routeIs('master-data-tde.*') ? 'active' : '' }}">
                                 Master Data TDE
                             </a>
-                        </li>
+                        </li>@endif
                     </ul>
-                </li>
+                </li>@endif
 
+                @if($canAnyMenu($listDataCodes))
                 <li class="{{ $registeredMenuActive ? 'mm-active' : '' }}">
                     <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ $registeredMenuActive ? 'true' : 'false' }}">
                         <i class="bx bx-list-check"></i>
                         <span>List Data</span>
                     </a>
                     <ul class="sub-menu {{ $registeredMenuActive ? 'mm-show' : '' }}" aria-expanded="{{ $registeredMenuActive ? 'true' : 'false' }}">
-                        <li>
+                        @if($canMenu('geospatial'))<li>
                             <a href="{{ route('clusters.index') }}" class="{{ request()->routeIs('clusters.*') ? 'active' : '' }}">
                                 Geospatial Workspace
                             </a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('monitoring-station'))<li>
                             <a href="{{ route('monitoring-stations.index') }}" class="{{ request()->routeIs('monitoring-stations.*') ? 'active' : '' }}">
                                 Monitoring Station
                             </a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('warning-station'))<li>
                             <a href="{{ route('warning-stations.index') }}" class="{{ request()->routeIs('warning-stations.*') ? 'active' : '' }}">
                                 Warning Station
                             </a>
-                        </li>
-                        <li>
+                        </li>@endif
+                        @if($canMenu('tde-forecast'))<li>
                             <a href="{{ route('tde-forecast.index') }}" class="{{ request()->routeIs('tde-forecast.*') ? 'active' : '' }}">
                                 TDE Forecast
                             </a>
-                        </li>
+                        </li>@endif
                     </ul>
-                </li>
+                </li>@endif
 
                 <li class="menu-title">Device Setup</li>
 
-                <li class="{{ request()->routeIs('mst-prefixes.*') ? 'mm-active' : '' }}">
+                @if($canMenu('prefix-sensors'))<li class="{{ request()->routeIs('mst-prefixes.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('mst-prefixes.index') }}" class="waves-effect {{ request()->routeIs('mst-prefixes.*') ? 'active' : '' }}">
                         <i class="bx bx-purchase-tag-alt"></i>
                         <span>Prefix Sensors</span>
                     </a>
-                </li>
+                </li>@endif
 
                 {{-- Modbus Configuration hidden — data now flows via MQTT --}}
                 {{--
@@ -248,19 +260,19 @@
 	                </li>
                 --}}
 
-                <li class="{{ request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : '' }}">
+                @if($canMenu('rednode-pin-scan'))<li class="{{ request()->routeIs('rednode-pin-scan.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('rednode-pin-scan.index') }}" class="waves-effect {{ request()->routeIs('rednode-pin-scan.*') ? 'active' : '' }}">
                         <i class="bx bx-search-alt-2"></i>
                         <span>RedNode Pin Scan</span>
                     </a>
-                </li>
+                </li>@endif
 
-                <li class="{{ request()->routeIs('rednode-builder.*') ? 'mm-active' : '' }}">
+                @if($canMenu('rednode-builder'))<li class="{{ request()->routeIs('rednode-builder.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('rednode-builder.index') }}" class="waves-effect {{ request()->routeIs('rednode-builder.*') ? 'active' : '' }}">
                         <i class="bx bx-package"></i>
                         <span>RedNode Builder</span>
                     </a>
-                </li>
+                </li>@endif
 
                 {{-- Mini Server hidden --}}
                 {{--
@@ -291,22 +303,22 @@
                 </li>
 	                --}}
 
-                <li class="{{ request()->routeIs('production-guide.*') ? 'mm-active' : '' }}">
+                @if($canMenu('production-guide'))<li class="{{ request()->routeIs('production-guide.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('production-guide.index') }}" class="waves-effect {{ request()->routeIs('production-guide.*') ? 'active' : '' }}">
                         <i class="bx bx-book-open"></i>
                         <span>Panduan Production</span>
                     </a>
-                </li>
+                </li>@endif
 
-                @if($sidebarUser?->hasRole('SentinelAdmin'))
+                @if($sidebarUser?->isSuperAdmin() || $sidebarUser?->hasRole('SentinelAdmin'))
                 <li class="menu-title">Administration</li>
 
-                <li class="{{ request()->routeIs('admins.*') ? 'mm-active' : '' }}">
+                @if($canMenu('admin-management'))<li class="{{ request()->routeIs('admins.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('admins.index') }}" class="waves-effect {{ request()->routeIs('admins.*') ? 'active' : '' }}">
                         <i class="bx bx-user-circle"></i>
                         <span>Admin Management</span>
                     </a>
-                </li>
+                </li>@endif
                 @endif
                 @endif
 

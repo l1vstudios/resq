@@ -17,7 +17,7 @@
         <h4 class="mb-1">Admin Management</h4>
         <p class="text-muted mb-0">Daftar akun, role, dan akses project.</p>
     </div>
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add-admin-modal"><i class="bx bx-plus me-1" aria-hidden="true"></i>Tambah Admin</button>
+    <a href="{{ route('admins.create') }}" class="btn btn-primary"><i class="bx bx-plus me-1" aria-hidden="true"></i>Tambah Admin</a>
 </div>
 
 <div class="bg-white border rounded-3 overflow-hidden">
@@ -36,7 +36,7 @@
                         <td class="ps-3 text-muted">{{ $users->firstItem() + $loop->index }}</td>
                         <td><strong>{{ $user->name }}</strong><small class="d-block text-muted">{{ $user->email }}</small></td>
                         <td>{{ $user->isSentinel() ? 'Internal' : ($user->isClientUser() ? 'Client' : '—') }}</td>
-                        <td>{{ $user->roles->map(fn ($role) => $role->display_name ?: $role->name)->implode(', ') ?: 'Belum ada role' }}</td>
+                        <td>{{ $user->roles->merge($user->projectRoles)->unique('id')->map(fn ($role) => $role->display_name ?: $role->name)->implode(', ') ?: 'Belum ada role' }}</td>
                         <td>{{ $user->client?->name ?: '—' }}</td>
                         <td>{{ $user->isSentinel() ? 'Semua project' : ($user->projects->pluck('project_code')->implode(', ') ?: ($user->roles->contains('name', 'ClientAdmin') ? 'Semua project klien' : 'Belum ditugaskan')) }}</td>
                         <td><span class="badge {{ $user->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ ucfirst($user->status ?? 'unknown') }}</span></td>
@@ -53,43 +53,4 @@
     </div>
 </div>
 
-<div class="modal fade" id="add-admin-modal" tabindex="-1" aria-labelledby="add-admin-title" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title" id="add-admin-title">Tambah Admin</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button></div>
-            <form method="POST" action="{{ route('admins.store') }}">
-                @csrf
-                <input type="hidden" name="_admin_form" value="create">
-                <div class="modal-body">
-                    <p class="text-muted small">Buat akun internal dan tentukan role aksesnya.</p>
-                    @if ($errors->any() && old('_admin_form') === 'create')
-                        <div class="alert alert-danger" role="alert"><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
-                    @endif
-                    <div class="mb-3"><label for="admin-name" class="form-label">Nama</label><input id="admin-name" name="name" class="form-control" value="{{ old('name') }}" maxlength="255" autocomplete="name" required></div>
-                    <div class="mb-3"><label for="admin-email" class="form-label">Email</label><input type="email" id="admin-email" name="email" class="form-control" value="{{ old('email') }}" maxlength="255" autocomplete="email" required></div>
-                    <div class="row">
-                        <div class="col-sm-6 mb-3"><label for="admin-password" class="form-label">Password</label><input type="password" id="admin-password" name="password" class="form-control" minlength="8" maxlength="255" autocomplete="new-password" required><small class="text-muted">Minimal 8 karakter.</small></div>
-                        <div class="col-sm-6 mb-3"><label for="admin-password-confirm" class="form-label">Konfirmasi Password</label><input type="password" id="admin-password-confirm" name="password_confirmation" class="form-control" minlength="8" maxlength="255" autocomplete="new-password" required></div>
-                    </div>
-                    <div class="row">
-                        <div class="col-sm-8 mb-3"><label for="admin-role" class="form-label">Role</label><select name="role_id" id="admin-role" class="form-select" required><option value="">Pilih role</option>@foreach ($roles as $role)<option value="{{ $role->id }}" @selected((string) old('role_id') === (string) $role->id)>{{ $role->display_name ?: $role->name }}</option>@endforeach</select></div>
-                        <div class="col-sm-4 mb-3"><label for="admin-status" class="form-label">Status</label><select name="status" id="admin-status" class="form-select"><option value="active" @selected(old('status', 'active') === 'active')>Active</option><option value="inactive" @selected(old('status') === 'inactive')>Inactive</option></select></div>
-                    </div>
-                    @if ($roles->isEmpty())<p class="text-warning mb-0">Role internal belum tersedia.</p>@endif
-                </div>
-                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button><button type="submit" class="btn btn-primary" @disabled($roles->isEmpty())>Simpan Admin</button></div>
-            </form>
-        </div>
-    </div>
-</div>
-@endsection
-
-@section('script')
-@if ($errors->any() && old('_admin_form') === 'create')
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('add-admin-modal')).show();
-    });
-</script>
-@endif
 @endsection

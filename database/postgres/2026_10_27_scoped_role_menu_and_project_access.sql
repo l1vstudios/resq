@@ -92,4 +92,36 @@ CREATE TRIGGER user_project_role_client_match
 BEFORE INSERT OR UPDATE OF user_id, project_id, role_id ON user_has_project_roles
 FOR EACH ROW EXECUTE FUNCTION ensure_user_project_role_client_match();
 
+-- Initial registry for the permission matrix in Admin Management. The rows are
+-- idempotent and may be extended from the application later.
+INSERT INTO navigation_menus (code, label, route_name, resource, is_project_scoped, sort_order, is_active, created_at, updated_at)
+VALUES
+    ('dashboard', 'Dashboard', 'dashboard', 'dashboard', FALSE, 10, TRUE, NOW(), NOW()),
+    ('monitoring', 'Monitoring', 'monitoring.index', 'monitoring', TRUE, 20, TRUE, NOW(), NOW()),
+    ('project', 'Project', 'projects.index', 'project', TRUE, 30, TRUE, NOW(), NOW()),
+    ('geospatial', 'Geospatial', 'project-setup.section', 'workspace', TRUE, 40, TRUE, NOW(), NOW()),
+    ('monitoring-station', 'Monitoring Station', 'monitoring-stations.index', 'monitoring-station', TRUE, 50, TRUE, NOW(), NOW()),
+    ('warning-station', 'Warning Station', 'warning-stations.index', 'warning-station', TRUE, 60, TRUE, NOW(), NOW()),
+    ('sensor-data', 'Sensor & Data', 'sensors.index', 'sensor', TRUE, 70, TRUE, NOW(), NOW()),
+    ('canonical-data', 'Canonical Data', 'canonical-database.index', 'canonical-data', TRUE, 80, TRUE, NOW(), NOW()),
+    ('operations-response', 'Operational & Response', 'platform-operations.index', 'operations', TRUE, 90, TRUE, NOW(), NOW()),
+    ('cfpe-corridor', 'CFPE Corridor', 'cfpe.index', 'cfpe', TRUE, 100, TRUE, NOW(), NOW()),
+    ('data-loggers', 'Data Loggers', 'data-loggers.index', 'data-logger', TRUE, 110, TRUE, NOW(), NOW()),
+    ('asset-management', 'Manajemen Assets', 'asset-management.index', 'asset', TRUE, 120, TRUE, NOW(), NOW()),
+    ('master-data-tde', 'Master Data TDE', 'master-data-tde.index', 'tde', TRUE, 130, TRUE, NOW(), NOW()),
+    ('tde-forecast', 'TDE Forecast', 'tde-forecast.index', 'tde-forecast', TRUE, 140, TRUE, NOW(), NOW()),
+    ('prefix-sensors', 'Prefix Sensors', 'mst-prefixes.index', 'sensor-prefix', FALSE, 150, TRUE, NOW(), NOW()),
+    ('rednode-pin-scan', 'RedNode Pin Scan', 'rednode-pin-scan.index', 'rednode-pin-scan', FALSE, 160, TRUE, NOW(), NOW()),
+    ('rednode-builder', 'RedNode Builder', 'rednode-builder.index', 'rednode-builder', TRUE, 170, TRUE, NOW(), NOW()),
+    ('production-guide', 'Panduan Production', 'production-guide.index', 'production-guide', FALSE, 180, TRUE, NOW(), NOW()),
+    ('client-operational-state', 'Operational State', 'client-operations.index', 'operational-state', TRUE, 190, TRUE, NOW(), NOW()),
+    ('client-operational-integrity', 'Operational Integrity', 'client-operations.index', 'operational-integrity', TRUE, 200, TRUE, NOW(), NOW()),
+    ('client-administrative-monitoring', 'Administrative Monitoring', 'client-operations.index', 'administrative-monitoring', TRUE, 210, TRUE, NOW(), NOW()),
+    ('client-function-configuration', 'Function Configuration', 'client-operations.function-configuration.index', 'function-configuration', TRUE, 220, TRUE, NOW(), NOW()),
+    ('client-reporting', 'Reporting & Export', 'client-operations.reporting.index', 'reporting', TRUE, 230, TRUE, NOW(), NOW()),
+    ('client-inbox', 'Inbox', 'client-operations.inbox.index', 'inbox', TRUE, 240, TRUE, NOW(), NOW()),
+    ('client-users', 'Client Users', 'client-operations.users.index', 'client-user', TRUE, 250, TRUE, NOW(), NOW()),
+    ('admin-management', 'Admin Management', 'admins.index', 'admin-management', FALSE, 260, TRUE, NOW(), NOW())
+ON CONFLICT (code) DO NOTHING;
+
 COMMIT;

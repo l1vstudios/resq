@@ -9,6 +9,11 @@ class Role extends Model
 {
     use HasFactory;
 
+    protected $attributes = [
+        'is_super_admin' => false,
+        'is_assignable' => true,
+    ];
+
     protected $fillable = [
         'name',
         'display_name',
