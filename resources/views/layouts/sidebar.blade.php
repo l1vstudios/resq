@@ -44,7 +44,6 @@
     $sidebarHasMenuPolicy = $sidebarUser?->hasConfiguredMenuAccess() ?? false;
     $canMenu = fn (string $code) => ! $sidebarHasMenuPolicy || in_array($code, $sidebarVisibleMenus, true);
     $canAnyMenu = fn (array $codes) => collect($codes)->contains(fn ($code) => $canMenu($code));
-    $clientOperationCodes = ['client-operational-state', 'client-operational-integrity', 'client-administrative-monitoring', 'client-function-configuration', 'client-reporting', 'client-inbox', 'client-users'];
 @endphp
 
 <div class="vertical-menu">
@@ -69,52 +68,7 @@
                     </li>
                 @endif
 
-                @if($sidebarIsClient)
-                    @if($canAnyMenu($clientOperationCodes))
-                    <li class="{{ request()->routeIs('client-operations.*') ? 'mm-active' : '' }}">
-                        <a href="javascript: void(0);" class="has-arrow waves-effect" aria-expanded="{{ request()->routeIs('client-operations.*') ? 'true' : 'false' }}">
-                            <i class="bx bx-radar"></i>
-                            <span>Client Operations</span>
-                        </a>
-                        <ul class="sub-menu {{ request()->routeIs('client-operations.*') ? 'mm-show' : '' }}" aria-expanded="{{ request()->routeIs('client-operations.*') ? 'true' : 'false' }}">
-                            @if($canMenu('client-operational-state'))<li>
-                                <a href="{{ route('client-operations.index') }}" class="{{ (request()->routeIs('client-operations.index') && ! request()->query('tab')) || request()->routeIs('client-operations.projects.show') || request()->routeIs('client-operations.corridors.*') || (request()->routeIs('client-operations.stations.show') && in_array(request()->query('tab'), [null, 'state'], true)) ? 'active' : '' }}">
-                                    Operational State
-                                </a>
-                            </li>@endif
-                            @if($canMenu('client-operational-integrity'))<li>
-                                <a href="{{ route('client-operations.index', ['tab' => 'integrity']) }}" class="{{ request()->query('tab') === 'integrity' ? 'active' : '' }}">
-                                    Operational Integrity
-                                </a>
-                            </li>@endif
-                            @if($canMenu('client-administrative-monitoring'))<li>
-                                <a href="{{ route('client-operations.index', ['tab' => 'administrative']) }}" class="{{ request()->query('tab') === 'administrative' ? 'active' : '' }}">
-                                    Administrative Monitoring
-                                </a>
-                            </li>@endif
-                            @if($canMenu('client-function-configuration'))<li>
-                                <a href="{{ route('client-operations.function-configuration.index') }}" class="{{ request()->routeIs('client-operations.function-configuration.*') ? 'active' : '' }}">
-                                    Function Configuration
-                                </a>
-                            </li>@endif
-                            @if($canMenu('client-reporting'))<li>
-                                <a href="{{ route('client-operations.reporting.index') }}" class="{{ request()->routeIs('client-operations.reporting.*') ? 'active' : '' }}">
-                                    Reporting &amp; Export
-                                </a>
-                            </li>@endif
-                            @if($canMenu('client-inbox'))<li>
-                                <a href="{{ route('client-operations.inbox.index') }}" class="{{ request()->routeIs('client-operations.inbox.*') ? 'active' : '' }}">
-                                    Inbox
-                                </a>
-                            </li>@endif
-                            @if($canMenu('client-users'))<li>
-                                <a href="{{ route('client-operations.users.index') }}" class="{{ request()->routeIs('client-operations.users.*') ? 'active' : '' }}">
-                                    Client Users
-                                </a>
-                            </li>@endif
-                        </ul>
-                    </li>@endif
-                @else
+                @if(! $sidebarIsClient)
                 @if($canMenu('monitoring'))<li class="{{ request()->routeIs('monitoring.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('monitoring.index') }}" class="waves-effect {{ request()->routeIs('monitoring.*') ? 'active' : '' }}">
                         <i class="bx bx-pulse"></i>
