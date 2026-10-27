@@ -14,7 +14,20 @@ class Role extends Model
         'display_name',
         'description',
         'type',
+        'client_id',
+        'is_super_admin',
+        'is_assignable',
     ];
+
+    protected $casts = [
+        'is_super_admin' => 'boolean',
+        'is_assignable' => 'boolean',
+    ];
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
 
     public function permissions()
     {
@@ -31,6 +44,20 @@ class Role extends Model
     public function clients()
     {
         return $this->morphedByMany(Client::class, 'model', 'model_has_roles')
+            ->withTimestamps();
+    }
+
+    public function menus()
+    {
+        return $this->belongsToMany(NavigationMenu::class, 'role_has_menu_access')
+            ->withPivot('can_view')
+            ->withTimestamps();
+    }
+
+    public function projectUsers()
+    {
+        return $this->belongsToMany(User::class, 'user_has_project_roles')
+            ->withPivot(['project_id', 'assigned_by'])
             ->withTimestamps();
     }
 

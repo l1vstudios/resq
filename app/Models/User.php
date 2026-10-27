@@ -45,6 +45,14 @@ class User extends Authenticatable implements MustVerifyEmail
             ->withTimestamps();
     }
 
+    /** Roles which apply only while the user is working in the selected project. */
+    public function projectRoles()
+    {
+        return $this->belongsToMany(Role::class, 'user_has_project_roles')
+            ->withPivot(['project_id', 'assigned_by'])
+            ->withTimestamps();
+    }
+
     public function recoveryAccounts()
     {
         return $this->hasMany(ProjectRecoveryAccount::class);
@@ -82,25 +90,95 @@ class User extends Authenticatable implements MustVerifyEmail
             return false;
         }
 
-        // Sentinel internal users can access according to role/permissions or globally if platform admin
+        if (! $this->isActive()) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        // Explicit project selection always wins. A user assigned to one
+        // project therefore cannot receive map/data from another project.
+        $selectedProjectIds = $this->selectedProjectIds();
+        if ($selectedProjectIds !== []) {
+            return in_array($projectId, $selectedProjectIds, true);
+        }
+
+        // Existing Sentinel accounts without project assignments remain
+        // platform-wide; Super Admin is no longer identified by a role name.
         if ($this->isSentinel()) {
             return true;
         }
 
-        // Client operational users: Must belong to the project's client organization
+        // Client users without an explicit project selection retain the
+        // legacy client-wide scope. New accounts should always be assigned a
+        // project through user_has_projects.
         if ($this->isClientUser()) {
-            if (! $this->client_id || $this->client_id !== $projectModel->client_id) {
-                return false;
-            }
-
-            // Check if explicitly assigned to project or has client-wide project manager role
-            if ($this->hasRole('ClientAdmin')) {
-                return true;
-            }
-
-            return $this->projects()->where('resq_projects.id', $projectId)->exists();
+            return $this->client_id !== null && $this->client_id === $projectModel->client_id;
         }
 
         return false;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->roles()
+            ->where('is_super_admin', true)
+            ->whereNull('client_id')
+            ->exists();
+    }
+
+    /** @return array<int, int> */
+    public function selectedProjectIds(): array
+    {
+        $memberships = $this->projects()->pluck('resq_projects.id')->map(fn ($id) => (int) $id);
+        $roleAssignments = $this->projectRoles()
+            ->pluck('user_has_project_roles.project_id')
+            ->map(fn ($id) => (int) $id);
+
+        return $memberships->merge($roleAssignments)->unique()->values()->all();
+    }
+
+    public function hasPermissionForProject(string $permission, Project|int $project): bool
+    {
+        $projectId = is_int($project) ? $project : $project->id;
+
+        if ($this->isSuperAdmin() || $this->hasPermissionTo($permission)) {
+            return true;
+        }
+
+        return $this->projectRoles()
+            ->where('user_has_project_roles.project_id', $projectId)
+            ->whereHas('permissions', fn ($query) => $query->where('name', $permission))
+            ->exists();
+    }
+
+    public function canViewMenu(NavigationMenu|int $menu, Project|int|null $project = null): bool
+    {
+        $menuId = is_int($menu) ? $menu : $menu->id;
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->roles()->whereHas('menus', function ($query) use ($menuId) {
+            $query->where('navigation_menus.id', $menuId)->where('role_has_menu_access.can_view', true);
+        })->exists()) {
+            return true;
+        }
+
+        if ($project === null) {
+            return false;
+        }
+
+        $projectId = is_int($project) ? $project : $project->id;
+
+        return $this->projectRoles()
+            ->where('user_has_project_roles.project_id', $projectId)
+            ->whereHas('menus', function ($query) use ($menuId) {
+                $query->where('navigation_menus.id', $menuId)->where('role_has_menu_access.can_view', true);
+            })
+            ->exists();
     }
 }

@@ -1,18 +1,19 @@
 <?php
 
 namespace App\Services;
+
 //aa
-use App\Models\Project;
-use App\Models\User;
+use App\Models\CorridorMonitoring;
 use App\Models\GeospatialWorkspace;
 use App\Models\MonitoringStation;
-use App\Models\WarningStation;
-use App\Models\Sensor;
-use App\Models\CorridorMonitoring;
+use App\Models\Project;
 use App\Models\ReferencePoint;
 use App\Models\ReferenceRoute;
+use App\Models\Sensor;
 use App\Models\SpatialInformationLayer;
 use App\Models\StationSpatialReference;
+use App\Models\User;
+use App\Models\WarningStation;
 
 class AuthorizationService
 {
@@ -29,11 +30,11 @@ class AuthorizationService
      */
     public function canEditProject(User $user, Project $project): bool
     {
-        if (!$this->canAccessProject($user, $project)) {
+        if (! $this->canAccessProject($user, $project)) {
             return false;
         }
 
-        return $user->isSentinel() && $user->hasPermissionTo('project.edit');
+        return $user->hasPermissionForProject('project.edit', $project);
     }
 
     /**
@@ -41,7 +42,11 @@ class AuthorizationService
      */
     public function canCreateProject(User $user): bool
     {
-        if (!$user->isSentinel()) {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $user->isSentinel()) {
             return false;
         }
 
@@ -53,18 +58,17 @@ class AuthorizationService
      */
     public function canDeleteProject(User $user, Project $project): bool
     {
-        if (!$this->canAccessProject($user, $project) || !$user->isSentinel()) {
+        if (! $this->canAccessProject($user, $project)) {
             return false;
         }
 
-        return $user->hasPermissionTo('project.delete');
+        return $user->hasPermissionForProject('project.delete', $project);
     }
 
     public function canCreateSpatialResource(User $user, Project $project): bool
     {
         return $this->canAccessProject($user, $project)
-            && $user->isSentinel()
-            && $user->hasPermissionTo('project.create');
+            && $user->hasPermissionForProject('project.create', $project);
     }
 
     public function canEditSpatialResource(User $user, Project $project): bool
@@ -83,30 +87,43 @@ class AuthorizationService
             return false;
         }
 
-        if ($user->isClientUser()) {
+        // Compatibility for pre-existing client accounts that have not yet
+        // been converted to explicit project membership/role assignments.
+        // Once a project is selected, CRUD follows the role permission (or
+        // the legacy operator/manager membership level), never a role name.
+        $membership = $user->projects()->whereKey($project->id)->first();
+        $hasProjectRole = $user->projectRoles()
+            ->where('user_has_project_roles.project_id', $project->id)
+            ->exists();
+
+        if ($user->isClientUser() && ! $membership && ! $hasProjectRole) {
             return true;
         }
 
-        return $user->isSentinel()
-            && (
-                $user->hasPermissionTo('project.edit')
-                || $user->hasPermissionTo('project.create')
-            );
+        if ($membership && in_array($membership->pivot->access_level, ['operator', 'manager'], true)) {
+            return true;
+        }
+
+        return $user->hasPermissionForProject('project.edit', $project)
+            || $user->hasPermissionForProject('project.create', $project);
     }
 
     public function canAccessOperationalState(User $user): bool
     {
-        return $user->isSentinel() && $user->hasPermissionTo('operational-state.access');
+        return $user->isSuperAdmin()
+            || ($user->isSentinel() && $user->hasPermissionTo('operational-state.access'));
     }
 
     public function canAccessOperationalIntegrity(User $user): bool
     {
-        return $user->isSentinel() && $user->hasPermissionTo('operational-integrity.access');
+        return $user->isSuperAdmin()
+            || ($user->isSentinel() && $user->hasPermissionTo('operational-integrity.access'));
     }
 
     public function canAccessAdministrativeMonitoring(User $user): bool
     {
-        return $user->isSentinel() && $user->hasPermissionTo('administrative-monitoring.access');
+        return $user->isSuperAdmin()
+            || ($user->isSentinel() && $user->hasPermissionTo('administrative-monitoring.access'));
     }
 
     public function canAccessPlatformOperations(User $user): bool
@@ -118,12 +135,13 @@ class AuthorizationService
 
     public function canAccessReporting(User $user): bool
     {
-        return $user->isSentinel() && $user->hasPermissionTo('reporting.access');
+        return $user->isSuperAdmin()
+            || ($user->isSentinel() && $user->hasPermissionTo('reporting.access'));
     }
 
     public function canMutateAssetRegistry(User $user): bool
     {
-        return $user->isSentinel();
+        return $user->isSuperAdmin() || $user->isSentinel();
     }
 
     /**
@@ -160,6 +178,7 @@ class AuthorizationService
     public function canAccessSensor(User $user, Sensor $sensor): bool
     {
         $workspace = $sensor->workspace;
+
         return $workspace && $this->canAccessProject($user, $workspace->project_id);
     }
 
@@ -195,6 +214,19 @@ class AuthorizationService
      */
     public function scopeProjectsForUser(User $user, $query)
     {
+        if (! $user->isActive()) {
+            return $query->whereRaw('1=0');
+        }
+
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        $selectedProjectIds = $user->selectedProjectIds();
+        if ($selectedProjectIds !== []) {
+            return $query->whereIn('resq_projects.id', $selectedProjectIds);
+        }
+
         if ($user->isSentinel()) {
             return $query;
         }
@@ -211,31 +243,15 @@ class AuthorizationService
      */
     public function scopeWorkspacesForUser(User $user, $query)
     {
-        if ($user->isSentinel()) {
-            return $query;
-        }
-
-        if ($user->isClientUser()) {
-            return $query->whereHas('project', function ($q) use ($user) {
-                $q->where('client_id', $user->client_id);
-            });
-        }
-
-        return $query->whereRaw('1=0');
+        return $query->whereHas('project', function ($projects) use ($user) {
+            $this->scopeProjectsForUser($user, $projects);
+        });
     }
 
     public function scopeProjectSpatialResourcesForUser(User $user, $query)
     {
-        if ($user->isSentinel()) {
-            return $query;
-        }
-
-        if ($user->isClientUser()) {
-            return $query->whereHas('project', function ($q) use ($user) {
-                $q->where('client_id', $user->client_id);
-            });
-        }
-
-        return $query->whereRaw('1=0');
+        return $query->whereHas('project', function ($projects) use ($user) {
+            $this->scopeProjectsForUser($user, $projects);
+        });
     }
 }

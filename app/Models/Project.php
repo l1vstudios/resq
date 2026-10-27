@@ -97,6 +97,13 @@ class Project extends Model
             ->withTimestamps();
     }
 
+    public function roleUsers()
+    {
+        return $this->belongsToMany(User::class, 'user_has_project_roles')
+            ->withPivot(['role_id', 'assigned_by'])
+            ->withTimestamps();
+    }
+
     public function recoveryAccount()
     {
         return $this->hasOne(ProjectRecoveryAccount::class);
