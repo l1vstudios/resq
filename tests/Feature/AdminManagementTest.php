@@ -59,6 +59,21 @@ class AdminManagementTest extends TestCase
             ->assertSee('data-password-toggle="admin-password-confirm"', false);
     }
 
+    public function test_client_sidebar_shows_monitoring_when_the_role_can_view_it(): void
+    {
+        $role = Role::create(['name' => 'client-monitoring-viewer', 'type' => 'custom']);
+        $role->menus()->attach(
+            NavigationMenu::where('code', 'monitoring')->value('id'),
+            ['can_view' => true]
+        );
+        $clientUser = $this->user(['type' => 'client']);
+        $clientUser->assignRole($role);
+
+        $this->actingAs($clientUser)->get(route('dashboard'))->assertOk()
+            ->assertSee('href="'.route('monitoring.index').'"', false)
+            ->assertSee('>Monitoring<', false);
+    }
+
     public function test_admin_can_create_an_internal_account_with_a_hashed_password_and_role(): void
     {
         $this->admin();

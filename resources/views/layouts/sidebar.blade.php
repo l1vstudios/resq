@@ -68,7 +68,6 @@
                     </li>
                 @endif
 
-                @if(! $sidebarIsClient)
                 @if($canMenu('monitoring'))<li class="{{ request()->routeIs('monitoring.*') ? 'mm-active' : '' }}">
                     <a href="{{ route('monitoring.index') }}" class="waves-effect {{ request()->routeIs('monitoring.*') ? 'active' : '' }}">
                         <i class="bx bx-pulse"></i>
@@ -76,6 +75,7 @@
                     </a>
                 </li>@endif
 
+                @if(! $sidebarIsClient)
                 {{-- Platform Operations hidden from sidebar --}}
 
                 @php
