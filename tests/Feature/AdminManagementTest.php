@@ -53,7 +53,9 @@ class AdminManagementTest extends TestCase
             ->assertSee('Matriks Menu &amp; CRUD', false)
             ->assertSee('Akses penuh')
             ->assertSee('name="permissions[project][]"', false)
-            ->assertSee('name="menu_ids[]"', false);
+            ->assertSee('name="menu_ids[]"', false)
+            ->assertSee('data-password-toggle="admin-password"', false)
+            ->assertSee('data-password-toggle="admin-password-confirm"', false);
     }
 
     public function test_admin_can_create_an_internal_account_with_a_hashed_password_and_role(): void

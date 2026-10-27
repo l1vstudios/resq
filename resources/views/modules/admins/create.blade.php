@@ -61,8 +61,8 @@
                     <div class="row g-3">
                         <div class="col-lg-6"><label for="admin-name" class="form-label">Nama <span class="text-danger">*</span></label><input id="admin-name" name="name" class="form-control" value="{{ old('name', $editingUser->name ?? '') }}" required maxlength="255" autocomplete="name"></div>
                         <div class="col-lg-6"><label for="admin-email" class="form-label">Email <span class="text-danger">*</span></label><input type="email" id="admin-email" name="email" class="form-control" value="{{ old('email', $editingUser->email ?? '') }}" required maxlength="255" autocomplete="email"></div>
-                        <div class="col-md-4"><label for="admin-password" class="form-label">Password {!! $isEditing ? '<span class="text-muted small">(opsional)</span>' : '<span class="text-danger">*</span>' !!}</label><input type="password" id="admin-password" name="password" class="form-control" @required(!$isEditing) minlength="8" maxlength="255" autocomplete="new-password"><small class="text-muted">{{ $isEditing ? 'Kosongkan bila password tidak diubah.' : 'Minimal 8 karakter.' }}</small></div>
-                        <div class="col-md-4"><label for="admin-password-confirm" class="form-label">Konfirmasi Password</label><input type="password" id="admin-password-confirm" name="password_confirmation" class="form-control" @required(!$isEditing) minlength="8" maxlength="255" autocomplete="new-password"></div>
+                        <div class="col-md-4"><label for="admin-password" class="form-label">Password {!! $isEditing ? '<span class="text-muted small">(opsional)</span>' : '<span class="text-danger">*</span>' !!}</label><div class="input-group"><input type="password" id="admin-password" name="password" class="form-control" @required(!$isEditing) minlength="8" maxlength="255" autocomplete="new-password"><button class="btn btn-outline-secondary" type="button" data-password-toggle="admin-password" aria-label="Tampilkan password" aria-pressed="false" title="Tampilkan password"><i class="bx bx-show" aria-hidden="true"></i></button></div><small class="text-muted">{{ $isEditing ? 'Kosongkan bila password tidak diubah.' : 'Minimal 8 karakter.' }}</small></div>
+                        <div class="col-md-4"><label for="admin-password-confirm" class="form-label">Konfirmasi Password</label><div class="input-group"><input type="password" id="admin-password-confirm" name="password_confirmation" class="form-control" @required(!$isEditing) minlength="8" maxlength="255" autocomplete="new-password"><button class="btn btn-outline-secondary" type="button" data-password-toggle="admin-password-confirm" aria-label="Tampilkan konfirmasi password" aria-pressed="false" title="Tampilkan konfirmasi password"><i class="bx bx-show" aria-hidden="true"></i></button></div></div>
                         <div class="col-md-2"><label for="admin-account-type" class="form-label">Jenis Akun</label><select name="account_type" id="admin-account-type" class="form-select"><option value="sentinel" @selected($accountType === 'sentinel')>Internal</option><option value="client" @selected($accountType === 'client')>Client</option></select></div>
                         <div class="col-md-2"><label for="admin-status" class="form-label">Status</label><select name="status" id="admin-status" class="form-select"><option value="active" @selected(old('status', $editingUser->status ?? 'active') === 'active')>Active</option><option value="inactive" @selected(old('status', $editingUser->status ?? '') === 'inactive')>Inactive</option></select></div>
                     </div>
@@ -191,6 +191,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const next = matrixChecks.some((check) => !check.checked);
         matrixChecks.forEach((check) => check.checked = next);
         fullAccess.checked = next;
+    });
+
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+        const input = document.getElementById(button.dataset.passwordToggle);
+        const icon = button.querySelector('i');
+        const label = button.dataset.passwordToggle === 'admin-password'
+            ? 'password'
+            : 'konfirmasi password';
+        button.addEventListener('click', () => {
+            const isVisible = input.type === 'text';
+            input.type = isVisible ? 'password' : 'text';
+            button.setAttribute('aria-pressed', String(!isVisible));
+            button.setAttribute('aria-label', `${isVisible ? 'Tampilkan' : 'Sembunyikan'} ${label}`);
+            button.title = `${isVisible ? 'Tampilkan' : 'Sembunyikan'} ${label}`;
+            icon.classList.toggle('bx-show', isVisible);
+            icon.classList.toggle('bx-hide', !isVisible);
+        });
     });
     setTab({{ $errors->any() ? 2 : 0 }});
 });
