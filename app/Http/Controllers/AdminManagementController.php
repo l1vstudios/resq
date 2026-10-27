@@ -22,6 +22,17 @@ class AdminManagementController extends Controller
 
     private const ACCESS_ACTIONS = ['view', 'create', 'edit', 'delete'];
 
+    // Only menus that are rendered by the current sidebar belong in the RBAC UI.
+    private const SIDEBAR_MENU_CODES = [
+        'dashboard', 'monitoring', 'project', 'geospatial', 'monitoring-station', 'warning-station', 'sensor-data',
+        'canonical-data', 'operations-response', 'cfpe-corridor', 'data-loggers', 'asset-management', 'master-data-tde',
+        'tde-forecast', 'prefix-sensors', 'rednode-pin-scan', 'rednode-builder', 'production-guide',
+        'client-operational-state', 'client-operational-integrity', 'client-administrative-monitoring',
+        'client-function-configuration', 'client-reporting', 'client-inbox', 'client-users', 'admin-management',
+    ];
+
+    private const MATRIX_ACTIONS = ['create', 'edit', 'delete'];
+
     public function index(Request $request): View
     {
         $this->authorizeAdmin($request);
@@ -235,8 +246,13 @@ class AdminManagementController extends Controller
             'roles' => Role::whereIn('name', self::INTERNAL_ROLES)->where('is_assignable', true)->orderBy('display_name')->get(),
             'clients' => Client::query()->where('status', 'active')->orderBy('name')->get(),
             'projects' => Project::query()->with('client')->orderBy('project_code')->get(),
-            'menus' => NavigationMenu::query()->where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(),
-            'actions' => self::ACCESS_ACTIONS,
+            'menus' => NavigationMenu::query()
+                ->where('is_active', true)
+                ->whereIn('code', self::SIDEBAR_MENU_CODES)
+                ->orderBy('sort_order')
+                ->orderBy('label')
+                ->get(),
+            'actions' => self::MATRIX_ACTIONS,
             'selectedProjectIds' => [],
             'selectedMenuIds' => [],
             'selectedPermissions' => [],

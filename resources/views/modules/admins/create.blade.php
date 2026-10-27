@@ -46,7 +46,6 @@
         .project-picker { max-height: 260px; overflow-y: auto; }
         .project-picker .form-check { border-bottom: 1px solid var(--bs-border-color); padding: .65rem 1rem  .65rem 2.1rem; }
         .project-picker .form-check:last-child { border-bottom: 0; }
-        .resource-badge { min-width: 7rem; }
         #access-matrix th, #access-matrix td { white-space: nowrap; }
     </style>
     <div class="card shadow-sm border-0">
@@ -98,7 +97,7 @@
                 </section>
 
                 <section data-access-panel="access" hidden>
-                    <div class="row g-3 align-items-end mb-4">
+                    <div class="row g-3 align-items-start mb-4">
                         @if($isEditing)
                             <input type="hidden" name="role_id" value="{{ $editingRole->id }}">
                             <div class="col-lg-8"><div class="border rounded bg-light-subtle px-3 py-2"><small class="text-muted d-block">Role yang sedang diedit</small><strong>{{ $editingRole->display_name ?: $editingRole->name }}</strong><span class="text-muted ms-2 small">({{ $editingRole->name }})</span></div></div>
@@ -108,26 +107,25 @@
                             <div class="col-lg-3 role-new-field"><label for="role-display-name" class="form-label">Nama Role</label><input id="role-display-name" name="role_display_name" class="form-control" value="{{ old('role_display_name') }}" placeholder="Contoh: Operator Project" maxlength="255"></div>
                             <div class="col-lg-6 role-existing-field" hidden><label for="role-id" class="form-label">Role Internal</label><select name="role_id" id="role-id" class="form-select"><option value="">Pilih role</option>@foreach ($roles as $role)<option value="{{ $role->id }}" @selected((string) old('role_id') === (string) $role->id)>{{ $role->display_name ?: $role->name }}</option>@endforeach</select></div>
                         @endif
-                        <div class="col-lg-3"><div class="form-check form-switch border rounded px-3 py-2"><input type="hidden" name="full_access" value="0"><input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="full-access" name="full_access" value="1" @checked(old('full_access', $editingRole->is_super_admin ?? false))><label class="form-check-label" for="full-access"><strong>Akses penuh</strong><small class="d-block text-muted">Semua menu &amp; CRUD.</small></label></div></div>
+                        <div class="col-lg-3"><label class="form-label d-block">Akses</label><div class="form-check form-switch border rounded px-3 py-2"><input type="hidden" name="full_access" value="0"><input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="full-access" name="full_access" value="1" @checked(old('full_access', $editingRole->is_super_admin ?? false))><label class="form-check-label" for="full-access"><strong>Akses penuh</strong><small class="d-block text-muted">Semua menu &amp; CRUD.</small></label></div></div>
                     </div>
 
-                    <div class="d-flex justify-content-between align-items-center mb-2"><div><h5 class="mb-1">Matriks Menu &amp; CRUD</h5><p class="text-muted mb-0 small">Centang <em>Lihat</em> agar menu tampil. Aksi CRUD hanya aktif untuk resource yang diizinkan.</p></div><button class="btn btn-sm btn-outline-primary" type="button" id="select-all-access">Pilih semua</button></div>
+                    <div class="d-flex justify-content-between align-items-center mb-2"><div><h5 class="mb-1">Matriks Menu &amp; CRUD</h5><p class="text-muted mb-0 small">Daftar ini mengikuti menu yang tampil pada sidebar. Centang <em>Lihat</em> agar menu tampil.</p></div><button class="btn btn-sm btn-outline-primary" type="button" id="select-all-access">Pilih semua</button></div>
                     <div class="table-responsive border rounded">
                         <table class="table table-sm table-hover align-middle mb-0" id="access-matrix">
-                            <thead class="table-light"><tr><th class="ps-3">Menu</th><th>Resource</th><th class="text-center">Lihat</th><th class="text-center">Tambah</th><th class="text-center">Ubah</th><th class="text-center">Hapus</th></tr></thead>
+                            <thead class="table-light"><tr><th class="ps-3">Menu Sidebar</th><th class="text-center">Lihat</th><th class="text-center">Tambah</th><th class="text-center">Ubah</th><th class="text-center">Hapus</th></tr></thead>
                             <tbody>
                             @forelse ($menus as $menu)
                                 @php($oldActions = $permissionValues[$menu->resource] ?? [])
                                 <tr>
-                                    <td class="ps-3"><strong>{{ $menu->label }}</strong><small class="d-block text-muted">{{ $menu->route_name ?: $menu->code }}</small></td>
-                                    <td><span class="badge bg-light text-dark border resource-badge">{{ $menu->resource ?: '—' }}</span></td>
+                                    <td class="ps-3"><strong>{{ $menu->label }}</strong></td>
                                     <td class="text-center"><input class="form-check-input access-check menu-check" type="checkbox" name="menu_ids[]" value="{{ $menu->id }}" aria-label="Lihat {{ $menu->label }}" @checked(in_array($menu->id, $menuIds))></td>
                                     @foreach ($actions as $action)
                                         <td class="text-center"><input class="form-check-input access-check" type="checkbox" name="permissions[{{ $menu->resource }}][]" value="{{ $action }}" aria-label="{{ ucfirst($action) }} {{ $menu->label }}" @disabled(!$menu->resource) @checked(in_array($action, $oldActions))></td>
                                     @endforeach
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="text-center text-muted py-4">Registry menu belum tersedia. Jalankan migration terbaru.</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-4">Registry menu sidebar belum tersedia. Jalankan migration terbaru.</td></tr>
                             @endforelse
                             </tbody>
                         </table>
