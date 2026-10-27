@@ -154,6 +154,8 @@
                 @php($inboxNotifications = collect($inboxNotifications ?? []))
                 @php($inboxUnreadCount = $inboxUnreadCount ?? 0)
                 @php($topbarUser = auth()->user())
+                @php($topbarRoleLabels = $topbarUser ? $topbarUser->roles()->get()->merge($topbarUser->projectRoles()->get())->map(fn ($role) => $role->display_name ?: $role->name)->filter()->unique()->values() : collect())
+                @php($topbarRoleLabel = $topbarRoleLabels->first() ?: ($topbarUser?->isClientUser() ? 'Client' : 'Internal'))
                 <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-bell bx-tada"></i>
@@ -228,6 +230,10 @@
                         </a>
                     </div>
                 </div>
+            </div>
+
+            <div class="d-inline-flex align-items-center px-2" data-account-role-badge title="Role akun: {{ $topbarRoleLabels->implode(', ') ?: $topbarRoleLabel }}">
+                <span class="badge bg-primary-subtle text-primary text-nowrap"><i class="bx bx-shield-quarter me-1" aria-hidden="true"></i>{{ $topbarRoleLabel }}</span>
             </div>
 
             <div class="dropdown d-inline-block">

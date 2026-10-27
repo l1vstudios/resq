@@ -34,6 +34,8 @@ class AdminManagementTest extends TestCase
             ->assertSee($user->name)->assertSee($user->email)
             ->assertSee('Tambah Admin')->assertSee('id="admin-user-grid"', false)
             ->assertSee('href="'.route('admins.create').'"', false)
+            ->assertSee('data-account-role-badge', false)
+            ->assertSee('SentinelAdmin')
             ->assertDontSee('ops@resq.id')->assertDontSee('User Setup')
             ->assertDontSee('href="contacts-profile"', false)
             ->assertDontSee('change-password')->assertSee('Logout');
