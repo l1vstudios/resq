@@ -20,6 +20,10 @@ class Project extends Model
         'status',
     ];
 
+    protected $casts = [
+        'client_id' => 'integer',
+    ];
+
     public function workspaces()
     {
         return $this->hasMany(GeospatialWorkspace::class);

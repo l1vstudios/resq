@@ -25,6 +25,7 @@ class Role extends Model
     ];
 
     protected $casts = [
+        'client_id' => 'integer',
         'is_super_admin' => 'boolean',
         'is_assignable' => 'boolean',
     ];

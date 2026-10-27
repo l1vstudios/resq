@@ -34,6 +34,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'client_id' => 'integer',
     ];
 
     public function client()

@@ -84,8 +84,10 @@ class AdminManagementTest extends TestCase
             'password' => 'ExamplePassword123',
             'password_confirmation' => 'ExamplePassword123',
             'account_type' => 'client',
-            'client_id' => $client->id,
-            'project_ids' => [$project->id],
+            // Form submissions send IDs as strings; client/project matching must
+            // therefore not depend on PHP's strict string-vs-integer comparison.
+            'client_id' => (string) $client->id,
+            'project_ids' => [(string) $project->id],
             'role_mode' => 'new',
             'role_name' => 'rbac-client-operator',
             'role_display_name' => 'RBAC Client Operator',

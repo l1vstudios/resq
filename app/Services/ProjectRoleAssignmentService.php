@@ -23,13 +23,13 @@ class ProjectRoleAssignmentService
             ]);
         }
 
-        if ($user->isClientUser() && $user->client_id !== $project->client_id) {
+        if ($user->isClientUser() && (int) $user->client_id !== (int) $project->client_id) {
             throw ValidationException::withMessages([
                 'project_id' => 'Project harus milik client yang sama dengan user.',
             ]);
         }
 
-        if ($role->client_id !== null && $role->client_id !== $project->client_id) {
+        if ($role->client_id !== null && (int) $role->client_id !== (int) $project->client_id) {
             throw ValidationException::withMessages([
                 'role' => 'Role hanya dapat digunakan pada project milik client pemilik role.',
             ]);
