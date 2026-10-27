@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\NavigationMenu;
+use App\Models\Permission;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
@@ -111,11 +112,23 @@ class AdminManagementTest extends TestCase
         $role = Role::create(['name' => 'editable-role', 'type' => 'custom']);
         $user = $this->user(['name' => 'Before Edit', 'email' => 'before-edit@example.test']);
         $user->assignRole($role);
-        $menuId = NavigationMenu::where('code', 'project')->value('id');
+        $menu = NavigationMenu::where('code', 'project')->firstOrFail();
+        $permission = Permission::firstOrCreate([
+            'name' => Permission::buildName('project', 'edit'),
+        ], [
+            'display_name' => 'Edit project',
+            'resource' => 'project',
+            'action' => 'edit',
+        ]);
+        $role->menus()->attach($menu->id, ['can_view' => true]);
+        $role->permissions()->attach($permission->id);
 
-        $this->get(route('admins.edit', $user))->assertOk()
+        $response = $this->get(route('admins.edit', $user));
+        $response->assertOk()
             ->assertSee('Edit Admin &amp; Hak Akses', false)
-            ->assertSee('Before Edit');
+            ->assertSee('Before Edit')
+            ->assertSee('value="'.$menu->id.'" aria-label="Lihat '.$menu->label.'" checked', false)
+            ->assertSee('name="permissions[project][]" value="edit" aria-label="Edit '.$menu->label.'"  checked', false);
 
         $this->put(route('admins.update', $user), [
             'name' => 'After Edit',
@@ -123,7 +136,7 @@ class AdminManagementTest extends TestCase
             'account_type' => 'sentinel',
             'status' => 'inactive',
             'full_access' => '0',
-            'menu_ids' => [$menuId],
+            'menu_ids' => [$menu->id],
             'permissions' => ['project' => ['view', 'edit']],
         ])->assertRedirect(route('admins.index'));
 
@@ -131,7 +144,7 @@ class AdminManagementTest extends TestCase
         $this->assertSame('After Edit', $user->name);
         $this->assertSame('inactive', $user->status);
         $this->assertSame('after-edit@example.test', $user->email);
-        $this->assertTrue($role->fresh()->menus()->whereKey($menuId)->exists());
+        $this->assertTrue($role->fresh()->menus()->whereKey($menu->id)->exists());
         $this->assertTrue($role->fresh()->givesPermission('project.edit'));
     }
 

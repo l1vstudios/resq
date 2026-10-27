@@ -5,9 +5,11 @@
     $pageTitle = $isEditing ? 'Edit Admin & Hak Akses' : 'Tambah Admin & Hak Akses';
     $accountType = old('account_type', $editingUser->type ?? 'sentinel');
     $clientId = old('client_id', $editingUser->client_id ?? null);
-    $projectIds = old('project_ids', $selectedProjectIds);
-    $menuIds = old('menu_ids', $selectedMenuIds);
-    $permissionValues = old('permissions', $selectedPermissions);
+    $projectIds = collect(old('project_ids', $selectedProjectIds))->map(fn ($id) => (int) $id)->all();
+    $menuIds = collect(old('menu_ids', $selectedMenuIds))->map(fn ($id) => (int) $id)->all();
+    $permissionValues = collect(old('permissions', $selectedPermissions))
+        ->map(fn ($permissions) => collect($permissions)->map(fn ($action) => (string) $action)->all())
+        ->all();
 @endphp
 
 @section('title') {{ $pageTitle }} @endsection
@@ -83,7 +85,7 @@
                             <div id="admin-projects" class="project-picker border rounded" aria-describedby="project-help">
                                 @forelse ($projects as $project)
                                     <label class="form-check project-option" data-client-id="{{ $project->client_id }}">
-                                        <input class="form-check-input project-check" type="checkbox" name="project_ids[]" value="{{ $project->id }}" @checked(in_array($project->id, $projectIds))>
+                                        <input class="form-check-input project-check" type="checkbox" name="project_ids[]" value="{{ $project->id }}" @checked(in_array($project->id, $projectIds, true))>
                                         <span class="form-check-label"><strong>{{ $project->project_code }}</strong><span class="d-block text-muted small">{{ $project->name }}{{ $project->client ? ' · '.$project->client->name : '' }}</span></span>
                                     </label>
                                 @empty
@@ -122,9 +124,9 @@
                                 @php($oldActions = $permissionValues[$menu->resource] ?? [])
                                 <tr>
                                     <td class="ps-3"><strong>{{ $menu->label }}</strong></td>
-                                    <td class="text-center"><input class="form-check-input access-check menu-check" type="checkbox" name="menu_ids[]" value="{{ $menu->id }}" aria-label="Lihat {{ $menu->label }}" @checked(in_array($menu->id, $menuIds))></td>
+                                    <td class="text-center"><input class="form-check-input access-check menu-check" type="checkbox" name="menu_ids[]" value="{{ $menu->id }}" aria-label="Lihat {{ $menu->label }}" @checked(in_array($menu->id, $menuIds, true))></td>
                                     @foreach ($actions as $action)
-                                        <td class="text-center"><input class="form-check-input access-check" type="checkbox" name="permissions[{{ $menu->resource }}][]" value="{{ $action }}" aria-label="{{ ucfirst($action) }} {{ $menu->label }}" @disabled(!$menu->resource) @checked(in_array($action, $oldActions))></td>
+                                        <td class="text-center"><input class="form-check-input access-check" type="checkbox" name="permissions[{{ $menu->resource }}][]" value="{{ $action }}" aria-label="{{ ucfirst($action) }} {{ $menu->label }}" @disabled(!$menu->resource) @checked(in_array($action, $oldActions, true))></td>
                                     @endforeach
                                 </tr>
                             @empty
