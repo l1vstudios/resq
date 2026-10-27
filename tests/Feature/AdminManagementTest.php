@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\NavigationMenu;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
@@ -98,6 +99,36 @@ class AdminManagementTest extends TestCase
         $this->assertTrue($user->hasPermissionForProject('project.edit', $project));
         $this->assertGreaterThan(0, $role->menus()->count());
         $this->assertContains('dashboard', $user->visibleMenuCodes());
+    }
+
+    public function test_admin_can_edit_an_account_and_its_role_matrix(): void
+    {
+        $this->admin();
+        $role = Role::create(['name' => 'editable-role', 'type' => 'custom']);
+        $user = $this->user(['name' => 'Before Edit', 'email' => 'before-edit@example.test']);
+        $user->assignRole($role);
+        $menuId = NavigationMenu::where('code', 'project')->value('id');
+
+        $this->get(route('admins.edit', $user))->assertOk()
+            ->assertSee('Edit Admin &amp; Hak Akses', false)
+            ->assertSee('Before Edit');
+
+        $this->put(route('admins.update', $user), [
+            'name' => 'After Edit',
+            'email' => 'after-edit@example.test',
+            'account_type' => 'sentinel',
+            'status' => 'inactive',
+            'full_access' => '0',
+            'menu_ids' => [$menuId],
+            'permissions' => ['project' => ['view', 'edit']],
+        ])->assertRedirect(route('admins.index'));
+
+        $user->refresh();
+        $this->assertSame('After Edit', $user->name);
+        $this->assertSame('inactive', $user->status);
+        $this->assertSame('after-edit@example.test', $user->email);
+        $this->assertTrue($role->fresh()->menus()->whereKey($menuId)->exists());
+        $this->assertTrue($role->fresh()->givesPermission('project.edit'));
     }
 
     public function test_invalid_admin_input_does_not_create_an_account(): void

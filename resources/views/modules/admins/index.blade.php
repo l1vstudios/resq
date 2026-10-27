@@ -29,7 +29,7 @@
     </form>
     <div class="table-responsive" tabindex="0" aria-label="Data akun">
         <table class="table table-hover align-middle mb-0" id="admin-user-grid">
-            <thead class="table-light"><tr><th scope="col" class="ps-3">No.</th><th scope="col">Nama / Email</th><th scope="col">Jenis Akun</th><th scope="col">Role</th><th scope="col">Klien</th><th scope="col">Project</th><th scope="col">Status</th></tr></thead>
+            <thead class="table-light"><tr><th scope="col" class="ps-3">No.</th><th scope="col">Nama / Email</th><th scope="col">Jenis Akun</th><th scope="col">Role</th><th scope="col">Klien</th><th scope="col">Project</th><th scope="col">Status</th><th scope="col" class="text-end pe-3">Aksi</th></tr></thead>
             <tbody>
                 @forelse ($users as $user)
                     <tr>
@@ -40,9 +40,10 @@
                         <td>{{ $user->client?->name ?: '—' }}</td>
                         <td>{{ $user->isSentinel() ? 'Semua project' : ($user->projects->pluck('project_code')->implode(', ') ?: ($user->roles->contains('name', 'ClientAdmin') ? 'Semua project klien' : 'Belum ditugaskan')) }}</td>
                         <td><span class="badge {{ $user->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ ucfirst($user->status ?? 'unknown') }}</span></td>
+                        <td class="text-end pe-3"><a href="{{ route('admins.edit', $user) }}" class="btn btn-sm btn-outline-primary"><i class="bx bx-pencil me-1"></i>Edit</a></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted py-5">{{ $search !== '' ? 'Tidak ada akun yang sesuai pencarian.' : 'Belum ada akun.' }}</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-5">{{ $search !== '' ? 'Tidak ada akun yang sesuai pencarian.' : 'Belum ada akun.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>

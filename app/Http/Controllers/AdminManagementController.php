@@ -133,13 +133,114 @@ class AdminManagementController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        return view('modules.admins.create', [
+        return view('modules.admins.create', $this->editorData());
+    }
+
+    public function edit(Request $request, User $user): View
+    {
+        $this->authorizeAdmin($request);
+        $user->load(['roles.permissions', 'roles.menus', 'projectRoles.permissions', 'projectRoles.menus', 'projects']);
+        $role = $user->roles->first() ?: $user->projectRoles->first();
+        abort_unless($role, 404, 'Role akun tidak ditemukan.');
+
+        return view('modules.admins.create', $this->editorData([
+            'editingUser' => $user,
+            'editingRole' => $role,
+            'selectedProjectIds' => $user->projects->pluck('id')->all(),
+            'selectedMenuIds' => $role->menus->where('pivot.can_view', true)->pluck('id')->all(),
+            'selectedPermissions' => $role->permissions
+                ->filter(fn (Permission $permission) => filled($permission->resource) && filled($permission->action))
+                ->groupBy('resource')
+                ->map(fn ($permissions) => $permissions->pluck('action')->all())
+                ->all(),
+        ]));
+    }
+
+    public function update(Request $request, User $user): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $user->load(['roles', 'projectRoles']);
+        $role = $user->roles->first() ?: $user->projectRoles->first();
+        abort_unless($role, 404, 'Role akun tidak ditemukan.');
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => ['nullable', 'string', 'min:8', 'max:255', 'confirmed'],
+            'account_type' => ['required', Rule::in(['sentinel', 'client'])],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')],
+            'project_ids' => ['nullable', 'array'],
+            'project_ids.*' => ['integer', Rule::exists('resq_projects', 'id')],
+            'full_access' => ['nullable', 'boolean'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['array'],
+            'permissions.*.*' => [Rule::in(self::ACCESS_ACTIONS)],
+            'menu_ids' => ['nullable', 'array'],
+            'menu_ids.*' => ['integer', Rule::exists('navigation_menus', 'id')],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+        ]);
+
+        if ($data['account_type'] === 'client' && empty($data['client_id'])) {
+            return back()->withInput()->withErrors(['client_id' => 'Client wajib dipilih untuk akun client.']);
+        }
+
+        $projects = Project::query()->whereIn('id', $data['project_ids'] ?? [])->get();
+        if (($data['client_id'] ?? null) && $projects->contains(fn (Project $project) => (int) $project->client_id !== (int) $data['client_id'])) {
+            return back()->withInput()->withErrors(['project_ids' => 'Semua project harus milik client yang dipilih.']);
+        }
+
+        DB::transaction(function () use ($data, $projects, $request, $user, $role) {
+            $attributes = [
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'type' => $data['account_type'],
+                'client_id' => $data['account_type'] === 'client' ? $data['client_id'] ?? null : null,
+                'status' => $data['status'],
+            ];
+            if (filled($data['password'] ?? null)) {
+                $attributes['password'] = Hash::make($data['password']);
+            }
+            $user->update($attributes);
+
+            $role->update([
+                'client_id' => $data['client_id'] ?? null,
+                'is_super_admin' => (bool) ($data['full_access'] ?? false)
+                    && $data['account_type'] === 'sentinel'
+                    && $projects->isEmpty(),
+            ]);
+            $this->syncRoleAccess($role, $data);
+
+            $user->roles()->detach();
+            $user->projectRoles()->detach();
+            $user->projects()->detach();
+
+            if ($projects->isEmpty()) {
+                $user->roles()->sync([$role->id]);
+
+                return;
+            }
+
+            $assignments = app(ProjectRoleAssignmentService::class);
+            foreach ($projects as $project) {
+                $assignments->assign($user, $project, $role, $request->user());
+            }
+        });
+
+        return redirect()->route('admins.index')->with('message', 'Admin dan hak akses berhasil diperbarui.');
+    }
+
+    private function editorData(array $overrides = []): array
+    {
+        return array_merge([
             'roles' => Role::whereIn('name', self::INTERNAL_ROLES)->where('is_assignable', true)->orderBy('display_name')->get(),
             'clients' => Client::query()->where('status', 'active')->orderBy('name')->get(),
             'projects' => Project::query()->with('client')->orderBy('project_code')->get(),
             'menus' => NavigationMenu::query()->where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(),
             'actions' => self::ACCESS_ACTIONS,
-        ]);
+            'selectedProjectIds' => [],
+            'selectedMenuIds' => [],
+            'selectedPermissions' => [],
+        ], $overrides);
     }
 
     private function syncRoleAccess(Role $role, array $data): void

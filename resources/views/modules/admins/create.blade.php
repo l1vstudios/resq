@@ -1,18 +1,28 @@
 @extends('layouts.master')
 
-@section('title') Tambah Admin & Hak Akses @endsection
+@php
+    $isEditing = isset($editingUser);
+    $pageTitle = $isEditing ? 'Edit Admin & Hak Akses' : 'Tambah Admin & Hak Akses';
+    $accountType = old('account_type', $editingUser->type ?? 'sentinel');
+    $clientId = old('client_id', $editingUser->client_id ?? null);
+    $projectIds = old('project_ids', $selectedProjectIds);
+    $menuIds = old('menu_ids', $selectedMenuIds);
+    $permissionValues = old('permissions', $selectedPermissions);
+@endphp
+
+@section('title') {{ $pageTitle }} @endsection
 
 @section('content')
 @component('components.breadcrumb')
 @slot('li_1') Administration @endslot
 @slot('li_2') <a href="{{ route('admins.index') }}">Admin Management</a> @endslot
-@slot('title') Tambah Admin & Hak Akses @endslot
+@slot('title') {{ $pageTitle }} @endslot
 @endcomponent
 
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
-        <h4 class="mb-1">Tambah Admin &amp; Hak Akses</h4>
-        <p class="text-muted mb-0">Buat akun, tentukan scope client/project, lalu atur menu dan aksi CRUD dalam satu role.</p>
+        <h4 class="mb-1">{{ $pageTitle }}</h4>
+        <p class="text-muted mb-0">{{ $isEditing ? 'Perbarui akun, scope client/project, serta matriks akses role.' : 'Buat akun, tentukan scope client/project, lalu atur menu dan aksi CRUD dalam satu role.' }}</p>
     </div>
     <a href="{{ route('admins.index') }}" class="btn btn-light"><i class="bx bx-arrow-back me-1"></i>Kembali</a>
 </div>
@@ -24,10 +34,21 @@
     </div>
 @endif
 
-<form method="POST" action="{{ route('admins.store') }}" id="rbac-admin-form">
+<form method="POST" action="{{ $isEditing ? route('admins.update', $editingUser) : route('admins.store') }}" id="rbac-admin-form" class="rbac-editor mx-auto">
     @csrf
+    @if($isEditing) @method('PUT') @endif
     <input type="hidden" name="_admin_form" value="create">
 
+    <style>
+        .rbac-editor { max-width: 1500px; }
+        .rbac-editor .card { border-radius: .75rem; }
+        .rbac-editor .form-label { font-weight: 600; }
+        .project-picker { max-height: 260px; overflow-y: auto; }
+        .project-picker .form-check { border-bottom: 1px solid var(--bs-border-color); padding: .65rem 1rem  .65rem 2.1rem; }
+        .project-picker .form-check:last-child { border-bottom: 0; }
+        .resource-badge { min-width: 7rem; }
+        #access-matrix th, #access-matrix td { white-space: nowrap; }
+    </style>
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
             <ul class="nav nav-tabs nav-tabs-custom px-4 pt-3" id="admin-access-tabs" role="tablist">
@@ -39,12 +60,12 @@
             <div class="p-4">
                 <section data-access-panel="account">
                     <div class="row g-3">
-                        <div class="col-md-6"><label for="admin-name" class="form-label">Nama <span class="text-danger">*</span></label><input id="admin-name" name="name" class="form-control" value="{{ old('name') }}" required maxlength="255" autocomplete="name"></div>
-                        <div class="col-md-6"><label for="admin-email" class="form-label">Email <span class="text-danger">*</span></label><input type="email" id="admin-email" name="email" class="form-control" value="{{ old('email') }}" required maxlength="255" autocomplete="email"></div>
-                        <div class="col-md-4"><label for="admin-password" class="form-label">Password <span class="text-danger">*</span></label><input type="password" id="admin-password" name="password" class="form-control" required minlength="8" maxlength="255" autocomplete="new-password"><small class="text-muted">Minimal 8 karakter.</small></div>
-                        <div class="col-md-4"><label for="admin-password-confirm" class="form-label">Konfirmasi Password <span class="text-danger">*</span></label><input type="password" id="admin-password-confirm" name="password_confirmation" class="form-control" required minlength="8" maxlength="255" autocomplete="new-password"></div>
-                        <div class="col-md-2"><label for="admin-account-type" class="form-label">Jenis Akun</label><select name="account_type" id="admin-account-type" class="form-select"><option value="sentinel" @selected(old('account_type', 'sentinel') === 'sentinel')>Internal</option><option value="client" @selected(old('account_type') === 'client')>Client</option></select></div>
-                        <div class="col-md-2"><label for="admin-status" class="form-label">Status</label><select name="status" id="admin-status" class="form-select"><option value="active" @selected(old('status', 'active') === 'active')>Active</option><option value="inactive" @selected(old('status') === 'inactive')>Inactive</option></select></div>
+                        <div class="col-lg-6"><label for="admin-name" class="form-label">Nama <span class="text-danger">*</span></label><input id="admin-name" name="name" class="form-control" value="{{ old('name', $editingUser->name ?? '') }}" required maxlength="255" autocomplete="name"></div>
+                        <div class="col-lg-6"><label for="admin-email" class="form-label">Email <span class="text-danger">*</span></label><input type="email" id="admin-email" name="email" class="form-control" value="{{ old('email', $editingUser->email ?? '') }}" required maxlength="255" autocomplete="email"></div>
+                        <div class="col-md-4"><label for="admin-password" class="form-label">Password {!! $isEditing ? '<span class="text-muted small">(opsional)</span>' : '<span class="text-danger">*</span>' !!}</label><input type="password" id="admin-password" name="password" class="form-control" @required(!$isEditing) minlength="8" maxlength="255" autocomplete="new-password"><small class="text-muted">{{ $isEditing ? 'Kosongkan bila password tidak diubah.' : 'Minimal 8 karakter.' }}</small></div>
+                        <div class="col-md-4"><label for="admin-password-confirm" class="form-label">Konfirmasi Password</label><input type="password" id="admin-password-confirm" name="password_confirmation" class="form-control" @required(!$isEditing) minlength="8" maxlength="255" autocomplete="new-password"></div>
+                        <div class="col-md-2"><label for="admin-account-type" class="form-label">Jenis Akun</label><select name="account_type" id="admin-account-type" class="form-select"><option value="sentinel" @selected($accountType === 'sentinel')>Internal</option><option value="client" @selected($accountType === 'client')>Client</option></select></div>
+                        <div class="col-md-2"><label for="admin-status" class="form-label">Status</label><select name="status" id="admin-status" class="form-select"><option value="active" @selected(old('status', $editingUser->status ?? 'active') === 'active')>Active</option><option value="inactive" @selected(old('status', $editingUser->status ?? '') === 'inactive')>Inactive</option></select></div>
                     </div>
                 </section>
 
@@ -54,15 +75,22 @@
                             <label for="admin-client" class="form-label">Client</label>
                             <select name="client_id" id="admin-client" class="form-select">
                                 <option value="">Platform / tanpa client</option>
-                                @foreach ($clients as $client)<option value="{{ $client->id }}" @selected((string) old('client_id') === (string) $client->id)>{{ $client->client_code }} — {{ $client->name }}</option>@endforeach
+                                @foreach ($clients as $client)<option value="{{ $client->id }}" @selected((string) $clientId === (string) $client->id)>{{ $client->client_code }} — {{ $client->name }}</option>@endforeach
                             </select>
                             <small class="text-muted">Wajib untuk akun client. Pilih client lebih dahulu untuk memfilter project.</small>
                         </div>
                         <div class="col-md-6">
-                            <label for="admin-projects" class="form-label">Project yang dapat diakses</label>
-                            <select name="project_ids[]" id="admin-projects" class="form-select" multiple size="7" aria-describedby="project-help">
-                                @foreach ($projects as $project)<option value="{{ $project->id }}" data-client-id="{{ $project->client_id }}" @selected(in_array($project->id, old('project_ids', [])))>{{ $project->project_code }} — {{ $project->name }}{{ $project->client ? ' ('.$project->client->name.')' : '' }}</option>@endforeach
-                            </select>
+                            <label class="form-label">Project yang dapat diakses</label>
+                            <div id="admin-projects" class="project-picker border rounded" aria-describedby="project-help">
+                                @forelse ($projects as $project)
+                                    <label class="form-check project-option" data-client-id="{{ $project->client_id }}">
+                                        <input class="form-check-input project-check" type="checkbox" name="project_ids[]" value="{{ $project->id }}" @checked(in_array($project->id, $projectIds))>
+                                        <span class="form-check-label"><strong>{{ $project->project_code }}</strong><span class="d-block text-muted small">{{ $project->name }}{{ $project->client ? ' · '.$project->client->name : '' }}</span></span>
+                                    </label>
+                                @empty
+                                    <p class="text-muted small p-3 mb-0">Belum ada project.</p>
+                                @endforelse
+                            </div>
                             <small id="project-help" class="text-muted">Kosongkan hanya untuk role internal yang berlaku ke semua project.</small>
                         </div>
                     </div>
@@ -71,11 +99,16 @@
 
                 <section data-access-panel="access" hidden>
                     <div class="row g-3 align-items-end mb-4">
-                        <div class="col-md-3"><label for="role-mode" class="form-label">Sumber Role</label><select name="role_mode" id="role-mode" class="form-select"><option value="new" @selected(old('role_mode', 'new') === 'new')>Buat role baru</option><option value="existing" @selected(old('role_mode') === 'existing')>Gunakan role internal</option></select></div>
-                        <div class="col-md-4 role-new-field"><label for="role-name" class="form-label">Kode Role</label><input id="role-name" name="role_name" class="form-control" value="{{ old('role_name') }}" placeholder="contoh: lumajang-operator" maxlength="255"><small class="text-muted">Huruf, angka, titik, strip, dan underscore.</small></div>
-                        <div class="col-md-4 role-new-field"><label for="role-display-name" class="form-label">Nama Role</label><input id="role-display-name" name="role_display_name" class="form-control" value="{{ old('role_display_name') }}" placeholder="Contoh: Operator Lumajang" maxlength="255"></div>
-                        <div class="col-md-8 role-existing-field" hidden><label for="role-id" class="form-label">Role Internal</label><select name="role_id" id="role-id" class="form-select"><option value="">Pilih role</option>@foreach ($roles as $role)<option value="{{ $role->id }}" @selected((string) old('role_id') === (string) $role->id)>{{ $role->display_name ?: $role->name }}</option>@endforeach</select></div>
-                        <div class="col-md-4 role-new-field"><div class="form-check form-switch border rounded p-3"><input type="hidden" name="full_access" value="0"><input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="full-access" name="full_access" value="1" @checked(old('full_access'))><label class="form-check-label" for="full-access"><strong>Akses penuh</strong><small class="d-block text-muted">Centang semua menu dan CRUD.</small></label></div></div>
+                        @if($isEditing)
+                            <input type="hidden" name="role_id" value="{{ $editingRole->id }}">
+                            <div class="col-lg-8"><div class="border rounded bg-light-subtle px-3 py-2"><small class="text-muted d-block">Role yang sedang diedit</small><strong>{{ $editingRole->display_name ?: $editingRole->name }}</strong><span class="text-muted ms-2 small">({{ $editingRole->name }})</span></div></div>
+                        @else
+                            <div class="col-lg-3"><label for="role-mode" class="form-label">Sumber Role</label><select name="role_mode" id="role-mode" class="form-select"><option value="new" @selected(old('role_mode', 'new') === 'new')>Buat role baru</option><option value="existing" @selected(old('role_mode') === 'existing')>Gunakan role internal</option></select></div>
+                            <div class="col-lg-3 role-new-field"><label for="role-name" class="form-label">Kode Role</label><input id="role-name" name="role_name" class="form-control" value="{{ old('role_name') }}" placeholder="contoh: operator-project" maxlength="255"><small class="text-muted">Huruf, angka, titik, strip, dan underscore.</small></div>
+                            <div class="col-lg-3 role-new-field"><label for="role-display-name" class="form-label">Nama Role</label><input id="role-display-name" name="role_display_name" class="form-control" value="{{ old('role_display_name') }}" placeholder="Contoh: Operator Project" maxlength="255"></div>
+                            <div class="col-lg-6 role-existing-field" hidden><label for="role-id" class="form-label">Role Internal</label><select name="role_id" id="role-id" class="form-select"><option value="">Pilih role</option>@foreach ($roles as $role)<option value="{{ $role->id }}" @selected((string) old('role_id') === (string) $role->id)>{{ $role->display_name ?: $role->name }}</option>@endforeach</select></div>
+                        @endif
+                        <div class="col-lg-4"><div class="form-check form-switch border rounded px-3 py-2"><input type="hidden" name="full_access" value="0"><input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="full-access" name="full_access" value="1" @checked(old('full_access', $editingRole->is_super_admin ?? false))><label class="form-check-label" for="full-access"><strong>Akses penuh</strong><small class="d-block text-muted">Centang semua menu dan CRUD.</small></label></div></div>
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center mb-2"><div><h5 class="mb-1">Matriks Menu &amp; CRUD</h5><p class="text-muted mb-0 small">Centang <em>Lihat</em> agar menu tampil. Aksi CRUD hanya aktif untuk resource yang diizinkan.</p></div><button class="btn btn-sm btn-outline-primary" type="button" id="select-all-access">Pilih semua</button></div>
@@ -84,11 +117,11 @@
                             <thead class="table-light"><tr><th class="ps-3">Menu</th><th>Resource</th><th class="text-center">Lihat</th><th class="text-center">Tambah</th><th class="text-center">Ubah</th><th class="text-center">Hapus</th></tr></thead>
                             <tbody>
                             @forelse ($menus as $menu)
-                                @php($oldActions = old('permissions.'.$menu->resource, []))
+                                @php($oldActions = $permissionValues[$menu->resource] ?? [])
                                 <tr>
                                     <td class="ps-3"><strong>{{ $menu->label }}</strong><small class="d-block text-muted">{{ $menu->route_name ?: $menu->code }}</small></td>
-                                    <td><code>{{ $menu->resource ?: '—' }}</code></td>
-                                    <td class="text-center"><input class="form-check-input access-check menu-check" type="checkbox" name="menu_ids[]" value="{{ $menu->id }}" aria-label="Lihat {{ $menu->label }}" @checked(in_array($menu->id, old('menu_ids', [])))></td>
+                                    <td><span class="badge bg-light text-dark border resource-badge">{{ $menu->resource ?: '—' }}</span></td>
+                                    <td class="text-center"><input class="form-check-input access-check menu-check" type="checkbox" name="menu_ids[]" value="{{ $menu->id }}" aria-label="Lihat {{ $menu->label }}" @checked(in_array($menu->id, $menuIds))></td>
                                     @foreach ($actions as $action)
                                         <td class="text-center"><input class="form-check-input access-check" type="checkbox" name="permissions[{{ $menu->resource }}][]" value="{{ $action }}" aria-label="{{ ucfirst($action) }} {{ $menu->label }}" @disabled(!$menu->resource) @checked(in_array($action, $oldActions))></td>
                                     @endforeach
@@ -102,7 +135,7 @@
                 </section>
             </div>
         </div>
-        <div class="card-footer bg-white d-flex justify-content-between gap-2"><button class="btn btn-light" type="button" id="previous-access-tab">Kembali</button><div><button class="btn btn-outline-primary me-2" type="button" id="next-access-tab">Lanjut</button><button class="btn btn-primary" type="submit"><i class="bx bx-save me-1"></i>Simpan Admin &amp; Akses</button></div></div>
+        <div class="card-footer bg-white d-flex justify-content-between gap-2"><button class="btn btn-light" type="button" id="previous-access-tab">Kembali</button><div><button class="btn btn-outline-primary me-2" type="button" id="next-access-tab">Lanjut</button><button class="btn btn-primary" type="submit"><i class="bx bx-save me-1"></i>{{ $isEditing ? 'Simpan Perubahan' : 'Simpan Admin & Akses' }}</button></div></div>
     </div>
 </form>
 @endsection
@@ -125,10 +158,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('next-access-tab').addEventListener('click', () => setTab(active + 1));
 
     const client = document.getElementById('admin-client');
-    const projects = document.getElementById('admin-projects');
-    const filterProjects = () => Array.from(projects.options).forEach((option) => {
+    const projects = Array.from(document.querySelectorAll('.project-option'));
+    const filterProjects = () => projects.forEach((option) => {
         option.hidden = Boolean(client.value) && option.dataset.clientId !== client.value;
-        if (option.hidden) option.selected = false;
+        if (option.hidden) option.querySelector('.project-check').checked = false;
     });
     client.addEventListener('change', filterProjects);
     filterProjects();
@@ -145,8 +178,10 @@ document.addEventListener('DOMContentLoaded', function () {
         roleName.required = isNew;
         roleId.required = !isNew;
     };
-    roleMode.addEventListener('change', switchRoleMode);
-    switchRoleMode();
+    if (roleMode) {
+        roleMode.addEventListener('change', switchRoleMode);
+        switchRoleMode();
+    }
 
     const fullAccess = document.getElementById('full-access');
     const matrixChecks = Array.from(document.querySelectorAll('.access-check'));
