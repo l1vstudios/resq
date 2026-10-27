@@ -107,11 +107,20 @@
         .monitor-sensor-card, .monitor-tde-summary { background: #080808; }
     }
 </style>
+@php
+    $monitoringUser = auth()->user();
+    $monitoringRoleLabels = $monitoringUser
+        ? $monitoringUser->roles()->get()->merge($monitoringUser->projectRoles()->get())
+            ->map(fn ($role) => $role->display_name ?: $role->name)->filter()->unique()->values()
+        : collect();
+    $monitoringRoleLabel = $monitoringRoleLabels->first()
+        ?: ($monitoringUser?->isClientUser() ? 'Client' : 'Internal');
+@endphp
 <button type="button" id="map-monitor-open" class="monitor-open-button" aria-label="Buka sidebar monitoring" title="Buka sidebar monitoring" aria-controls="map-monitor-panel" aria-expanded="false" hidden><i class="bx bx-menu-alt-right" aria-hidden="true"></i></button>
 <section id="map-monitor-panel" class="map-monitor-panel" aria-label="Informasi monitoring project">
     <div class="monitor-header">
         <div class="monitor-header-main">
-            <div class="monitor-heading"><h2>Monitoring</h2><span class="monitor-badge tone-info" data-monitor="sensor-count">Memuat sensor…</span></div>
+            <div class="monitor-heading"><h2>Monitoring</h2><span class="monitor-badge tone-info" data-monitor="sensor-count">Memuat sensor…</span><span class="monitor-badge tone-unknown" data-account-role-badge title="Role akun: {{ $monitoringRoleLabels->implode(', ') ?: $monitoringRoleLabel }}"><i class="bx bx-shield-quarter me-1" aria-hidden="true"></i>{{ $monitoringRoleLabel }}</span></div>
             <div class="monitor-project-identity">@if($project->displayName())<strong>{{ $project->displayName() }}</strong>@endif<small class="monitor-muted">{{ $project->project_code }}</small><small class="monitor-muted">ID Monitoring Station: {{ ($projectMonitoringStations ?? collect())->implode(', ') ?: 'Belum ada monitoring station' }}</small></div>
         </div>
         <button type="button" class="monitor-minimize" data-monitor="panel-toggle" aria-expanded="true" aria-controls="map-monitor-panel">Minimize</button>

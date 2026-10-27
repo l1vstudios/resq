@@ -34,8 +34,6 @@ class AdminManagementTest extends TestCase
             ->assertSee($user->name)->assertSee($user->email)
             ->assertSee('Tambah Admin')->assertSee('id="admin-user-grid"', false)
             ->assertSee('href="'.route('admins.create').'"', false)
-            ->assertSee('data-account-role-badge', false)
-            ->assertSee('SentinelAdmin')
             ->assertDontSee('ops@resq.id')->assertDontSee('User Setup')
             ->assertDontSee('href="contacts-profile"', false)
             ->assertDontSee('change-password')->assertSee('Logout');
@@ -85,6 +83,20 @@ class AdminManagementTest extends TestCase
 
         $this->assertNull($project->displayName());
         $this->assertSame('EMP-DEMO-001', $project->displayLabel());
+    }
+
+    public function test_map_monitoring_panel_shows_the_active_account_role_next_to_sensor_count(): void
+    {
+        $this->admin();
+        $project = Project::create([
+            'project_code' => 'ROLE-BADGE',
+            'name' => 'Role Badge Project',
+        ]);
+
+        $panel = view('modules.dashboard.partials.monitoring-panel', compact('project'))->render();
+
+        $this->assertStringContainsString('data-account-role-badge', $panel);
+        $this->assertStringContainsString('SentinelAdmin', $panel);
     }
 
     public function test_admin_can_create_an_internal_account_with_a_hashed_password_and_role(): void
