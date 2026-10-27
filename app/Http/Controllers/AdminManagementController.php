@@ -27,8 +27,7 @@ class AdminManagementController extends Controller
         'dashboard', 'monitoring', 'project', 'geospatial', 'monitoring-station', 'warning-station', 'sensor-data',
         'canonical-data', 'operations-response', 'cfpe-corridor', 'data-loggers', 'asset-management', 'master-data-tde',
         'tde-forecast', 'prefix-sensors', 'rednode-pin-scan', 'rednode-builder', 'production-guide',
-        'client-operational-state', 'client-operational-integrity', 'client-administrative-monitoring',
-        'client-function-configuration', 'client-reporting', 'client-inbox', 'client-users', 'admin-management',
+        'client-inbox', 'client-users', 'admin-management',
     ];
 
     private const MATRIX_ACTIONS = ['create', 'edit', 'delete'];
