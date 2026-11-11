@@ -10,12 +10,12 @@
         flex-direction: column;
         overflow: hidden;
         color: #ffffff;
-        background: rgba(24, 34, 29, 0.76);
-        -webkit-backdrop-filter: blur(14px);
-        backdrop-filter: blur(14px);
-        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(12, 20, 16, 0.45);
+        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 8px;
-        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
         font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .map-monitor-panel, .sensor-detail-dialog {
@@ -157,8 +157,8 @@
         display: none;
     }
     .widget-card {
-        background: rgba(14, 22, 18, 0.45);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 6px;
         padding: 10px 12px;
         display: flex;

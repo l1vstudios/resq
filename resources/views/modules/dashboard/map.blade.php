@@ -240,12 +240,12 @@
             justify-content: space-between;
             gap: 10px;
             padding: 8px 14px;
-            background: rgba(22, 33, 28, 0.82);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(12, 20, 16, 0.45);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
             color: #ffffff;
         }
         .dash-header-left {
@@ -359,14 +359,14 @@
             scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
-            background: rgba(22, 33, 28, 0.82);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(12, 20, 16, 0.45);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 6px;
             padding: 10px 12px;
             color: #ffffff;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
         }
         .hydro-card-header {
             display: flex;
@@ -443,14 +443,14 @@
             bottom: 24px;
             right: calc(clamp(380px, 29vw, 440px) + 24px);
             width: 220px;
-            background: rgba(22, 33, 28, 0.82);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(12, 20, 16, 0.45);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 6px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
             transition: right 0.3s ease;
         }
         .dash-legend-card.sidebar-collapsed {
@@ -522,6 +522,47 @@
         }
         .hide-station-labels .map-station-permanent-label {
             display: none !important;
+        }
+        .map-badge-marker-wrap {
+            pointer-events: auto;
+        }
+        .map-badge-marker {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+            pointer-events: auto;
+            cursor: pointer;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+        }
+        .map-marker-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background-color: #10b981;
+            border: 1.5px solid #ffffff;
+            box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+            flex-shrink: 0;
+        }
+        .map-marker-badge {
+            background: #000000;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            letter-spacing: 0.2px;
+            line-height: 1.2;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .map-marker-badge small {
+            font-size: 9.5px;
+            font-weight: 500;
+            color: #cbd5e1;
+            margin-left: 2px;
         }
         .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
         @media (max-width: 991px) {
@@ -1060,18 +1101,19 @@
                     : (sensor.status === 'Waspada' ? 'warning' : 'live');
                 var displayPoint = sensorDisplayPoint(sensor, sensorIndexByCoordinate);
                 var labelValue = markerLabelValue(sensor);
+                var sensorDotColor = sensorDanger ? '#ef4444' : (color || '#10b981');
                 var sensorIcon = L.divIcon({
-                    className: 'sensor-live-icon' + (sensorDanger ? ' sensor-live-icon-danger' : ''),
-                    html: '<span class="sensor-map-marker-wrap">' +
-                        '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>' +
-                        '<span class="sensor-map-label ' + (sensorDanger ? 'danger' : '') + '">' +
+                    className: 'map-badge-marker-wrap',
+                    html: '<div class="map-badge-marker">' +
+                        '<span class="map-marker-dot" style="background-color: ' + sensorDotColor + ';"></span>' +
+                        '<span class="map-marker-badge">' +
                             escapeHtml(sensor.name || '-') +
-                            '<small>' + escapeHtml(labelValue) + '</small>' +
+                            (labelValue && labelValue !== '-' ? '<small>' + escapeHtml(labelValue) + '</small>' : '') +
                         '</span>' +
-                    '</span>',
-                    iconSize: [1, 1],
-                    iconAnchor: [0, 0],
-                    popupAnchor: [0, -14]
+                    '</div>',
+                    iconSize: [80, 24],
+                    iconAnchor: [5, 12],
+                    popupAnchor: [40, -12]
                 });
                 var sensorPopupBody =
                     '<br>Jenis: ' + escapeHtml(sensor.type) +
@@ -1106,22 +1148,19 @@
             warningStations.filter(hasCoordinate).forEach(function (station) {
                 var stationDanger = Boolean(station.is_danger);
                 var color = stationDanger ? '#f46a6a' : (statusColors[station.status] || '#f1b44c');
-                var statusClass = stationDanger
-                    ? 'danger'
-                    : (station.status === 'Waspada' ? 'warning' : 'live');
+                var warningDotColor = stationDanger ? '#ef4444' : (color || '#f59e0b');
 
                 var warningIcon = L.divIcon({
-                    className: 'sensor-live-icon warning-station-marker' + (stationDanger ? ' sensor-live-icon-danger' : ''),
-                    html: '<span class="sensor-map-marker-wrap">' +
-                        '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>' +
-                        '<span class="sensor-map-label ' + (stationDanger ? 'danger' : '') + '">' +
+                    className: 'map-badge-marker-wrap',
+                    html: '<div class="map-badge-marker">' +
+                        '<span class="map-marker-dot" style="background-color: ' + warningDotColor + ';"></span>' +
+                        '<span class="map-marker-badge">' +
                             escapeHtml(station.station_code || station.name || '-') +
-                            '<small>' + escapeHtml(station.status || 'Active') + '</small>' +
                         '</span>' +
-                    '</span>',
-                    iconSize: [1, 1],
-                    iconAnchor: [0, 0],
-                    popupAnchor: [0, -14]
+                    '</div>',
+                    iconSize: [80, 24],
+                    iconAnchor: [5, 12],
+                    popupAnchor: [40, -12]
                 });
 
                 L.marker([station.lat, station.lng], {
@@ -1134,8 +1173,6 @@
                     monitoring.selectWarningStation(station.id);
                 }).addTo(warningLayer);
             });
-
-            applyMapFocus();
         }
 
         L.control.layers({
@@ -1209,7 +1246,7 @@
 
         monitoring.start();
         refreshMapData();
-        setInterval(refreshMapData, 1000);
+        setInterval(refreshMapData, 3000);
 
         // --- Spatial Overlay (Routes, Corridors, Information Layers from CFPE) ---
         var spatialLoaded = false;
@@ -1329,28 +1366,29 @@
                     } catch (e) {}
                 });
 
-                // Draw monitoring stations with tower icon
+                // Draw monitoring stations
                 (data.monitoring_stations || []).forEach(function (station) {
                     if (!station.latitude || !station.longitude) return;
+                    var msIcon = L.divIcon({
+                        className: 'map-badge-marker-wrap',
+                        html: '<div class="map-badge-marker">' +
+                            '<span class="map-marker-dot dot-info"></span>' +
+                            '<span class="map-marker-badge">' +
+                                escapeHtml(station.station_code || station.name) +
+                            '</span>' +
+                        '</div>',
+                        iconSize: [80, 24],
+                        iconAnchor: [5, 12],
+                        popupAnchor: [40, -12]
+                    });
                     var msMarker = L.marker([station.latitude, station.longitude], {
-                        icon: L.divIcon({
-                            html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🗼</span>',
-                            className: '',
-                            iconSize: [26, 26],
-                            iconAnchor: [13, 13]
-                        })
+                        icon: msIcon
                     }).bindPopup(
                         '<strong>📡 Monitoring Station</strong><br>' +
                         escapeHtml(station.station_code) + '<br>' +
                         escapeHtml(station.name) + '<br>' +
                         '<span class="badge bg-info">' + escapeHtml(station.status || 'Active') + '</span>'
                     );
-
-                    msMarker.bindTooltip(escapeHtml(station.station_code || station.name), {
-                        permanent: true,
-                        direction: 'bottom',
-                        className: 'map-station-permanent-label'
-                    });
                     msMarker.addTo(monitoringStationLayer);
                 });
 
@@ -1360,6 +1398,28 @@
             })
             .catch(function () {});
         }
+
+        var huluIcon = L.divIcon({
+            className: 'map-badge-marker-wrap',
+            html: '<div class="map-badge-marker">' +
+                  '<span class="map-marker-dot" style="background-color:#0f766e;"></span>' +
+                  '<span class="map-marker-badge">HULU <i class="bx bx-down-arrow-alt" style="color:#34d399;"></i></span>' +
+                  '</div>',
+            iconSize: [75, 24],
+            iconAnchor: [5, 12]
+        });
+        L.marker([-8.125, 112.930], { icon: huluIcon, interactive: false }).addTo(map);
+
+        var hilirIcon = L.divIcon({
+            className: 'map-badge-marker-wrap',
+            html: '<div class="map-badge-marker">' +
+                  '<span class="map-marker-dot" style="background-color:#b45309;"></span>' +
+                  '<span class="map-marker-badge">HILIR</span>' +
+                  '</div>',
+            iconSize: [65, 24],
+            iconAnchor: [5, 12]
+        });
+        L.marker([-8.235, 113.020], { icon: hilirIcon, interactive: false }).addTo(map);
 
         var chkWs = document.getElementById('chk-ws');
         if (chkWs) {
@@ -1445,9 +1505,10 @@
         var corridorSelect = document.getElementById('dash-corridor-select');
         var clusterSelect = document.getElementById('dash-cluster-select');
 
-        function applyDashboardFilters() {
+        function applyDashboardFilters(shouldFly) {
             var selectedCorridor = corridorSelect ? corridorSelect.value.trim() : 'all';
             var selectedCluster = clusterSelect ? clusterSelect.value.trim() : 'all';
+            var doFly = (shouldFly !== false);
 
             // 1. Zoom/Pan & Highlight Corridor
             if (selectedCorridor !== 'all') {
@@ -1461,7 +1522,9 @@
 
                 if (matchingPolys.length > 0) {
                     var polyGroup = L.featureGroup(matchingPolys.map(function (p) { return p.polyline; }));
-                    map.fitBounds(polyGroup.getBounds(), { padding: [60, 60], maxZoom: 15 });
+                    if (doFly) {
+                        map.fitBounds(polyGroup.getBounds(), { padding: [60, 60], maxZoom: 15 });
+                    }
                     foundMatch = true;
 
                     corridorPolylines.forEach(function (cp) {
@@ -1496,17 +1559,17 @@
                             }
                         }
                         collectPoints(cObj.coordinates);
-                        if (pts.length === 1) {
+                        if (pts.length === 1 && doFly) {
                             map.flyTo(pts[0], 15, { duration: 0.8 });
                             foundMatch = true;
-                        } else if (pts.length > 1) {
+                        } else if (pts.length > 1 && doFly) {
                             map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
                             foundMatch = true;
                         }
                     }
                 }
 
-                if (!foundMatch) {
+                if (!foundMatch && doFly) {
                     var matchingWs = warningStations.filter(function (w) {
                         return (w.corridor || w.workspace || w.name || '').toLowerCase().indexOf(selectedCorridor.toLowerCase()) >= 0;
                     });
@@ -1521,7 +1584,7 @@
             }
 
             // 2. Zoom to cluster if cluster selected and corridor is all
-            if (selectedCorridor === 'all' && selectedCluster !== 'all') {
+            if (doFly && selectedCorridor === 'all' && selectedCluster !== 'all') {
                 var clMatch = clusters.find(function (c) {
                     return (c.name || '').toLowerCase() === selectedCluster.toLowerCase();
                 });
@@ -1531,7 +1594,7 @@
             }
 
             // 3. Reset to Semeru focus if both are 'all'
-            if (selectedCorridor === 'all' && selectedCluster === 'all' && userAdjustedView) {
+            if (doFly && selectedCorridor === 'all' && selectedCluster === 'all' && userAdjustedView) {
                 map.fitBounds(semeruFocusBounds, { maxZoom: initialMapZoom, animate: true });
             }
 
@@ -1600,10 +1663,10 @@
         }
 
         if (corridorSelect) {
-            corridorSelect.addEventListener('change', applyDashboardFilters);
+            corridorSelect.addEventListener('change', function () { applyDashboardFilters(true); });
         }
         if (clusterSelect) {
-            clusterSelect.addEventListener('change', applyDashboardFilters);
+            clusterSelect.addEventListener('change', function () { applyDashboardFilters(true); });
         }
 
         document.querySelectorAll('#map-monitor-panel-body .widget-table tbody tr').forEach(function (tr) {
@@ -1618,7 +1681,7 @@
                     });
                     if (matchingOption) {
                         corridorSelect.value = matchingOption.value;
-                        applyDashboardFilters();
+                        applyDashboardFilters(true);
                     }
                 });
             }
