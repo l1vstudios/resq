@@ -240,12 +240,12 @@
             justify-content: space-between;
             gap: 10px;
             padding: 8px 14px;
-            background: rgba(12, 20, 16, 0.45);
-            -webkit-backdrop-filter: blur(16px);
-            backdrop-filter: blur(16px);
+            background: rgba(10, 18, 14, 0.28);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
             color: #ffffff;
         }
         .dash-header-left {
@@ -359,14 +359,14 @@
             scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
-            background: rgba(12, 20, 16, 0.45);
-            -webkit-backdrop-filter: blur(16px);
-            backdrop-filter: blur(16px);
+            background: rgba(10, 18, 14, 0.28);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 6px;
             padding: 10px 12px;
             color: #ffffff;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
         }
         .hydro-card-header {
             display: flex;
@@ -443,14 +443,14 @@
             bottom: 24px;
             right: calc(clamp(380px, 29vw, 440px) + 24px);
             width: 220px;
-            background: rgba(12, 20, 16, 0.45);
-            -webkit-backdrop-filter: blur(16px);
-            backdrop-filter: blur(16px);
+            background: rgba(10, 18, 14, 0.28);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 6px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
             transition: right 0.3s ease;
         }
         .dash-legend-card.sidebar-collapsed {
@@ -564,6 +564,27 @@
             color: #cbd5e1;
             margin-left: 2px;
         }
+        .leaflet-top.leaflet-left {
+            top: 74px !important;
+            left: 16px !important;
+        }
+        .leaflet-control-zoom {
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 6px !important;
+            overflow: hidden !important;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+        }
+        .leaflet-control-zoom a {
+            background-color: rgba(14, 22, 18, 0.65) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            backdrop-filter: blur(10px) !important;
+            color: #ffffff !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        .leaflet-control-zoom a:hover {
+            background-color: rgba(24, 36, 30, 0.85) !important;
+            color: #ffffff !important;
+        }
         .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
         @media (max-width: 991px) {
             .dash-legend-card { display: none; }
@@ -629,6 +650,16 @@
             ];
         });
     }
+
+    $timelineDates = collect([0, 1, 2, 3, 4])->map(function ($dayOffset) {
+        $dt = now()->addDays($dayOffset);
+        $icons = ['bx-sun text-warning', 'bx-sun text-warning', 'bx-cloud text-light', 'bx-cloud-rain text-info', 'bx-cloud text-light'];
+        return [
+            'date_label' => $dt->format('d M'),
+            'is_today' => $dayOffset === 0,
+            'icon' => $icons[$dayOffset % 5],
+        ];
+    });
 @endphp
 
     <header class="project-map-header">
@@ -656,26 +687,16 @@
             </div>
         </div>
 
-        <div class="dash-weather-timeline">
-            <div class="dash-timeline-item active">
-                <span class="t-date">09 Nov</span>
-                <i class="bx bx-sun text-warning" aria-hidden="true"></i>
+        <div class="dash-weather-timeline" id="dash-weather-timeline">
+            @foreach($timelineDates as $td)
+            <div class="dash-timeline-item {{ $td['is_today'] ? 'active' : '' }}" data-date="{{ $td['date_label'] }}">
+                <span class="t-date">{{ $td['date_label'] }}</span>
+                <i class="bx {{ $td['icon'] }}" aria-hidden="true"></i>
             </div>
-            <div class="dash-timeline-item">
-                <span class="t-date">10 Nov</span>
-                <i class="bx bx-sun text-warning" aria-hidden="true"></i>
-            </div>
-            <div class="dash-timeline-item">
-                <span class="t-date">11 Nov</span>
-                <i class="bx bx-cloud text-light" aria-hidden="true"></i>
-            </div>
-            <div class="dash-timeline-item">
-                <span class="t-date">12 Nov</span>
-                <i class="bx bx-cloud-rain text-info" aria-hidden="true"></i>
-            </div>
-            <div class="dash-timeline-item">
-                <span class="t-date">13 Nov</span>
-                <i class="bx bx-cloud text-light" aria-hidden="true"></i>
+            @endforeach
+            <div class="dash-current-clock" id="dash-live-clock" style="padding: 2px 8px; border-left: 1px solid rgba(255,255,255,0.15); font-size: 11px; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 4px;">
+                <i class="bx bx-time-five" aria-hidden="true"></i>
+                <span id="live-time-str">{{ now()->format('H:i') }}</span>
             </div>
         </div>
 
@@ -1693,6 +1714,17 @@
                 this.classList.add('active');
             });
         });
+
+        function updateLiveClock() {
+            var clockEl = document.getElementById('live-time-str');
+            if (clockEl) {
+                var d = new Date();
+                var h = String(d.getHours()).padStart(2, '0');
+                var m = String(d.getMinutes()).padStart(2, '0');
+                clockEl.textContent = h + ':' + m;
+            }
+        }
+        setInterval(updateLiveClock, 1000);
 
         setTimeout(loadSpatialOverlay, 2000);
 
