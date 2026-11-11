@@ -752,6 +752,18 @@
         var sensorPoints = @json($mapSensors ?? []);
         var warningStations = @json($mapWarningStations ?? []);
         var initialAlertActive = @json($dashboardAlertActive ?? false);
+        var corridorsData = @json($realCorridors->map(function ($c) {
+            $coords = is_array($c->path_coordinates) ? $c->path_coordinates : (json_decode($c->path_coordinates, true) ?: []);
+            return [
+                'id' => $c->id,
+                'name' => $c->name,
+                'code' => $c->corridor_code,
+                'status' => $c->status,
+                'coordinates' => $coords,
+            ];
+        }));
+        var spatialCorridors = [];
+        var corridorPolylines = [];
         var mapDataUrl = @json(route('dashboard.projects.map-data', $project, false));
         var hasAppliedInitialFocus = false;
         var latestMapData = {
@@ -1177,7 +1189,12 @@
                 })
                 .then(function (data) {
                     if (data) {
-                        renderMapData(data);
+                        sensorPoints = data.sensors || [];
+                        warningStations = data.warningStations || [];
+                        clusters = data.clusters || [];
+                        initialAlertActive = data.alert_active;
+                        latestMapData = data;
+                        applyDashboardFilters();
                     }
                 })
                 .catch(function () {
@@ -1205,6 +1222,7 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
                 if (!data) return;
+                spatialCorridors = data.corridors || [];
 
                 // Draw corridors
                 (data.corridors || []).forEach(function (corridor) {
@@ -1223,9 +1241,14 @@
                         var latLngs = line.filter(function (c) { return Array.isArray(c) && c.length >= 2; })
                             .map(function (c) { return [c[1], c[0]]; });
                         if (latLngs.length >= 2) {
-                            L.polyline(latLngs, { color: '#0D47A1', weight: 3, opacity: 0.7 })
+                            var poly = L.polyline(latLngs, { color: '#0D47A1', weight: 3, opacity: 0.7 })
                                 .bindPopup('<strong>Corridor: ' + escapeHtml(corridor.name) + '</strong>')
                                 .addTo(corridorLayer);
+                            corridorPolylines.push({
+                                name: corridor.name,
+                                code: corridor.corridor_code,
+                                polyline: poly
+                            });
                         }
                     });
                 });
@@ -1424,6 +1447,93 @@
             var selectedCorridor = corridorSelect ? corridorSelect.value.trim() : 'all';
             var selectedCluster = clusterSelect ? clusterSelect.value.trim() : 'all';
 
+            // 1. Zoom/Pan & Highlight Corridor
+            if (selectedCorridor !== 'all') {
+                var foundMatch = false;
+
+                // Check corridorPolylines
+                var matchingPolys = corridorPolylines.filter(function (cp) {
+                    return (cp.name && cp.name.toLowerCase() === selectedCorridor.toLowerCase()) ||
+                           (cp.code && cp.code.toLowerCase() === selectedCorridor.toLowerCase());
+                });
+
+                if (matchingPolys.length > 0) {
+                    var polyGroup = L.featureGroup(matchingPolys.map(function (p) { return p.polyline; }));
+                    map.fitBounds(polyGroup.getBounds(), { padding: [60, 60], maxZoom: 15 });
+                    foundMatch = true;
+
+                    corridorPolylines.forEach(function (cp) {
+                        if (matchingPolys.indexOf(cp) >= 0) {
+                            cp.polyline.setStyle({ color: '#ffb300', weight: 5, opacity: 1 });
+                            cp.polyline.bringToFront();
+                        } else {
+                            cp.polyline.setStyle({ color: '#0D47A1', weight: 2, opacity: 0.4 });
+                        }
+                    });
+                } else {
+                    var cObj = corridorsData.find(function (c) {
+                        return (c.name && c.name.toLowerCase() === selectedCorridor.toLowerCase()) ||
+                               (c.code && c.code.toLowerCase() === selectedCorridor.toLowerCase());
+                    }) || spatialCorridors.find(function (c) {
+                        return (c.name && c.name.toLowerCase() === selectedCorridor.toLowerCase()) ||
+                               (c.corridor_code && c.corridor_code.toLowerCase() === selectedCorridor.toLowerCase());
+                    });
+
+                    if (cObj && cObj.coordinates && cObj.coordinates.length > 0) {
+                        var pts = [];
+                        function collectPoints(arr) {
+                            if (!arr) return;
+                            if (typeof arr.lat === 'number' && typeof arr.lng === 'number') {
+                                pts.push([arr.lat, arr.lng]);
+                            } else if (Array.isArray(arr)) {
+                                if (typeof arr[0] === 'number' && typeof arr[1] === 'number') {
+                                    pts.push(Math.abs(arr[0]) > Math.abs(arr[1]) ? [arr[1], arr[0]] : [arr[0], arr[1]]);
+                                } else {
+                                    arr.forEach(collectPoints);
+                                }
+                            }
+                        }
+                        collectPoints(cObj.coordinates);
+                        if (pts.length === 1) {
+                            map.flyTo(pts[0], 15, { duration: 0.8 });
+                            foundMatch = true;
+                        } else if (pts.length > 1) {
+                            map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
+                            foundMatch = true;
+                        }
+                    }
+                }
+
+                if (!foundMatch) {
+                    var matchingWs = warningStations.filter(function (w) {
+                        return (w.corridor || w.workspace || w.name || '').toLowerCase().indexOf(selectedCorridor.toLowerCase()) >= 0;
+                    });
+                    if (matchingWs.length > 0 && hasCoordinate(matchingWs[0])) {
+                        map.flyTo([matchingWs[0].lat, matchingWs[0].lng], 14, { duration: 0.8 });
+                    }
+                }
+            } else {
+                corridorPolylines.forEach(function (cp) {
+                    cp.polyline.setStyle({ color: '#0D47A1', weight: 3, opacity: 0.7 });
+                });
+            }
+
+            // 2. Zoom to cluster if cluster selected and corridor is all
+            if (selectedCorridor === 'all' && selectedCluster !== 'all') {
+                var clMatch = clusters.find(function (c) {
+                    return (c.name || '').toLowerCase() === selectedCluster.toLowerCase();
+                });
+                if (clMatch && hasCoordinate(clMatch)) {
+                    map.flyTo([clMatch.lat, clMatch.lng], 13, { duration: 0.8 });
+                }
+            }
+
+            // 3. Reset to Semeru focus if both are 'all'
+            if (selectedCorridor === 'all' && selectedCluster === 'all' && userAdjustedView) {
+                map.fitBounds(semeruFocusBounds, { maxZoom: initialMapZoom, animate: true });
+            }
+
+            // 4. Filter sensors and warning stations
             var filteredSensors = sensorPoints.filter(function (s) {
                 if (selectedCorridor !== 'all') {
                     var sCorr = (s.corridor || s.workspace || s.station || '').toLowerCase();
@@ -1457,9 +1567,9 @@
             });
 
             var filteredClusters = clusters.filter(function (c) {
-                if (selectedCorridor !== 'all') {
+                if (selectedCluster !== 'all') {
                     var cName = (c.name || '').toLowerCase();
-                    if (cName.indexOf(selectedCorridor.toLowerCase()) === -1) {
+                    if (cName.indexOf(selectedCluster.toLowerCase()) === -1) {
                         return false;
                     }
                 }
@@ -1473,11 +1583,18 @@
                 alert_active: initialAlertActive
             });
 
-            if (filteredWarningStations.length > 0 && hasCoordinate(filteredWarningStations[0])) {
-                map.flyTo([filteredWarningStations[0].lat, filteredWarningStations[0].lng], 14, { duration: 0.8 });
-            } else if (filteredClusters.length > 0 && hasCoordinate(filteredClusters[0])) {
-                map.flyTo([filteredClusters[0].lat, filteredClusters[0].lng], 13, { duration: 0.8 });
-            }
+            // 5. Highlight active row in Status Eskalasi table
+            document.querySelectorAll('#map-monitor-panel-body .widget-table tbody tr').forEach(function (tr) {
+                var firstTd = tr.querySelector('td strong');
+                if (firstTd) {
+                    var rowName = firstTd.textContent.trim().toLowerCase();
+                    if (selectedCorridor !== 'all' && rowName === selectedCorridor.toLowerCase()) {
+                        tr.style.backgroundColor = 'rgba(255, 179, 0, 0.2)';
+                    } else {
+                        tr.style.backgroundColor = '';
+                    }
+                }
+            });
         }
 
         if (corridorSelect) {
@@ -1486,6 +1603,24 @@
         if (clusterSelect) {
             clusterSelect.addEventListener('change', applyDashboardFilters);
         }
+
+        document.querySelectorAll('#map-monitor-panel-body .widget-table tbody tr').forEach(function (tr) {
+            var firstTd = tr.querySelector('td strong');
+            if (firstTd && corridorSelect) {
+                tr.style.cursor = 'pointer';
+                tr.addEventListener('click', function (e) {
+                    if (e.target.closest('.siren-pill-btn')) return;
+                    var name = firstTd.textContent.trim();
+                    var matchingOption = Array.from(corridorSelect.options).find(function (opt) {
+                        return opt.text.trim().toLowerCase() === name.toLowerCase();
+                    });
+                    if (matchingOption) {
+                        corridorSelect.value = matchingOption.value;
+                        applyDashboardFilters();
+                    }
+                });
+            }
+        });
 
         document.querySelectorAll('.dash-timeline-item').forEach(function (item) {
             item.addEventListener('click', function () {
