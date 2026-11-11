@@ -1,4 +1,4 @@
-<style>
+{{-- <style>
     .map-monitor-panel {
         position: absolute; z-index: 1000; top: 16px; right: 16px; bottom: 26px;
         width: clamp(360px, 32vw, 460px); display: flex; flex-direction: column; overflow: hidden;
@@ -153,4 +153,4 @@
         <button type="button" class="sensor-detail-close" data-monitor="sensor-detail-close" aria-label="Tutup detail sensor"><i class="bx bx-x" aria-hidden="true"></i></button>
     </div>
     <div class="sensor-detail-content" data-monitor="sensor-detail-content"></div>
-</dialog>
+</dialog> --}}
