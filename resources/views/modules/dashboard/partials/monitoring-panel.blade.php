@@ -1,3 +1,4 @@
+<h1>KONTOL</h1>
 {{-- <style>
     .map-monitor-panel {
         position: absolute; z-index: 1000; top: 16px; right: 16px; bottom: 26px;
