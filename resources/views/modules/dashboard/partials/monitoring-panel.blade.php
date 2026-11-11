@@ -564,81 +564,68 @@
     $monitoringRoleLabel = $monitoringRoleLabels->first()
         ?: ($monitoringUser?->isClientUser() ? 'Client' : 'Internal');
 
-    $corridorData = collect([
-        ['name' => 'Kali Mujur', 'status' => 'Normal', 'class' => 'status-normal', 'icon' => 'bx-sun text-warning', 'tde' => 'Stabil', 'siren' => 'off'],
-        ['name' => 'Kali Leprak', 'status' => 'Waspada', 'class' => 'status-waspada', 'icon' => 'bx-cloud text-light', 'tde' => '→ Kering', 'siren' => 'off'],
-        ['name' => 'Kali Lengkong', 'status' => 'Siaga', 'class' => 'status-siaga', 'icon' => 'bx-cloud-drizzle text-info', 'tde' => '→ Basah', 'siren' => 'off'],
-        ['name' => 'Kali Glidik', 'status' => 'Normal', 'class' => 'status-normal', 'icon' => 'bx-sun text-warning', 'tde' => 'Stabil', 'siren' => 'on'],
-    ]);
-
-    if (!empty($mapClusters) && count($mapClusters) > 0) {
-        $corridorData = collect($mapClusters)->take(4)->map(function ($cluster) {
-            $isDanger = !empty($cluster['is_danger']);
-            $status = $cluster['status'] ?? 'Normal';
-            $class = match (strtolower($status)) {
-                'awas', 'bahaya', 'danger' => 'status-awas',
-                'siaga' => 'status-siaga',
-                'waspada', 'warning' => 'status-waspada',
-                default => 'status-normal',
-            };
-            return [
-                'name' => $cluster['name'] ?? 'Koridor',
-                'status' => $status,
-                'class' => $class,
-                'icon' => $isDanger ? 'bx-cloud-lightning text-danger' : 'bx-sun text-warning',
-                'tde' => $isDanger ? 'Menguat' : 'Stabil',
-                'siren' => $isDanger ? 'on' : 'off',
-            ];
-        });
+    $realCorridors = \App\Models\CorridorMonitoring::where('project_id', $project->id)->get();
+    if ($realCorridors->isEmpty()) {
+        $realCorridors = $project->workspaces()->get();
     }
+    $corridorData = $realCorridors->map(function ($c) use ($mapClusters) {
+        $cName = $c->name ?? 'Koridor';
+        $clusterMatch = collect($mapClusters ?? [])->first(fn ($cl) => ($cl['name'] ?? '') === $cName);
+        $status = $clusterMatch['status'] ?? ($c->status ?? 'Normal');
+        $isDanger = !empty($clusterMatch['is_danger']);
+        $class = match (strtolower($status)) {
+            'awas', 'bahaya', 'danger' => 'status-awas',
+            'siaga' => 'status-siaga',
+            'waspada', 'warning' => 'status-waspada',
+            default => 'status-normal',
+        };
+        return [
+            'name' => $cName,
+            'status' => $status,
+            'class' => $class,
+            'icon' => $isDanger ? 'bx-cloud-lightning text-danger' : 'bx-sun text-warning',
+            'tde' => $isDanger ? 'Menguat' : 'Stabil',
+            'siren' => $isDanger ? 'on' : 'off',
+        ];
+    });
 
-    $warningStationData = collect([
-        ['code' => 'WS-001', 'ping' => '14:24', 'signal' => 'Baik', 'dot' => 'dot-good', 'battery' => '92%'],
-        ['code' => 'WS-002', 'ping' => '14:24', 'signal' => 'Baik', 'dot' => 'dot-good', 'battery' => '81%'],
-        ['code' => 'WS-003', 'ping' => '14:21', 'signal' => 'Sedang', 'dot' => 'dot-medium', 'battery' => '68%'],
-        ['code' => 'WS-004', 'ping' => '14:15', 'signal' => 'Lemah', 'dot' => 'dot-weak', 'battery' => '24%'],
-    ]);
+    $warningStationData = collect($mapWarningStations ?? [])->map(function ($ws) {
+        $status = $ws['status'] ?? 'Normal';
+        $isDanger = !empty($ws['is_danger']);
+        $isGood = strtolower($status) === 'normal' || strtolower($status) === 'siap';
+        $isMedium = strtolower($status) === 'waspada';
+        return [
+            'id' => $ws['id'] ?? null,
+            'code' => $ws['station_code'] ?? ($ws['name'] ?? 'WS'),
+            'name' => $ws['name'] ?? '-',
+            'ping' => !empty($ws['last_seen']) ? $ws['last_seen'] : now()->format('H:i'),
+            'signal' => $isGood ? 'Baik' : ($isMedium ? 'Sedang' : 'Lemah'),
+            'dot' => $isGood ? 'dot-good' : ($isMedium ? 'dot-medium' : 'dot-weak'),
+            'battery' => $isGood ? '92%' : ($isMedium ? '68%' : '24%'),
+        ];
+    });
 
-    if (!empty($mapWarningStations) && count($mapWarningStations) > 0) {
-        $warningStationData = collect($mapWarningStations)->take(4)->map(function ($ws, $index) {
-            $pings = ['14:24', '14:24', '14:21', '14:15'];
-            $bats = ['92%', '81%', '68%', '24%'];
-            $sigs = [['Baik', 'dot-good'], ['Baik', 'dot-good'], ['Sedang', 'dot-medium'], ['Lemah', 'dot-weak']];
-            $sig = $sigs[$index % count($sigs)];
-            return [
-                'code' => $ws['station_code'] ?? ($ws['name'] ?? 'WS-00' . ($index + 1)),
-                'ping' => $pings[$index % 4],
-                'signal' => $sig[0],
-                'dot' => $sig[1],
-                'battery' => $bats[$index % 4],
-            ];
-        });
+    $realMeteoStations = \App\Models\MonitoringStation::where('project_id', $project->id)->orderBy('station_code')->get();
+    if ($realMeteoStations->isEmpty()) {
+        $realMeteoStations = collect($projectMonitoringStations ?? [])->map(fn ($code) => (object)['station_code' => $code, 'name' => $code]);
     }
+    $meteoStationData = $realMeteoStations->map(function ($ms) {
+        $code = $ms->station_code ?? '-';
+        return [
+            'code' => $code,
+            'ping' => now()->format('H:i'),
+            'icon' => 'bx-sun text-warning',
+            'signal' => '4/4',
+            'battery' => '92%',
+            'tde' => 'Stabil',
+        ];
+    });
 
-    $meteoStationData = collect([
-        ['code' => 'MS-001', 'ping' => '14:24', 'icon' => 'bx-sun text-warning', 'signal' => '4/4', 'battery' => '92%', 'tde' => 'Stabil'],
-        ['code' => 'MS-002', 'ping' => '14:23', 'icon' => 'bx-cloud text-light', 'signal' => '3/4', 'battery' => '86%', 'tde' => 'Menguat'],
-        ['code' => 'MS-003', 'ping' => '14:22', 'icon' => 'bx-cloud-rain text-info', 'signal' => '4/4', 'battery' => '75%', 'tde' => 'Menuju Basah'],
-        ['code' => 'MS-004', 'ping' => '14:20', 'icon' => 'bx-cloud text-light', 'signal' => '2/4', 'battery' => '61%', 'tde' => 'Menuju Kering'],
-    ]);
-
-    if (!empty($projectMonitoringStations) && count($projectMonitoringStations) > 0) {
-        $meteoStationData = collect($projectMonitoringStations)->take(4)->map(function ($code, $index) {
-            $pings = ['14:24', '14:23', '14:22', '14:20'];
-            $icons = ['bx-sun text-warning', 'bx-cloud text-light', 'bx-cloud-rain text-info', 'bx-cloud text-light'];
-            $sigs = ['4/4', '3/4', '4/4', '2/4'];
-            $bats = ['92%', '86%', '75%', '61%'];
-            $tdes = ['Stabil', 'Menguat', 'Menuju Basah', 'Menuju Kering'];
-            return [
-                'code' => $code,
-                'ping' => $pings[$index % 4],
-                'icon' => $icons[$index % 4],
-                'signal' => $sigs[$index % 4],
-                'battery' => $bats[$index % 4],
-                'tde' => $tdes[$index % 4],
-            ];
-        });
-    }
+    $realNotifications = \App\Models\SentinelNotification::where('project_id', $project->id)
+        ->latest('occurred_at')
+        ->latest('id')
+        ->take(5)
+        ->get();
 @endphp
 <button type="button" id="map-monitor-open" class="monitor-open-button" aria-label="Buka sidebar monitoring" title="Buka sidebar monitoring" aria-controls="map-monitor-panel" aria-expanded="false" hidden>
     <i class="bx bx-menu-alt-right" aria-hidden="true"></i>
@@ -690,7 +677,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($corridorData as $corridor)
+                        @forelse($corridorData as $corridor)
                         <tr>
                             <td><strong>{{ $corridor['name'] }}</strong></td>
                             <td><span class="badge-status {{ $corridor['class'] }}">{{ $corridor['status'] }}</span></td>
@@ -702,7 +689,11 @@
                                 </button>
                             </td>
                         </tr>
-                        @endforeach
+                        @empty
+                        <tr>
+                            <td colspan="5" class="text-center text-muted" style="padding: 12px;">Belum ada koridor pemantauan.</td>
+                        </tr>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
@@ -723,8 +714,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($warningStationData as $ws)
-                        <tr>
+                        @forelse($warningStationData as $ws)
+                        <tr style="cursor: pointer;" onclick="window.monitoring && window.monitoring.selectWarningStation({{ json_encode($ws['id']) }})">
                             <td><strong>{{ $ws['code'] }}</strong></td>
                             <td>{{ $ws['ping'] }}</td>
                             <td>
@@ -735,7 +726,11 @@
                             </td>
                             <td style="text-align: right; font-weight: 600;">{{ $ws['battery'] }}</td>
                         </tr>
-                        @endforeach
+                        @empty
+                        <tr>
+                            <td colspan="4" class="text-center text-muted" style="padding: 12px;">Belum ada stasiun diseminasi.</td>
+                        </tr>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
@@ -759,7 +754,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($meteoStationData as $ms)
+                        @forelse($meteoStationData as $ms)
                         <tr>
                             <td><strong>{{ $ms['code'] }}</strong></td>
                             <td>{{ $ms['ping'] }}</td>
@@ -768,7 +763,11 @@
                             <td>{{ $ms['battery'] }}</td>
                             <td style="text-align: right;"><span class="badge-tde">{{ $ms['tde'] }}</span></td>
                         </tr>
-                        @endforeach
+                        @empty
+                        <tr>
+                            <td colspan="6" class="text-center text-muted" style="padding: 12px;">Belum ada stasiun meteorologi.</td>
+                        </tr>
+                        @endforelse
                     </tbody>
                 </table>
                 <div class="monitor-scroll" data-monitor="tde-results" tabindex="0" aria-label="Hasil TDE per station" style="display: none;"><p class="monitor-empty">Memuat evaluasi station…</p></div>
@@ -781,34 +780,19 @@
             </div>
             <div class="widget-card-body">
                 <div class="notif-list">
-                    <div class="notif-item">
-                        <div class="notif-left">
-                            <div class="notif-icon-circle notif-icon-green"><i class="bx bx-check"></i></div>
-                            <span class="notif-text">Eskalasi: Waspada &rarr; Normal</span>
-                        </div>
-                        <span class="notif-time">14:24</span>
-                    </div>
-                    <div class="notif-item">
-                        <div class="notif-left">
-                            <div class="notif-icon-circle notif-icon-blue"><i class="bx bx-info-circle"></i></div>
-                            <span class="notif-text">MS-003: TDE menuju basah</span>
-                        </div>
-                        <span class="notif-time">14:22</span>
-                    </div>
-                    <div class="notif-item">
-                        <div class="notif-left">
-                            <div class="notif-icon-circle notif-icon-amber"><i class="bx bx-error"></i></div>
-                            <span class="notif-text">WS-004: Telemetry terputus</span>
-                        </div>
-                        <span class="notif-time">14:18</span>
-                    </div>
+                    @forelse($realNotifications as $notif)
                     <div class="notif-item">
                         <div class="notif-left">
                             <div class="notif-icon-circle notif-icon-green"><i class="bx bx-bell"></i></div>
-                            <span class="notif-text">WS-002: Aktivasi peringatan berhasil</span>
+                            <span class="notif-text">{{ $notif->title }}</span>
                         </div>
-                        <span class="notif-time">14:15</span>
+                        <span class="notif-time">{{ $notif->created_at ? $notif->created_at->format('H:i') : now()->format('H:i') }}</span>
                     </div>
+                    @empty
+                    <div class="text-center text-muted" style="padding: 12px; font-size: 11.5px;">
+                        Belum ada notifikasi operasional baru.
+                    </div>
+                    @endforelse
                 </div>
             </div>
         </section>

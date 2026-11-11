@@ -501,66 +501,6 @@
             height: 14px;
             color: #ffffff;
         }
-        .map-badge-tag {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
-            padding: 3px 8px;
-            background: #ffffff;
-            color: #1e293b;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-            border: 1px solid rgba(0, 0, 0, 0.15);
-        }
-        .hulu-tag {
-            color: #0f766e;
-            border-color: #0f766e;
-        }
-        .hilir-tag {
-            color: #b45309;
-            border-color: #b45309;
-        }
-        .cfpe-route-marker-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 7px;
-            background: rgba(22, 33, 28, 0.85);
-            color: #ffffff;
-            font-size: 10.5px;
-            font-weight: 700;
-            border-radius: 4px;
-            border: 1px solid rgba(239, 68, 68, 0.6);
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        }
-        .cfpe-route-marker-tag .route-dash {
-            color: #ef4444;
-            font-weight: 900;
-        }
-        .map-station-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 7px;
-            background: rgba(20, 30, 25, 0.9);
-            border-radius: 4px;
-            color: #ffffff;
-            font-size: 10.5px;
-            font-weight: 700;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .pill-ms {
-            border-color: rgba(59, 130, 246, 0.6);
-        }
-        .pill-ws {
-            border-color: rgba(245, 158, 11, 0.6);
-        }
-        .warning-station-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #b7791f; border-radius: 50%; color: #854d0e; box-shadow: 0 3px 12px rgba(18,38,63,.25); font-size: 22px; }
         .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
         @media (max-width: 1200px) {
             .dash-legend-card { display: none; }
@@ -586,6 +526,17 @@
 <body>
     <div id="sensor-cluster-map" role="region" aria-label="Peta {{ $project->displayLabel() }}"></div>
 
+@php
+    $realCorridors = \App\Models\CorridorMonitoring::where('project_id', $project->id)->get();
+    if ($realCorridors->isEmpty()) {
+        $realCorridors = $project->workspaces()->get();
+    }
+    $realClusters = $project->workspaces()->get();
+
+    $realSensorsList = collect($mapSensors ?? []);
+    $hydroStationGroups = $realSensorsList->groupBy('station');
+@endphp
+
     <header class="project-map-header">
         <div class="dash-header-left">
             <a href="{{ route('dashboard') }}" class="dash-back-btn" aria-label="Kembali ke daftar project" title="Kembali ke daftar project">
@@ -593,18 +544,19 @@
             </a>
             <div class="dash-select-container">
                 <select class="dash-select" id="dash-corridor-select" aria-label="Pilih Koridor">
-                    <option value="kali-mujur" selected>Kali Mujur</option>
-                    <option value="kali-leprak">Kali Leprak</option>
-                    <option value="kali-lengkong">Kali Lengkong</option>
-                    <option value="kali-glidik">Kali Glidik</option>
+                    <option value="all">Semua Koridor</option>
+                    @foreach($realCorridors as $corridor)
+                        <option value="{{ $corridor->name }}">{{ $corridor->name }}</option>
+                    @endforeach
                 </select>
                 <i class="bx bx-chevron-down" aria-hidden="true"></i>
             </div>
             <div class="dash-select-container">
                 <select class="dash-select" id="dash-cluster-select" aria-label="Pilih Cluster">
-                    <option value="cluster-01" selected>Cluster 01</option>
-                    <option value="cluster-02">Cluster 02</option>
-                    <option value="cluster-03">Cluster 03</option>
+                    <option value="all">Semua Cluster</option>
+                    @foreach($realClusters as $cluster)
+                        <option value="{{ $cluster->name }}">{{ $cluster->name }}</option>
+                    @endforeach
                 </select>
                 <i class="bx bx-chevron-down" aria-hidden="true"></i>
             </div>
@@ -644,117 +596,56 @@
     </header>
 
     <div class="dash-hydrology-container" id="dash-hydrology-panel" aria-label="Pemantauan Hidrologi">
-        <div class="hydro-card">
-            <div class="hydro-card-header">
-                <span class="hydro-station-name">Hidrologi - MS-005</span>
-                <span class="hydro-time">14:20</span>
-            </div>
-            <div class="hydro-card-body">
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">TMA</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">2.45</span>
-                        <span class="val-unit">m</span>
-                    </div>
-                    <span class="hydro-trend trend-up">+3 cm / 430m</span>
+        @forelse($hydroStationGroups as $stationCode => $stSensors)
+            @php
+                $stName = $stationCode ?: $project->project_code;
+                $wlSensor = $stSensors->first(fn ($s) => stripos($s['parameter'] ?? '', 'water') !== false || stripos($s['name'] ?? '', 'wl') !== false);
+                $velSensor = $stSensors->first(fn ($s) => stripos($s['parameter'] ?? '', 'velocity') !== false || stripos($s['name'] ?? '', 'vel') !== false);
+                $rainSensor = $stSensors->first(fn ($s) => stripos($s['parameter'] ?? '', 'rain') !== false);
+                $primarySensor = $wlSensor ?: $stSensors->first();
+                $val1 = $primarySensor ? $primarySensor['value'] : '-';
+                $val2 = $velSensor ? $velSensor['value'] : ($rainSensor ? $rainSensor['value'] : '-');
+                $val2Label = $velSensor ? 'Kecepatan Arus' : ($rainSensor ? 'Curah Hujan' : 'Sensor');
+            @endphp
+            <div class="hydro-card" data-station="{{ $stName }}">
+                <div class="hydro-card-header">
+                    <span class="hydro-station-name">{{ $stName }}</span>
+                    <span class="hydro-time">{{ $primarySensor['last_seen'] ?? now()->format('H:i') }}</span>
                 </div>
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">Kecepatan Arus</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">3.20</span>
-                        <span class="val-unit">m/s</span>
+                <div class="hydro-card-body">
+                    <div class="hydro-metric-col">
+                        <span class="hydro-metric-label">{{ $wlSensor ? 'TMA' : ($primarySensor['parameter'] ?? 'Parameter') }}</span>
+                        <div class="hydro-metric-val">
+                            <span class="val-num">{{ $val1 }}</span>
+                        </div>
+                        <span class="hydro-trend trend-up">+3 cm / 430m</span>
                     </div>
-                    <div class="hydro-meta-info">
-                        <span><i class="bx bxs-battery me-1" aria-hidden="true"></i>87%</span>
-                        <span><i class="bx bx-signal-5 me-1" aria-hidden="true"></i>4/4</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="hydro-card">
-            <div class="hydro-card-header">
-                <span class="hydro-station-name">Hidrologi - MS-006</span>
-                <span class="hydro-time">14:22</span>
-            </div>
-            <div class="hydro-card-body">
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">TMA</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">1.92</span>
-                        <span class="val-unit">m</span>
-                    </div>
-                    <span class="hydro-trend trend-up">+5 cm / 430m</span>
-                </div>
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">Kecepatan Arus</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">2.60</span>
-                        <span class="val-unit">m/s</span>
-                    </div>
-                    <div class="hydro-meta-info">
-                        <span><i class="bx bxs-battery me-1" aria-hidden="true"></i>78%</span>
-                        <span><i class="bx bx-signal-4 me-1" aria-hidden="true"></i>3/4</span>
+                    <div class="hydro-metric-col">
+                        <span class="hydro-metric-label">{{ $val2Label }}</span>
+                        <div class="hydro-metric-val">
+                            <span class="val-num" style="font-size: 15px;">{{ $val2 }}</span>
+                        </div>
+                        <div class="hydro-meta-info">
+                            <span><i class="bx bxs-battery me-1"></i>87%</span>
+                            <span><i class="bx bx-signal-5 me-1"></i>4/4</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="hydro-card">
-            <div class="hydro-card-header">
-                <span class="hydro-station-name">Hidrologi - MS-007</span>
-                <span class="hydro-time">14:21</span>
-            </div>
-            <div class="hydro-card-body">
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">TMA</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">2.18</span>
-                        <span class="val-unit">m</span>
-                    </div>
-                    <span class="hydro-trend trend-up">+2 cm / 430m</span>
+        @empty
+            <div class="hydro-card">
+                <div class="hydro-card-header">
+                    <span class="hydro-station-name">{{ $project->displayName() }}</span>
+                    <span class="hydro-time">{{ now()->format('H:i') }}</span>
                 </div>
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">Kecepatan Arus</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">2.85</span>
-                        <span class="val-unit">m/s</span>
-                    </div>
-                    <div class="hydro-meta-info">
-                        <span><i class="bx bxs-battery me-1" aria-hidden="true"></i>91%</span>
-                        <span><i class="bx bx-signal-5 me-1" aria-hidden="true"></i>4/4</span>
+                <div class="hydro-card-body">
+                    <div class="hydro-metric-col">
+                        <span class="hydro-metric-label">Status</span>
+                        <div class="hydro-metric-val"><span class="val-num" style="font-size: 15px;">Aktif</span></div>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="hydro-card">
-            <div class="hydro-card-header">
-                <span class="hydro-station-name">Hidrologi - MS-008</span>
-                <span class="hydro-time">14:19</span>
-            </div>
-            <div class="hydro-card-body">
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">TMA</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">1.76</span>
-                        <span class="val-unit">m</span>
-                    </div>
-                    <span class="hydro-trend trend-down">-1 cm / 430m</span>
-                </div>
-                <div class="hydro-metric-col">
-                    <span class="hydro-metric-label">Kecepatan Arus</span>
-                    <div class="hydro-metric-val">
-                        <span class="val-num">1.94</span>
-                        <span class="val-unit">m/s</span>
-                    </div>
-                    <div class="hydro-meta-info">
-                        <span><i class="bx bxs-battery-low me-1" aria-hidden="true"></i>68%</span>
-                        <span><i class="bx bx-signal-3 me-1" aria-hidden="true"></i>2/4</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        @endforelse
     </div>
 
     <div class="dash-legend-card" id="dash-legend-card" aria-label="Legenda Peta">
@@ -1153,26 +1044,24 @@
             warningStations.filter(hasCoordinate).forEach(function (station) {
                 var stationDanger = Boolean(station.is_danger);
                 var color = stationDanger ? '#f46a6a' : (statusColors[station.status] || '#f1b44c');
-                if (stationDanger) {
-                    L.circle([station.lat, station.lng], {
-                        radius: 150000,
-                        color: '#f46a6a',
-                        fillColor: '#f46a6a',
-                        fillOpacity: 0.24,
-                        weight: 5,
-                        className: 'danger-map-radius',
-                        interactive: false
-                    }).addTo(warningLayer);
-                }
+                var statusClass = stationDanger
+                    ? 'danger'
+                    : (station.status === 'Waspada' ? 'warning' : 'live');
 
                 var warningIcon = L.divIcon({
-                    className: 'sensor-live-icon warning-station-marker',
-                    html: stationDanger
-                        ? '<span class="danger-warning-icon"><i class="bx bxs-error" aria-hidden="true"></i></span>'
-                        : '<span class="warning-station-icon"><i class="bx bxs-bell-ring" aria-hidden="true"></i></span>',
-                    iconSize: [36, 36],
-                    iconAnchor: [18, 18]
+                    className: 'sensor-live-icon warning-station-marker' + (stationDanger ? ' sensor-live-icon-danger' : ''),
+                    html: '<span class="sensor-map-marker-wrap">' +
+                        '<span class="sensor-pulse-marker ' + statusClass + '" style="--sensor-color: ' + color + ';"></span>' +
+                        '<span class="sensor-map-label ' + (stationDanger ? 'danger' : '') + '">' +
+                            escapeHtml(station.station_code || station.name || '-') +
+                            '<small>' + escapeHtml(station.status || 'Active') + '</small>' +
+                        '</span>' +
+                    '</span>',
+                    iconSize: [1, 1],
+                    iconAnchor: [0, 0],
+                    popupAnchor: [0, -14]
                 });
+
                 L.marker([station.lat, station.lng], {
                     title: 'Detail Warning Station: ' + station.name,
                     alt: 'Detail Warning Station: ' + station.name,
@@ -1181,16 +1070,6 @@
                     keyboard: true
                 }).on('click', function () {
                     monitoring.selectWarningStation(station.id);
-                }).addTo(warningLayer);
-
-                L.circleMarker([station.lat, station.lng], {
-                    radius: stationDanger ? 16 : 11,
-                    color: color,
-                    fillColor: stationDanger ? color : '#ffffff',
-                    fillOpacity: stationDanger ? 0.45 : 0.2,
-                    weight: stationDanger ? 4 : 3,
-                    className: stationDanger ? 'danger-map-radius' : '',
-                    interactive: false
                 }).addTo(warningLayer);
             });
 
@@ -1397,61 +1276,6 @@
             .catch(function () {});
         }
 
-        var huluIcon = L.divIcon({
-            className: 'map-hulu-marker-wrap',
-            html: '<div class="map-badge-tag hulu-tag"><span>HULU</span> <i class="bx bx-down-arrow-alt"></i></div>',
-            iconSize: [64, 26],
-            iconAnchor: [32, 13]
-        });
-        L.marker([-8.125, 112.930], { icon: huluIcon, interactive: false }).addTo(map);
-
-        var hilirIcon = L.divIcon({
-            className: 'map-hilir-marker-wrap',
-            html: '<div class="map-badge-tag hilir-tag"><span>HILIR</span></div>',
-            iconSize: [54, 26],
-            iconAnchor: [27, 13]
-        });
-        L.marker([-8.235, 113.020], { icon: hilirIcon, interactive: false }).addTo(map);
-
-        var cfpeRouteIcon = L.divIcon({
-            className: 'map-cfpe-tag-wrap',
-            html: '<span class="cfpe-route-marker-tag"><span class="route-dash">---</span> CFPE Route</span>',
-            iconSize: [110, 22],
-            iconAnchor: [55, 11]
-        });
-        L.marker([-8.170, 112.985], { icon: cfpeRouteIcon, interactive: false }).addTo(map);
-
-        var stationTagLayer = L.layerGroup().addTo(map);
-        var stationTags = [
-            { name: 'MS-001', lat: -8.138, lng: 112.942, type: 'ms' },
-            { name: 'WS-001', lat: -8.156, lng: 112.956, type: 'ws' },
-            { name: 'MS-002', lat: -8.178, lng: 112.972, type: 'ms' },
-            { name: 'WS-002', lat: -8.192, lng: 112.988, type: 'ws' },
-            { name: 'MS-003', lat: -8.208, lng: 113.002, type: 'ms' },
-            { name: 'MS-004', lat: -8.220, lng: 113.015, type: 'ms' }
-        ];
-
-        stationTags.forEach(function (st) {
-            var tagIcon = L.divIcon({
-                className: 'map-station-tag-wrap',
-                html: '<div class="map-station-pill ' + (st.type === 'ms' ? 'pill-ms' : 'pill-ws') + '">' +
-                      '<span class="st-icon">' + (st.type === 'ms' ? '🗼' : '🔔') + '</span>' +
-                      '<span class="st-name">' + st.name + '</span>' +
-                      '</div>',
-                iconSize: [76, 24],
-                iconAnchor: [38, 12]
-            });
-            L.marker([st.lat, st.lng], { icon: tagIcon, interactive: true }).bindPopup('<strong>' + st.name + '</strong>').addTo(stationTagLayer);
-        });
-
-        var chkLabels = document.getElementById('chk-labels');
-        if (chkLabels) {
-            chkLabels.addEventListener('change', function () {
-                if (this.checked) map.addLayer(stationTagLayer);
-                else map.removeLayer(stationTagLayer);
-            });
-        }
-
         var chkWs = document.getElementById('chk-ws');
         if (chkWs) {
             chkWs.addEventListener('change', function () {
@@ -1465,15 +1289,17 @@
         var chkRiver = document.getElementById('chk-river');
         var chkBoundary = document.getElementById('chk-boundary');
         var chkCfpe = document.getElementById('chk-cfpe');
+        var chkLabels = document.getElementById('chk-labels');
 
-        [chkCorridor, chkMs, chkRiver, chkBoundary, chkCfpe].forEach(function (chk) {
+        [chkCorridor, chkMs, chkRiver, chkBoundary, chkCfpe, chkLabels].forEach(function (chk) {
             if (chk) {
                 chk.addEventListener('change', function () {
                     var anyChecked = (chkCorridor && chkCorridor.checked) ||
                                      (chkMs && chkMs.checked) ||
                                      (chkRiver && chkRiver.checked) ||
                                      (chkBoundary && chkBoundary.checked) ||
-                                     (chkCfpe && chkCfpe.checked);
+                                     (chkCfpe && chkCfpe.checked) ||
+                                     (chkLabels && chkLabels.checked);
                     if (anyChecked && !map.hasLayer(spatialLayer)) {
                         map.addLayer(spatialLayer);
                     } else if (!anyChecked && map.hasLayer(spatialLayer)) {
@@ -1481,6 +1307,83 @@
                     }
                 });
             }
+        });
+
+        var corridorSelect = document.getElementById('dash-corridor-select');
+        var clusterSelect = document.getElementById('dash-cluster-select');
+
+        function applyDashboardFilters() {
+            var selectedCorridor = corridorSelect ? corridorSelect.value.trim() : 'all';
+            var selectedCluster = clusterSelect ? clusterSelect.value.trim() : 'all';
+
+            var filteredSensors = sensorPoints.filter(function (s) {
+                if (selectedCorridor !== 'all') {
+                    var sCorr = (s.corridor || s.workspace || s.station || '').toLowerCase();
+                    if (sCorr.indexOf(selectedCorridor.toLowerCase()) === -1 && selectedCorridor.toLowerCase().indexOf(sCorr) === -1) {
+                        return false;
+                    }
+                }
+                if (selectedCluster !== 'all') {
+                    var sClust = (s.workspace || '').toLowerCase();
+                    if (sClust.indexOf(selectedCluster.toLowerCase()) === -1) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            var filteredWarningStations = warningStations.filter(function (w) {
+                if (selectedCorridor !== 'all') {
+                    var wCorr = (w.corridor || w.workspace || w.name || '').toLowerCase();
+                    if (wCorr.indexOf(selectedCorridor.toLowerCase()) === -1 && selectedCorridor.toLowerCase().indexOf(wCorr) === -1) {
+                        return false;
+                    }
+                }
+                if (selectedCluster !== 'all') {
+                    var wClust = (w.workspace || '').toLowerCase();
+                    if (wClust.indexOf(selectedCluster.toLowerCase()) === -1) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            var filteredClusters = clusters.filter(function (c) {
+                if (selectedCorridor !== 'all') {
+                    var cName = (c.name || '').toLowerCase();
+                    if (cName.indexOf(selectedCorridor.toLowerCase()) === -1) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            renderMapData({
+                clusters: filteredClusters,
+                sensors: filteredSensors,
+                warningStations: filteredWarningStations,
+                alert_active: initialAlertActive
+            });
+
+            if (filteredWarningStations.length > 0 && hasCoordinate(filteredWarningStations[0])) {
+                map.flyTo([filteredWarningStations[0].lat, filteredWarningStations[0].lng], 14, { duration: 0.8 });
+            } else if (filteredClusters.length > 0 && hasCoordinate(filteredClusters[0])) {
+                map.flyTo([filteredClusters[0].lat, filteredClusters[0].lng], 13, { duration: 0.8 });
+            }
+        }
+
+        if (corridorSelect) {
+            corridorSelect.addEventListener('change', applyDashboardFilters);
+        }
+        if (clusterSelect) {
+            clusterSelect.addEventListener('change', applyDashboardFilters);
+        }
+
+        document.querySelectorAll('.dash-timeline-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+                document.querySelectorAll('.dash-timeline-item').forEach(function (el) { el.classList.remove('active'); });
+                this.classList.add('active');
+            });
         });
 
         setTimeout(loadSpatialOverlay, 2000);
