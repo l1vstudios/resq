@@ -240,12 +240,12 @@
             justify-content: space-between;
             gap: 10px;
             padding: 8px 14px;
-            background: #141f19;
+            background: #243330;
             -webkit-backdrop-filter: none;
             backdrop-filter: none;
-            border: 1px solid #2a3a31;
+            border: 1px solid #374b47;
             border-radius: 8px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
             color: #ffffff;
         }
         .dash-header-left {
@@ -261,8 +261,8 @@
             width: 32px;
             height: 32px;
             border-radius: 6px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: #1c2926;
+            border: 1px solid #374b47;
             color: #ffffff;
             cursor: pointer;
             font-size: 16px;
@@ -270,7 +270,7 @@
             text-decoration: none;
         }
         .dash-back-btn:hover, .dash-action-btn:hover {
-            background: rgba(255, 255, 255, 0.18);
+            background: #2b3d39;
             color: #ffffff;
         }
         .dash-select-container {
@@ -280,8 +280,8 @@
         }
         .dash-select {
             appearance: none;
-            background: #1c2b23;
-            border: 1px solid #33463b;
+            background: #1c2926;
+            border: 1px solid #374b47;
             border-radius: 6px;
             color: #ffffff;
             font-size: 12px;
@@ -292,11 +292,11 @@
             transition: all 0.2s ease;
         }
         .dash-select:hover, .dash-select:focus {
-            background: #24372d;
+            background: #243531;
             border-color: #34d399;
         }
         .dash-select option {
-            background: #141f19;
+            background: #1c2926;
             color: #ffffff;
         }
         .dash-select-container i {
@@ -304,16 +304,16 @@
             right: 8px;
             pointer-events: none;
             font-size: 14px;
-            color: #9ca3af;
+            color: #95a5a0;
         }
         .dash-weather-timeline {
             display: flex;
             align-items: center;
             gap: 4px;
-            background: #1c2b23;
+            background: #1c2926;
             padding: 3px 6px;
             border-radius: 6px;
-            border: 1px solid #33463b;
+            border: 1px solid #374b47;
         }
         .dash-timeline-item {
             display: flex;
@@ -359,14 +359,14 @@
             scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
-            background: #141f19;
+            background: #243330;
             -webkit-backdrop-filter: none;
             backdrop-filter: none;
-            border: 1px solid rgba(52, 211, 153, 0.35);
+            border: 1px solid #374b47;
             border-radius: 6px;
             padding: 10px 12px;
-            color: #34d399;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            color: #ffffff;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
         }
         .hydro-card-header {
             display: flex;
@@ -374,16 +374,21 @@
             justify-content: space-between;
             margin-bottom: 6px;
             padding-bottom: 5px;
-            border-bottom: 1px solid rgba(52, 211, 153, 0.15);
+            border-bottom: 1px solid #374b47;
         }
         .hydro-station-name {
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 700;
-            color: #34d399;
+            color: #ffffff;
         }
-        .hydro-time {
-            font-size: 10.5px;
-            color: #10b981;
+        .hydro-badge-live {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            font-size: 9.5px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(16, 185, 129, 0.4);
         }
         .hydro-card-body {
             display: grid;
@@ -395,12 +400,25 @@
             flex-direction: column;
         }
         .hydro-metric-label {
-            font-size: 10px;
+            font-size: 9.5px;
             font-weight: 600;
-            color: #6ee7b7;
+            color: #95a5a0;
             text-transform: uppercase;
             letter-spacing: 0.3px;
             margin-bottom: 2px;
+        }
+        .hydro-sub-label {
+            font-size: 9.5px;
+            color: #7b8e88;
+            margin-top: 1px;
+        }
+        .hydro-status-dot {
+            font-size: 10.5px;
+            font-weight: 500;
+            color: #34d399;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         .hydro-metric-val {
             display: flex;
@@ -410,32 +428,20 @@
         .hydro-metric-val .val-num {
             font-size: 18px;
             font-weight: 700;
-            color: #34d399;
+            color: #ffffff;
             line-height: 1.1;
         }
         .hydro-metric-val .val-unit {
             font-size: 11px;
-            color: #a7f3d0;
+            color: #95a5a0;
             font-weight: 500;
-        }
-        .hydro-trend {
-            font-size: 10.5px;
-            font-weight: 600;
-            margin-top: 3px;
-            color: #34d399;
-        }
-        .trend-up {
-            color: #34d399;
-        }
-        .trend-down {
-            color: #10b981;
         }
         .hydro-meta-info {
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 10.5px;
-            color: #6ee7b7;
+            font-size: 10px;
+            color: #95a5a0;
             margin-top: 4px;
         }
         .dash-legend-card {
@@ -444,14 +450,14 @@
             bottom: 24px;
             right: calc(clamp(380px, 29vw, 440px) + 24px);
             width: 220px;
-            background: #141f19;
+            background: #243330;
             -webkit-backdrop-filter: none;
             backdrop-filter: none;
-            border: 1px solid #2a3a31;
+            border: 1px solid #374b47;
             border-radius: 6px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
             transition: right 0.3s ease;
         }
         .dash-legend-card.sidebar-collapsed {
@@ -463,7 +469,7 @@
             color: #ffffff;
             margin-bottom: 8px;
             padding-bottom: 5px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid #374b47;
         }
         .legend-card-body {
             display: flex;
@@ -726,24 +732,26 @@
             @endphp
             <div class="hydro-card" data-station="{{ $stCode }}" data-sensor="{{ $sensor->sensor_code }}">
                 <div class="hydro-card-header">
-                    <span class="hydro-station-name">{{ $stCode }} · {{ $sensor->sensor_code }}</span>
-                    <span class="hydro-time">{{ $sensor->last_seen_at ? \Illuminate\Support\Carbon::parse($sensor->last_seen_at)->format('H:i') : now()->format('H:i') }}</span>
+                    <span class="hydro-station-name">{{ $stCode }}_{{ strtoupper(str_replace('-', '_', $sensor->sensor_code)) }}</span>
+                    <span class="hydro-badge-live">Live</span>
                 </div>
                 <div class="hydro-card-body">
                     <div class="hydro-metric-col">
                         <span class="hydro-metric-label">{{ $paramName }}</span>
+                        <div class="hydro-sub-label">{{ $loggerCode ?: 'REDNODE-BLIIOT' }}</div>
+                        <div class="hydro-status-dot" style="margin-top: 6px;">
+                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ $isAwas ? '#ef4444' : '#10b981' }};"></span>
+                            <span>{{ $sensorStatus }}</span>
+                        </div>
+                    </div>
+                    <div class="hydro-metric-col" style="justify-content: flex-end; align-items: flex-end; text-align: right;">
                         <div class="hydro-metric-val">
                             <span class="val-num">{{ $valStr }}</span>
                             @if($unitStr)<span class="val-unit">{{ $unitStr }}</span>@endif
                         </div>
-                        <span class="badge-status {{ $statusBadgeClass }}" style="align-self: flex-start; margin-top: 4px;">{{ $sensorStatus }}</span>
-                    </div>
-                    <div class="hydro-metric-col" style="justify-content: flex-end; align-items: flex-end;">
-                        @if($loggerCode)
-                            <span class="hydro-metric-label" style="text-align: right;">{{ $loggerCode }}</span>
-                        @endif
-                        <div class="hydro-meta-info" style="margin-top: auto;">
-                            <span><i class="bx bxs-battery me-1"></i>{{ $isAwas ? '34%' : '92%' }}</span>
+                        <div class="hydro-sub-label">3.110</div>
+                        <div class="hydro-meta-info" style="margin-top: 6px;">
+                            <span><i class="bx bxs-battery me-1"></i>92%</span>
                             <span><i class="bx bx-signal-5 me-1"></i>4/4</span>
                         </div>
                     </div>
