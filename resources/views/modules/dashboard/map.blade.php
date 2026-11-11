@@ -436,8 +436,8 @@
         .dash-legend-card {
             position: absolute;
             z-index: 900;
-            bottom: 16px;
-            left: 560px;
+            bottom: 24px;
+            right: calc(clamp(380px, 29vw, 440px) + 24px);
             width: 220px;
             background: rgba(22, 33, 28, 0.82);
             -webkit-backdrop-filter: blur(12px);
@@ -447,6 +447,10 @@
             padding: 10px 14px;
             color: #ffffff;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            transition: right 0.3s ease;
+        }
+        .dash-legend-card.sidebar-collapsed {
+            right: 20px;
         }
         .legend-card-header {
             font-size: 12.5px;
@@ -501,11 +505,23 @@
             height: 14px;
             color: #ffffff;
         }
-        .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
-        @media (max-width: 1200px) {
-            .dash-legend-card { display: none; }
+        .map-station-permanent-label {
+            background: rgba(22, 33, 28, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 4px;
+            padding: 1px 5px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
         }
+        .hide-station-labels .map-station-permanent-label {
+            display: none !important;
+        }
+        .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
         @media (max-width: 991px) {
+            .dash-legend-card { display: none; }
             .project-map-header {
                 right: 16px;
                 top: 10px;
@@ -912,6 +928,11 @@
         var clusterLayer = L.layerGroup().addTo(map);
         var sensorLayer = L.layerGroup().addTo(map);
         var warningLayer = L.layerGroup().addTo(map);
+        var corridorLayer = L.layerGroup().addTo(map);
+        var cfpeRouteLayer = L.layerGroup().addTo(map);
+        var riverLayer = L.layerGroup().addTo(map);
+        var boundaryLayer = L.layerGroup().addTo(map);
+        var monitoringStationLayer = L.layerGroup().addTo(map);
         var spatialLayer = L.featureGroup().addTo(map);
         var tdeLayer = L.layerGroup().addTo(map);
         var monitoring = new ProjectMapMonitoring({
@@ -1177,7 +1198,7 @@
                         if (latLngs.length >= 2) {
                             L.polyline(latLngs, { color: '#0D47A1', weight: 3, opacity: 0.7 })
                                 .bindPopup('<strong>Corridor: ' + escapeHtml(corridor.name) + '</strong>')
-                                .addTo(spatialLayer);
+                                .addTo(corridorLayer);
                         }
                     });
                 });
@@ -1185,7 +1206,7 @@
                 // Draw CFPE routes
                 (data.routes || []).forEach(function (route) {
                     if (!route.path_coordinates || !route.path_coordinates.length) return;
-                    if (route.route_type === 'monitoring_corridor') return; // skip, already drawn as corridor
+                    if (route.route_type === 'monitoring_corridor') return;
                     var coords = route.path_coordinates;
                     if (!Array.isArray(coords[0])) return;
 
@@ -1202,7 +1223,7 @@
                         if (latLngs.length >= 2) {
                             L.polyline(latLngs, { color: '#e74c3c', weight: 2, opacity: 0.8, dashArray: '6, 4' })
                                 .bindPopup('<strong>Route: ' + escapeHtml(route.name) + '</strong>')
-                                .addTo(spatialLayer);
+                                .addTo(cfpeRouteLayer);
                         }
                     });
 
@@ -1213,7 +1234,7 @@
                             radius: 4, fillColor: '#e74c3c', color: '#fff', weight: 1, fillOpacity: 0.8
                         }).bindPopup('<strong>' + escapeHtml(p.point_code) + '</strong>' +
                             (p.chainage ? '<br>Chainage: ' + p.chainage.toFixed(0) + ' m' : ''))
-                        .addTo(spatialLayer);
+                        .addTo(cfpeRouteLayer);
                     });
                 });
 
@@ -1222,6 +1243,11 @@
                     if (!layer.layer_payload || !layer.layer_payload.features) return;
                     var color = layer.style_color || '#4CAF50';
                     var layerName = (layer.name || '').toLowerCase();
+                    var targetLayer = (layerName.indexOf('sungai') >= 0 || layerName.indexOf('river') >= 0 || layerName.indexOf('flood') >= 0 || layerName.indexOf('lahar') >= 0)
+                        ? riverLayer
+                        : ((layerName.indexOf('batas') >= 0 || layerName.indexOf('admin') >= 0 || layerName.indexOf('boundary') >= 0)
+                            ? boundaryLayer
+                            : spatialLayer);
 
                     try {
                         L.geoJSON(layer.layer_payload, {
@@ -1247,14 +1273,14 @@
                                 var props = feature.properties || {};
                                 fl.bindPopup('<strong>' + escapeHtml(layer.name) + '</strong>' + (props.NAMOBJ ? '<br>' + escapeHtml(props.NAMOBJ) : ''));
                             }
-                        }).addTo(spatialLayer);
+                        }).addTo(targetLayer);
                     } catch (e) {}
                 });
 
                 // Draw monitoring stations with tower icon
                 (data.monitoring_stations || []).forEach(function (station) {
                     if (!station.latitude || !station.longitude) return;
-                    L.marker([station.latitude, station.longitude], {
+                    var msMarker = L.marker([station.latitude, station.longitude], {
                         icon: L.divIcon({
                             html: '<span style="font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">🗼</span>',
                             className: '',
@@ -1266,7 +1292,14 @@
                         escapeHtml(station.station_code) + '<br>' +
                         escapeHtml(station.name) + '<br>' +
                         '<span class="badge bg-info">' + escapeHtml(station.status || 'Active') + '</span>'
-                    ).addTo(spatialLayer);
+                    );
+
+                    msMarker.bindTooltip(escapeHtml(station.station_code || station.name), {
+                        permanent: true,
+                        direction: 'bottom',
+                        className: 'map-station-permanent-label'
+                    });
+                    msMarker.addTo(monitoringStationLayer);
                 });
 
                 // Warning stations use the live warningLayer so every icon opens the same details.
@@ -1291,23 +1324,71 @@
         var chkCfpe = document.getElementById('chk-cfpe');
         var chkLabels = document.getElementById('chk-labels');
 
-        [chkCorridor, chkMs, chkRiver, chkBoundary, chkCfpe, chkLabels].forEach(function (chk) {
-            if (chk) {
-                chk.addEventListener('change', function () {
-                    var anyChecked = (chkCorridor && chkCorridor.checked) ||
-                                     (chkMs && chkMs.checked) ||
-                                     (chkRiver && chkRiver.checked) ||
-                                     (chkBoundary && chkBoundary.checked) ||
-                                     (chkCfpe && chkCfpe.checked) ||
-                                     (chkLabels && chkLabels.checked);
-                    if (anyChecked && !map.hasLayer(spatialLayer)) {
-                        map.addLayer(spatialLayer);
-                    } else if (!anyChecked && map.hasLayer(spatialLayer)) {
-                        map.removeLayer(spatialLayer);
+        if (chkCorridor) {
+            chkCorridor.addEventListener('change', function () {
+                if (this.checked) map.addLayer(corridorLayer);
+                else map.removeLayer(corridorLayer);
+            });
+        }
+        if (chkMs) {
+            chkMs.addEventListener('change', function () {
+                if (this.checked) map.addLayer(monitoringStationLayer);
+                else map.removeLayer(monitoringStationLayer);
+            });
+        }
+        if (chkRiver) {
+            chkRiver.addEventListener('change', function () {
+                if (this.checked) map.addLayer(riverLayer);
+                else map.removeLayer(riverLayer);
+            });
+        }
+        if (chkBoundary) {
+            chkBoundary.addEventListener('change', function () {
+                if (this.checked) map.addLayer(boundaryLayer);
+                else map.removeLayer(boundaryLayer);
+            });
+        }
+        if (chkCfpe) {
+            chkCfpe.addEventListener('change', function () {
+                if (this.checked) map.addLayer(cfpeRouteLayer);
+                else map.removeLayer(cfpeRouteLayer);
+            });
+        }
+        if (chkLabels) {
+            chkLabels.addEventListener('change', function () {
+                var mapContainer = document.getElementById('sensor-cluster-map');
+                if (mapContainer) {
+                    if (this.checked) {
+                        mapContainer.classList.remove('hide-station-labels');
+                    } else {
+                        mapContainer.classList.add('hide-station-labels');
                     }
-                });
-            }
-        });
+                }
+            });
+        }
+
+        var panelToggleBtn = document.querySelector('[data-monitor="panel-toggle"]');
+        var openBtn = document.getElementById('map-monitor-open');
+        var legendCard = document.getElementById('dash-legend-card');
+        if (panelToggleBtn && legendCard) {
+            panelToggleBtn.addEventListener('click', function () {
+                setTimeout(function () {
+                    var panel = document.getElementById('map-monitor-panel');
+                    if (panel && panel.hidden) {
+                        legendCard.classList.add('sidebar-collapsed');
+                    } else {
+                        legendCard.classList.remove('sidebar-collapsed');
+                    }
+                }, 50);
+            });
+        }
+        if (openBtn && legendCard) {
+            openBtn.addEventListener('click', function () {
+                setTimeout(function () {
+                    legendCard.classList.remove('sidebar-collapsed');
+                }, 50);
+            });
+        }
 
         var corridorSelect = document.getElementById('dash-corridor-select');
         var clusterSelect = document.getElementById('dash-cluster-select');
