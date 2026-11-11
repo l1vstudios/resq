@@ -283,70 +283,76 @@
         position: relative;
         display: inline-flex;
         align-items: center;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        font-size: 9.5px;
-        font-weight: 800;
-        cursor: pointer;
-        background: #121c17;
-        color: #94a3b8;
+        justify-content: space-between;
+        width: 62px;
+        height: 24px;
         padding: 2px;
-        line-height: 1;
-        width: 58px;
-        height: 22px;
+        background: #141f19;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 12px;
+        cursor: pointer;
         user-select: none;
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
-        outline: none;
+        overflow: hidden;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
     }
     .siren-pill-slider {
         position: absolute;
         top: 2px;
         left: 2px;
-        width: 26px;
-        height: 16px;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.2);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease;
+        width: 27px;
+        height: 18px;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.22);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+        transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.28s ease, box-shadow 0.28s ease;
+        pointer-events: none;
         z-index: 1;
     }
     .siren-pill-btn.is-active {
-        border-color: rgba(239, 68, 68, 0.5);
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 8px rgba(239, 68, 68, 0.3);
+        background: #201315;
+        border-color: #ef4444;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 10px rgba(239, 68, 68, 0.35);
     }
     .siren-pill-btn.is-active .siren-pill-slider {
         transform: translateX(0px);
         background: #ef4444;
-        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.5);
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.6);
     }
     .siren-pill-btn:not(.is-active) .siren-pill-slider {
-        transform: translateX(26px);
-        background: rgba(255, 255, 255, 0.2);
+        transform: translateX(29px);
+        background: rgba(255, 255, 255, 0.22);
     }
-    .siren-pill-btn span {
+    .siren-pill-btn .pill-label {
         position: relative;
         z-index: 2;
         width: 27px;
         text-align: center;
-        transition: color 0.2s ease;
+        font-size: 10px;
+        font-weight: 800;
         letter-spacing: 0.3px;
+        line-height: 18px;
+        transition: color 0.25s ease, text-shadow 0.25s ease;
     }
     .siren-pill-btn.is-active .pill-on {
         color: #ffffff;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     }
     .siren-pill-btn.is-active .pill-off {
-        color: #64748b;
+        color: rgba(255, 255, 255, 0.35);
     }
     .siren-pill-btn:not(.is-active) .pill-on {
-        color: #64748b;
+        color: rgba(255, 255, 255, 0.35);
     }
     .siren-pill-btn:not(.is-active) .pill-off {
         color: #ffffff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     }
     .siren-pill-btn:hover {
         border-color: rgba(255, 255, 255, 0.35);
+    }
+    .siren-pill-btn:active .siren-pill-slider {
+        width: 31px;
     }
     .notif-list {
         display: flex;
@@ -881,10 +887,10 @@
                             <td style="text-align: center;"><i class="bx {{ $corridor['icon'] }}" style="font-size: 15px;"></i></td>
                             <td style="text-align: center;"><span class="badge-tde">{{ $corridor['tde'] }}</span></td>
                             <td style="text-align: right;">
-                                <button type="button" class="siren-pill-btn {{ $corridor['siren'] === 'on' ? 'is-active' : '' }}" aria-label="Toggle Sirine {{ $corridor['name'] }}">
+                                <button type="button" class="siren-pill-btn {{ $corridor['siren'] === 'on' ? 'is-active' : '' }}" onclick="toggleSirenPill(this, event)" aria-label="Toggle Sirine {{ $corridor['name'] }}">
                                     <div class="siren-pill-slider"></div>
-                                    <span class="pill-on">ON</span>
-                                    <span class="pill-off">OFF</span>
+                                    <span class="pill-label pill-on">ON</span>
+                                    <span class="pill-label pill-off">OFF</span>
                                 </button>
                             </td>
                         </tr>
@@ -1022,3 +1028,16 @@
     </div>
     <div class="sensor-detail-content" data-monitor="sensor-detail-content"></div>
 </dialog>
+<script>
+    function toggleSirenPill(btn, e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        btn.classList.toggle('is-active');
+        var masterBtn = document.querySelector('[data-monitor="siren-toggle"]');
+        if (masterBtn) {
+            masterBtn.click();
+        }
+    }
+</script>
