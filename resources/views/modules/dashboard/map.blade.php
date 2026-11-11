@@ -1756,6 +1756,33 @@
             }
         });
 
+        document.querySelectorAll('.siren-pill-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.toggle('is-active');
+                var masterBtn = document.querySelector('[data-monitor="siren-toggle"]');
+                if (masterBtn) {
+                    masterBtn.click();
+                }
+            });
+        });
+
+        var masterSiren = document.querySelector('[data-monitor="siren-toggle"]');
+        if (masterSiren && typeof MutationObserver !== 'undefined') {
+            var sirenObserver = new MutationObserver(function () {
+                var isMasterActive = masterSiren.getAttribute('aria-pressed') === 'true' || masterSiren.classList.contains('siren-active');
+                document.querySelectorAll('.siren-pill-btn').forEach(function (btn) {
+                    if (isMasterActive) {
+                        btn.classList.add('is-active');
+                    } else {
+                        btn.classList.remove('is-active');
+                    }
+                });
+            });
+            sirenObserver.observe(masterSiren, { attributes: true, attributeFilter: ['aria-pressed', 'class'] });
+        }
+
         document.querySelectorAll('.dash-timeline-item').forEach(function (item) {
             item.addEventListener('click', function () {
                 document.querySelectorAll('.dash-timeline-item').forEach(function (el) { el.classList.remove('active'); });

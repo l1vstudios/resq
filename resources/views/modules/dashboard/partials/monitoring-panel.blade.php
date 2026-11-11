@@ -280,29 +280,73 @@
         box-shadow: 0 0 5px rgba(239, 68, 68, 0.6);
     }
     .siren-pill-btn {
+        position: relative;
         display: inline-flex;
-        border-radius: 4px;
-        overflow: hidden;
+        align-items: center;
+        border-radius: 20px;
         border: 1px solid rgba(255, 255, 255, 0.2);
-        font-size: 10px;
-        font-weight: 700;
+        font-size: 9.5px;
+        font-weight: 800;
         cursor: pointer;
-        background: rgba(0, 0, 0, 0.4);
-        color: #9ca3af;
-        padding: 0;
+        background: #121c17;
+        color: #94a3b8;
+        padding: 2px;
         line-height: 1;
+        width: 58px;
+        height: 22px;
+        user-select: none;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+        outline: none;
+    }
+    .siren-pill-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 26px;
+        height: 16px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease;
+        z-index: 1;
+    }
+    .siren-pill-btn.is-active {
+        border-color: rgba(239, 68, 68, 0.5);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 8px rgba(239, 68, 68, 0.3);
+    }
+    .siren-pill-btn.is-active .siren-pill-slider {
+        transform: translateX(0px);
+        background: #ef4444;
+        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.5);
+    }
+    .siren-pill-btn:not(.is-active) .siren-pill-slider {
+        transform: translateX(26px);
+        background: rgba(255, 255, 255, 0.2);
     }
     .siren-pill-btn span {
-        padding: 3px 6px;
-        transition: all 0.2s ease;
+        position: relative;
+        z-index: 2;
+        width: 27px;
+        text-align: center;
+        transition: color 0.2s ease;
+        letter-spacing: 0.3px;
     }
-    .siren-pill-btn .active-on {
-        background: #dc2626;
+    .siren-pill-btn.is-active .pill-on {
+        color: #ffffff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .siren-pill-btn.is-active .pill-off {
+        color: #64748b;
+    }
+    .siren-pill-btn:not(.is-active) .pill-on {
+        color: #64748b;
+    }
+    .siren-pill-btn:not(.is-active) .pill-off {
         color: #ffffff;
     }
-    .siren-pill-btn .active-off {
-        background: rgba(255, 255, 255, 0.16);
-        color: #ffffff;
+    .siren-pill-btn:hover {
+        border-color: rgba(255, 255, 255, 0.35);
     }
     .notif-list {
         display: flex;
@@ -837,8 +881,10 @@
                             <td style="text-align: center;"><i class="bx {{ $corridor['icon'] }}" style="font-size: 15px;"></i></td>
                             <td style="text-align: center;"><span class="badge-tde">{{ $corridor['tde'] }}</span></td>
                             <td style="text-align: right;">
-                                <button type="button" class="siren-pill-btn" onclick="document.querySelector('[data-monitor=\'siren-toggle\']')?.click()">
-                                    <span class="{{ $corridor['siren'] === 'on' ? 'active-on' : '' }}">ON</span><span class="{{ $corridor['siren'] === 'off' ? 'active-off' : '' }}">OFF</span>
+                                <button type="button" class="siren-pill-btn {{ $corridor['siren'] === 'on' ? 'is-active' : '' }}" aria-label="Toggle Sirine {{ $corridor['name'] }}">
+                                    <div class="siren-pill-slider"></div>
+                                    <span class="pill-on">ON</span>
+                                    <span class="pill-off">OFF</span>
                                 </button>
                             </td>
                         </tr>
