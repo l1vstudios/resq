@@ -605,14 +605,22 @@
         ];
     });
 
-    $realMeteoStations = \App\Models\MonitoringStation::where('project_id', $project->id)->orderBy('station_code')->get();
+    $realMeteoStations = \App\Models\MonitoringStation::with('sensors')
+        ->where('project_id', $project->id)
+        ->orderBy('station_code')
+        ->get();
     if ($realMeteoStations->isEmpty()) {
-        $realMeteoStations = collect($projectMonitoringStations ?? [])->map(fn ($code) => (object)['station_code' => $code, 'name' => $code]);
+        $realMeteoStations = collect($projectMonitoringStations ?? [])->map(fn ($code) => (object)['station_code' => $code, 'name' => $code, 'sensors' => collect()]);
     }
     $meteoStationData = $realMeteoStations->map(function ($ms) {
         $code = $ms->station_code ?? '-';
+        $sensorCount = $ms->sensors ? $ms->sensors->count() : 0;
+        $sensorList = $ms->sensors ? $ms->sensors->pluck('sensor_code')->implode(', ') : '';
         return [
             'code' => $code,
+            'name' => $ms->name ?? $code,
+            'sensor_count' => $sensorCount,
+            'sensor_list' => $sensorList,
             'ping' => now()->format('H:i'),
             'icon' => 'bx-sun text-warning',
             'signal' => '4/4',
@@ -755,8 +763,13 @@
                     </thead>
                     <tbody>
                         @forelse($meteoStationData as $ms)
-                        <tr>
-                            <td><strong>{{ $ms['code'] }}</strong></td>
+                        <tr title="{{ $ms['sensor_list'] ? 'Sensors: ' . $ms['sensor_list'] : '' }}">
+                            <td>
+                                <strong>{{ $ms['code'] }}</strong>
+                                @if($ms['sensor_count'] > 0)
+                                    <small class="text-muted d-block" style="font-size: 9.5px;">{{ $ms['sensor_count'] }} sensor</small>
+                                @endif
+                            </td>
                             <td>{{ $ms['ping'] }}</td>
                             <td><i class="bx {{ $ms['icon'] }}"></i></td>
                             <td>{{ $ms['signal'] }}</td>

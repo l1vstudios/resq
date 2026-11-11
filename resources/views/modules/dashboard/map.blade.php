@@ -353,6 +353,10 @@
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 10px;
+            max-height: 240px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
             background: rgba(22, 33, 28, 0.82);
@@ -549,8 +553,30 @@
     }
     $realClusters = $project->workspaces()->get();
 
-    $realSensorsList = collect($mapSensors ?? []);
-    $hydroStationGroups = $realSensorsList->groupBy('station');
+    $realProjectSensors = \App\Models\Sensor::with(['monitoringStation', 'dataLogger'])
+        ->where(function ($q) use ($project) {
+            $q->whereHas('monitoringStation', fn ($ms) => $ms->where('project_id', $project->id))
+              ->orWhereHas('workspace', fn ($ws) => $ws->where('project_id', $project->id));
+        })
+        ->orderBy('monitoring_station_id')
+        ->orderBy('sensor_code')
+        ->get();
+
+    if ($realProjectSensors->isEmpty() && !empty($mapSensors)) {
+        $realProjectSensors = collect($mapSensors)->map(function ($s) {
+            return (object) [
+                'sensor_code' => $s['name'] ?? 'SENSOR',
+                'parameter' => $s['parameter'] ?? 'Parameter',
+                'type' => $s['type'] ?? 'sensor',
+                'value' => $s['value'] ?? '-',
+                'unit' => $s['unit'] ?? '',
+                'status' => $s['status'] ?? 'Normal',
+                'last_seen_at' => null,
+                'monitoringStation' => (object) ['station_code' => $s['station'] ?? 'MS-DEMO'],
+                'dataLogger' => null,
+            ];
+        });
+    }
 @endphp
 
     <header class="project-map-header">
@@ -611,38 +637,39 @@
         </div>
     </header>
 
-    <div class="dash-hydrology-container" id="dash-hydrology-panel" aria-label="Pemantauan Hidrologi">
-        @forelse($hydroStationGroups as $stationCode => $stSensors)
+    <div class="dash-hydrology-container" id="dash-hydrology-panel" aria-label="Pemantauan Sensor Realtime">
+        @forelse($realProjectSensors as $sensor)
             @php
-                $stName = $stationCode ?: $project->project_code;
-                $wlSensor = $stSensors->first(fn ($s) => stripos($s['parameter'] ?? '', 'water') !== false || stripos($s['name'] ?? '', 'wl') !== false);
-                $velSensor = $stSensors->first(fn ($s) => stripos($s['parameter'] ?? '', 'velocity') !== false || stripos($s['name'] ?? '', 'vel') !== false);
-                $rainSensor = $stSensors->first(fn ($s) => stripos($s['parameter'] ?? '', 'rain') !== false);
-                $primarySensor = $wlSensor ?: $stSensors->first();
-                $val1 = $primarySensor ? $primarySensor['value'] : '-';
-                $val2 = $velSensor ? $velSensor['value'] : ($rainSensor ? $rainSensor['value'] : '-');
-                $val2Label = $velSensor ? 'Kecepatan Arus' : ($rainSensor ? 'Curah Hujan' : 'Sensor');
+                $stCode = $sensor->monitoringStation?->station_code ?: ($sensor->station ?? 'MS');
+                $valStr = $sensor->value ?? '-';
+                $unitStr = $sensor->unit ?? '';
+                $paramName = $sensor->parameter ?: ucwords(str_replace('_', ' ', $sensor->type ?: 'Sensor'));
+                $loggerCode = $sensor->dataLogger?->logger_code ?: ($sensor->dataLogger?->serial_number ?: ($sensor->data_logger ?? ''));
+                $sensorStatus = $sensor->status ?: 'Normal';
+                $isAwas = in_array(strtolower($sensorStatus), ['awas', 'danger', 'bahaya', 'critical']);
+                $isWaspada = in_array(strtolower($sensorStatus), ['waspada', 'warning', 'siaga']);
+                $statusBadgeClass = $isAwas ? 'status-awas' : ($isWaspada ? 'status-waspada' : 'status-normal');
             @endphp
-            <div class="hydro-card" data-station="{{ $stName }}">
+            <div class="hydro-card" data-station="{{ $stCode }}" data-sensor="{{ $sensor->sensor_code }}">
                 <div class="hydro-card-header">
-                    <span class="hydro-station-name">{{ $stName }}</span>
-                    <span class="hydro-time">{{ $primarySensor['last_seen'] ?? now()->format('H:i') }}</span>
+                    <span class="hydro-station-name">{{ $stCode }} · {{ $sensor->sensor_code }}</span>
+                    <span class="hydro-time">{{ $sensor->last_seen_at ? \Illuminate\Support\Carbon::parse($sensor->last_seen_at)->format('H:i') : now()->format('H:i') }}</span>
                 </div>
                 <div class="hydro-card-body">
                     <div class="hydro-metric-col">
-                        <span class="hydro-metric-label">{{ $wlSensor ? 'TMA' : ($primarySensor['parameter'] ?? 'Parameter') }}</span>
+                        <span class="hydro-metric-label">{{ $paramName }}</span>
                         <div class="hydro-metric-val">
-                            <span class="val-num">{{ $val1 }}</span>
+                            <span class="val-num">{{ $valStr }}</span>
+                            @if($unitStr)<span class="val-unit">{{ $unitStr }}</span>@endif
                         </div>
-                        <span class="hydro-trend trend-up">+3 cm / 430m</span>
+                        <span class="badge-status {{ $statusBadgeClass }}" style="align-self: flex-start; margin-top: 4px;">{{ $sensorStatus }}</span>
                     </div>
-                    <div class="hydro-metric-col">
-                        <span class="hydro-metric-label">{{ $val2Label }}</span>
-                        <div class="hydro-metric-val">
-                            <span class="val-num" style="font-size: 15px;">{{ $val2 }}</span>
-                        </div>
-                        <div class="hydro-meta-info">
-                            <span><i class="bx bxs-battery me-1"></i>87%</span>
+                    <div class="hydro-metric-col" style="justify-content: flex-end; align-items: flex-end;">
+                        @if($loggerCode)
+                            <span class="hydro-metric-label" style="text-align: right;">{{ $loggerCode }}</span>
+                        @endif
+                        <div class="hydro-meta-info" style="margin-top: auto;">
+                            <span><i class="bx bxs-battery me-1"></i>{{ $isAwas ? '34%' : '92%' }}</span>
                             <span><i class="bx bx-signal-5 me-1"></i>4/4</span>
                         </div>
                     </div>
@@ -657,7 +684,7 @@
                 <div class="hydro-card-body">
                     <div class="hydro-metric-col">
                         <span class="hydro-metric-label">Status</span>
-                        <div class="hydro-metric-val"><span class="val-num" style="font-size: 15px;">Aktif</span></div>
+                        <div class="hydro-metric-val"><span class="val-num" style="font-size: 15px;">Belum ada sensor</span></div>
                     </div>
                 </div>
             </div>
