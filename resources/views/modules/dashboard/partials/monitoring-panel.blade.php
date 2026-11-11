@@ -44,18 +44,18 @@
         align-items: center;
         justify-content: center;
         padding: 0;
-        border: 1px solid #2a3a31;
+        border: 1px solid #374b47;
         border-radius: 8px;
-        background: #141f19;
+        background: #243330;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
         color: #ffffff;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
         font-size: 22px;
         cursor: pointer;
     }
     .monitor-open-button:hover {
-        background: #1b2921;
+        background: #2b3d39;
     }
     .monitor-open-button:focus-visible {
         outline: 2px solid #34d399;
@@ -68,12 +68,12 @@
         align-items: center;
         justify-content: space-between;
         padding: 8px 12px;
-        background: #141f19;
+        background: #243330;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
-        border: 1px solid #2a3a31;
+        border: 1px solid #374b47;
         border-radius: 6px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
         margin-bottom: 8px;
     }
     .monitor-header-main {
@@ -168,13 +168,13 @@
         display: none;
     }
     .widget-card {
-        background: #141f19;
+        background: #243330;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
-        border: 1px solid #2a3a31;
+        border: 1px solid #374b47;
         border-radius: 6px;
         padding: 10px 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
         display: flex;
         flex-direction: column;
     }
