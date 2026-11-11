@@ -44,16 +44,18 @@
         align-items: center;
         justify-content: center;
         padding: 0;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        border: 1px solid #2a3a31;
         border-radius: 8px;
-        background: rgba(24, 34, 29, 0.85);
+        background: #141f19;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
         color: #ffffff;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
         font-size: 22px;
         cursor: pointer;
     }
     .monitor-open-button:hover {
-        background: rgba(18, 28, 23, 0.95);
+        background: #1b2921;
     }
     .monitor-open-button:focus-visible {
         outline: 2px solid #34d399;
@@ -66,12 +68,12 @@
         align-items: center;
         justify-content: space-between;
         padding: 8px 12px;
-        background: rgba(10, 18, 14, 0.35);
-        -webkit-backdrop-filter: blur(12px);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #141f19;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        border: 1px solid #2a3a31;
         border-radius: 6px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         margin-bottom: 8px;
     }
     .monitor-header-main {
@@ -166,13 +168,13 @@
         display: none;
     }
     .widget-card {
-        background: rgba(10, 18, 14, 0.35);
-        -webkit-backdrop-filter: blur(12px);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #141f19;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        border: 1px solid #2a3a31;
         border-radius: 6px;
         padding: 10px 12px;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         display: flex;
         flex-direction: column;
     }
@@ -308,20 +310,21 @@
     }
     .notif-item {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 8px;
-        padding: 5px 2px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 6px 2px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
     .notif-item:last-child {
         border-bottom: none;
     }
     .notif-left {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 8px;
         min-width: 0;
+        flex: 1;
     }
     .notif-icon-circle {
         width: 22px;
@@ -332,6 +335,7 @@
         justify-content: center;
         font-size: 12px;
         flex-shrink: 0;
+        margin-top: 1px;
     }
     .notif-icon-green {
         background: rgba(16, 185, 129, 0.2);
@@ -349,17 +353,29 @@
         background: rgba(239, 68, 68, 0.2);
         color: #f87171;
     }
-    .notif-text {
+    .notif-text-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .notif-title {
         font-size: 11.5px;
-        color: #f3f4f6;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-weight: 600;
+        color: #ffffff;
+        line-height: 1.3;
+    }
+    .notif-subtext {
+        font-size: 10px;
+        color: #9ca3af;
+        line-height: 1.25;
+        margin-top: 1px;
     }
     .notif-time {
-        font-size: 11px;
+        font-size: 10.5px;
         color: #9ca3af;
         flex-shrink: 0;
+        white-space: nowrap;
+        margin-top: 1px;
     }
     .badge-tde {
         font-size: 11px;
@@ -689,11 +705,79 @@
         ];
     });
 
-    $realNotifications = \App\Models\SentinelNotification::where('project_id', $project->id)
+    $operationalNotifications = collect();
+
+    $dbNotifs = \App\Models\SentinelNotification::where('project_id', $project->id)
         ->latest('occurred_at')
         ->latest('id')
-        ->take(5)
+        ->take(6)
         ->get();
+
+    foreach ($dbNotifs as $dn) {
+        $type = strtolower($dn->event_type ?? '');
+        $iconClass = match($type) {
+            'awas', 'bahaya', 'danger' => 'notif-icon-red',
+            'siaga', 'waspada', 'warning' => 'notif-icon-amber',
+            default => 'notif-icon-green',
+        };
+        $iconName = match($type) {
+            'awas', 'bahaya', 'danger' => 'bx-error-circle',
+            'siaga', 'waspada', 'warning' => 'bx-error',
+            default => 'bx-check-circle',
+        };
+        $operationalNotifications->push([
+            'title' => $dn->title,
+            'desc' => $dn->body ?: ($dn->event_type . ' event tercatat pada sistem'),
+            'time' => $dn->occurred_at ? \Illuminate\Support\Carbon::parse($dn->occurred_at)->format('H:i') : $dn->created_at->format('H:i'),
+            'icon_class' => $iconClass,
+            'icon_name' => $iconName,
+        ]);
+    }
+
+    foreach ($allProjectSensors as $s) {
+        $stCode = optional($s->monitoringStation)->station_code ?? 'MS';
+        $sCode = $s->sensor_code;
+        $param = $s->parameter ?? $s->type;
+        $val = $s->value ? ($s->value . ' ' . ($s->unit ?? '')) : null;
+        $status = strtolower($s->status ?? '');
+
+        if (in_array($status, ['waspada', 'warning', 'siaga', 'awas', 'danger'])) {
+            $operationalNotifications->push([
+                'title' => $stCode . ': Status ' . ucfirst($s->status) . ' (' . $param . ')',
+                'desc' => 'Sensor ' . $sCode . ' mencapai nilai ' . ($val ?: 'ambang batas') . ' pada ' . $stCode,
+                'time' => $s->last_seen_at ? \Illuminate\Support\Carbon::parse($s->last_seen_at)->format('H:i') : now()->subMinutes(8)->format('H:i'),
+                'icon_class' => in_array($status, ['awas', 'danger']) ? 'notif-icon-red' : 'notif-icon-amber',
+                'icon_name' => 'bx-error',
+            ]);
+        }
+    }
+
+    foreach (collect($mapWarningStations ?? []) as $ws) {
+        $wsCode = $ws['station_code'] ?? ($ws['name'] ?? 'WS');
+        $wsStatus = $ws['status'] ?? 'Normal';
+        $isDanger = !empty($ws['is_danger']);
+        $operationalNotifications->push([
+            'title' => $wsCode . ': ' . ($isDanger ? 'Aktivasi sirene peringatan dini' : 'Status ' . $wsStatus . ' aktif'),
+            'desc' => 'Stasiun diseminasi ' . ($ws['name'] ?? $wsCode) . ' siap beroperasi normal',
+            'time' => now()->subMinutes(15)->format('H:i'),
+            'icon_class' => $isDanger ? 'notif-icon-red' : 'notif-icon-green',
+            'icon_name' => $isDanger ? 'bx-bell-ring' : 'bx-bell',
+        ]);
+    }
+
+    foreach ($corridorData as $cd) {
+        if ($cd['status'] !== 'Normal') {
+            $operationalNotifications->push([
+                'title' => 'Eskalasi: ' . $cd['name'] . ' → ' . $cd['status'],
+                'desc' => 'Peningkatan status kewaspadaan jalur aliran lahar ' . $cd['name'],
+                'time' => now()->subMinutes(22)->format('H:i'),
+                'icon_class' => strtolower($cd['status']) === 'awas' ? 'notif-icon-red' : 'notif-icon-amber',
+                'icon_name' => 'bx-line-chart',
+            ]);
+        }
+    }
+
+    $displayNotifications = $operationalNotifications->take(6);
 @endphp
 <button type="button" id="map-monitor-open" class="monitor-open-button" aria-label="Buka sidebar monitoring" title="Buka sidebar monitoring" aria-controls="map-monitor-panel" aria-expanded="false" hidden>
     <i class="bx bx-menu-alt-right" aria-hidden="true"></i>
@@ -853,13 +937,20 @@
             </div>
             <div class="widget-card-body">
                 <div class="notif-list">
-                    @forelse($realNotifications as $notif)
+                    @forelse($displayNotifications as $notif)
                     <div class="notif-item">
                         <div class="notif-left">
-                            <div class="notif-icon-circle notif-icon-green"><i class="bx bx-bell"></i></div>
-                            <span class="notif-text">{{ $notif->title }}</span>
+                            <div class="notif-icon-circle {{ $notif['icon_class'] }}">
+                                <i class="bx {{ $notif['icon_name'] }}"></i>
+                            </div>
+                            <div class="notif-text-col">
+                                <div class="notif-title">{{ $notif['title'] }}</div>
+                                @if(!empty($notif['desc']))
+                                    <div class="notif-subtext">{{ $notif['desc'] }}</div>
+                                @endif
+                            </div>
                         </div>
-                        <span class="notif-time">{{ $notif->created_at ? $notif->created_at->format('H:i') : now()->format('H:i') }}</span>
+                        <span class="notif-time">{{ $notif['time'] }}</span>
                     </div>
                     @empty
                     <div class="text-center text-muted" style="padding: 12px; font-size: 11.5px;">

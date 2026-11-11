@@ -240,12 +240,12 @@
             justify-content: space-between;
             gap: 10px;
             padding: 8px 14px;
-            background: rgba(10, 18, 14, 0.28);
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: #141f19;
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+            border: 1px solid #2a3a31;
             border-radius: 8px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
             color: #ffffff;
         }
         .dash-header-left {
@@ -280,8 +280,8 @@
         }
         .dash-select {
             appearance: none;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: #1c2b23;
+            border: 1px solid #33463b;
             border-radius: 6px;
             color: #ffffff;
             font-size: 12px;
@@ -292,11 +292,11 @@
             transition: all 0.2s ease;
         }
         .dash-select:hover, .dash-select:focus {
-            background: rgba(255, 255, 255, 0.14);
-            border-color: rgba(255, 255, 255, 0.3);
+            background: #24372d;
+            border-color: #34d399;
         }
         .dash-select option {
-            background: #1e293b;
+            background: #141f19;
             color: #ffffff;
         }
         .dash-select-container i {
@@ -310,10 +310,10 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            background: rgba(0, 0, 0, 0.25);
+            background: #1c2b23;
             padding: 3px 6px;
             border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid #33463b;
         }
         .dash-timeline-item {
             display: flex;
@@ -359,14 +359,14 @@
             scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
-            background: rgba(10, 18, 14, 0.28);
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(52, 211, 153, 0.25);
+            background: #141f19;
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+            border: 1px solid rgba(52, 211, 153, 0.35);
             border-radius: 6px;
             padding: 10px 12px;
             color: #34d399;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
         }
         .hydro-card-header {
             display: flex;
@@ -444,14 +444,14 @@
             bottom: 24px;
             right: calc(clamp(380px, 29vw, 440px) + 24px);
             width: 220px;
-            background: rgba(10, 18, 14, 0.28);
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #141f19;
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+            border: 1px solid #2a3a31;
             border-radius: 6px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
             transition: right 0.3s ease;
         }
         .dash-legend-card.sidebar-collapsed {
@@ -770,6 +770,11 @@
             <span>Legenda Peta</span>
         </div>
         <div class="legend-card-body">
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-sensor" checked>
+                <span class="legend-symbol-icon" style="color: #34d399; font-size: 14px;">●</span>
+                <span class="legend-text">Sensor Pemantauan</span>
+            </label>
             <label class="legend-checkbox-item">
                 <input type="checkbox" id="chk-corridor" checked>
                 <span class="legend-symbol sym-corridor"></span>
@@ -1442,6 +1447,14 @@
             iconAnchor: [5, 12]
         });
         L.marker([-8.235, 113.020], { icon: hilirIcon, interactive: false }).addTo(map);
+
+        var chkSensor = document.getElementById('chk-sensor');
+        if (chkSensor) {
+            chkSensor.addEventListener('change', function () {
+                if (this.checked) map.addLayer(sensorLayer);
+                else map.removeLayer(sensorLayer);
+            });
+        }
 
         var chkWs = document.getElementById('chk-ws');
         if (chkWs) {
