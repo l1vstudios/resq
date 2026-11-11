@@ -553,6 +553,17 @@
     }
     $realClusters = $project->workspaces()->get();
 
+    $corridorsJsonData = $realCorridors->map(function ($c) {
+        $coords = is_array($c->path_coordinates) ? $c->path_coordinates : (json_decode($c->path_coordinates, true) ?: []);
+        return [
+            'id' => $c->id,
+            'name' => $c->name,
+            'code' => $c->corridor_code,
+            'status' => $c->status,
+            'coordinates' => $coords,
+        ];
+    })->values()->all();
+
     $realProjectSensors = \App\Models\Sensor::with(['monitoringStation', 'dataLogger'])
         ->where(function ($q) use ($project) {
             $q->whereHas('monitoringStation', fn ($ms) => $ms->where('project_id', $project->id))
@@ -752,16 +763,7 @@
         var sensorPoints = @json($mapSensors ?? []);
         var warningStations = @json($mapWarningStations ?? []);
         var initialAlertActive = @json($dashboardAlertActive ?? false);
-        var corridorsData = @json($realCorridors->map(function ($c) {
-            $coords = is_array($c->path_coordinates) ? $c->path_coordinates : (json_decode($c->path_coordinates, true) ?: []);
-            return [
-                'id' => $c->id,
-                'name' => $c->name,
-                'code' => $c->corridor_code,
-                'status' => $c->status,
-                'coordinates' => $coords,
-            ];
-        }));
+        var corridorsData = {!! json_encode($corridorsJsonData) !!};
         var spatialCorridors = [];
         var corridorPolylines = [];
         var mapDataUrl = @json(route('dashboard.projects.map-data', $project, false));
