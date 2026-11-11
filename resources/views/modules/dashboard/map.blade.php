@@ -362,10 +362,10 @@
             background: rgba(10, 18, 14, 0.28);
             -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.25);
             border-radius: 6px;
             padding: 10px 12px;
-            color: #ffffff;
+            color: #34d399;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
         }
         .hydro-card-header {
@@ -374,16 +374,16 @@
             justify-content: space-between;
             margin-bottom: 6px;
             padding-bottom: 5px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid rgba(52, 211, 153, 0.15);
         }
         .hydro-station-name {
             font-size: 12px;
             font-weight: 700;
-            color: #ffffff;
+            color: #34d399;
         }
         .hydro-time {
             font-size: 10.5px;
-            color: #9ca3af;
+            color: #10b981;
         }
         .hydro-card-body {
             display: grid;
@@ -397,7 +397,7 @@
         .hydro-metric-label {
             font-size: 10px;
             font-weight: 600;
-            color: #9ca3af;
+            color: #6ee7b7;
             text-transform: uppercase;
             letter-spacing: 0.3px;
             margin-bottom: 2px;
@@ -408,33 +408,34 @@
             gap: 3px;
         }
         .hydro-metric-val .val-num {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
-            color: #ffffff;
+            color: #34d399;
             line-height: 1.1;
         }
         .hydro-metric-val .val-unit {
             font-size: 11px;
-            color: #9ca3af;
+            color: #a7f3d0;
             font-weight: 500;
         }
         .hydro-trend {
             font-size: 10.5px;
             font-weight: 600;
             margin-top: 3px;
+            color: #34d399;
         }
         .trend-up {
             color: #34d399;
         }
         .trend-down {
-            color: #f87171;
+            color: #10b981;
         }
         .hydro-meta-info {
             display: flex;
             align-items: center;
             gap: 8px;
             font-size: 10.5px;
-            color: #9ca3af;
+            color: #6ee7b7;
             margin-top: 4px;
         }
         .dash-legend-card {

@@ -10,13 +10,17 @@
         flex-direction: column;
         overflow: hidden;
         color: #ffffff;
-        background: rgba(12, 20, 16, 0.45);
-        -webkit-backdrop-filter: blur(16px);
-        backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 8px;
-        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
         font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        pointer-events: none;
+    }
+    .map-monitor-panel > * {
+        pointer-events: auto;
     }
     .map-monitor-panel, .sensor-detail-dialog {
         --bs-heading-color: #ffffff;
@@ -61,9 +65,14 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 14px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(0, 0, 0, 0.22);
+        padding: 8px 12px;
+        background: rgba(10, 18, 14, 0.35);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        margin-bottom: 8px;
     }
     .monitor-header-main {
         flex: 1 1 auto;
@@ -147,20 +156,23 @@
         overflow-x: hidden;
         overscroll-behavior: contain;
         scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-        padding: 10px;
+        scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+        padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
     }
     .monitor-body[hidden] {
         display: none;
     }
     .widget-card {
-        background: rgba(0, 0, 0, 0.22);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(10, 18, 14, 0.35);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 6px;
         padding: 10px 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
         display: flex;
         flex-direction: column;
     }
