@@ -415,13 +415,13 @@
                         @enderror
                     </div>
 
-                    <div class="forgot-wrapper">
+                    {{-- <div class="forgot-wrapper">
                         @if (Route::has('password.request'))
                         <a href="{{ route('password.request') }}" class="forgot-link">Lupa Kata Sandi?</a>
                         @else
                         <a href="#" class="forgot-link">Lupa Kata Sandi?</a>
                         @endif
-                    </div>
+                    </div> --}}
 
                     <button type="submit" class="btn-masuk">
                         <i class="mdi mdi-login-variant"></i>
