@@ -580,24 +580,72 @@
     if ($realCorridors->isEmpty()) {
         $realCorridors = $project->workspaces()->get();
     }
-    $corridorData = $realCorridors->map(function ($c) use ($mapClusters) {
+
+    $allProjectSensors = \App\Models\Sensor::with(['monitoringStation', 'workspace'])
+        ->where(function ($q) use ($project) {
+            $q->whereHas('monitoringStation', fn ($ms) => $ms->where('project_id', $project->id))
+              ->orWhereHas('workspace', fn ($ws) => $ws->where('project_id', $project->id));
+        })->get();
+
+    $corridorData = $realCorridors->map(function ($c) use ($mapClusters, $allProjectSensors) {
         $cName = $c->name ?? 'Koridor';
-        $clusterMatch = collect($mapClusters ?? [])->first(fn ($cl) => ($cl['name'] ?? '') === $cName);
-        $status = $clusterMatch['status'] ?? ($c->status ?? 'Normal');
-        $isDanger = !empty($clusterMatch['is_danger']);
-        $class = match (strtolower($status)) {
-            'awas', 'bahaya', 'danger' => 'status-awas',
-            'siaga' => 'status-siaga',
-            'waspada', 'warning' => 'status-waspada',
-            default => 'status-normal',
-        };
+        $cCode = $c->corridor_code ?? '';
+
+        $matchedSensors = $allProjectSensors->filter(function ($s) use ($c, $cName, $cCode) {
+            if ($s->workspace_id && $s->workspace_id === $c->workspace_id) return true;
+            $stCode = strtolower(optional($s->monitoringStation)->station_code ?? '');
+            $sName = strtolower($s->sensor_code ?? '');
+            $cLower = strtolower($cName);
+            $codeLower = strtolower($cCode);
+            foreach (['kklg', 'kkl', 'kkm', 'kkg'] as $prefix) {
+                if ((str_contains($cLower, $prefix) || str_contains($codeLower, $prefix)) && (str_contains($stCode, $prefix) || str_contains($sName, $prefix))) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if ($matchedSensors->isEmpty()) {
+            $matchedSensors = $allProjectSensors;
+        }
+
+        $hasAwas = $matchedSensors->contains(fn ($s) => in_array(strtolower($s->status ?? ''), ['awas', 'danger', 'bahaya', 'critical']));
+        $hasSiaga = $matchedSensors->contains(fn ($s) => strtolower($s->status ?? '') === 'siaga');
+        $hasWaspada = $matchedSensors->contains(fn ($s) => in_array(strtolower($s->status ?? ''), ['waspada', 'warning']));
+
+        if ($hasAwas) {
+            $status = 'Awas';
+            $class = 'status-awas';
+            $icon = 'bx-cloud-lightning text-danger';
+            $tde = 'Menguat';
+            $siren = 'on';
+        } elseif ($hasSiaga) {
+            $status = 'Siaga';
+            $class = 'status-siaga';
+            $icon = 'bx-cloud-rain text-danger';
+            $tde = '→ Basah';
+            $siren = 'on';
+        } elseif ($hasWaspada) {
+            $status = 'Waspada';
+            $class = 'status-waspada';
+            $icon = 'bx-cloud text-warning';
+            $tde = '→ Kering';
+            $siren = 'off';
+        } else {
+            $status = 'Normal';
+            $class = 'status-normal';
+            $icon = 'bx-sun text-warning';
+            $tde = 'Stabil';
+            $siren = 'off';
+        }
+
         return [
             'name' => $cName,
             'status' => $status,
             'class' => $class,
-            'icon' => $isDanger ? 'bx-cloud-lightning text-danger' : 'bx-sun text-warning',
-            'tde' => $isDanger ? 'Menguat' : 'Stabil',
-            'siren' => $isDanger ? 'on' : 'off',
+            'icon' => $icon,
+            'tde' => $tde,
+            'siren' => $siren,
         ];
     });
 
@@ -689,20 +737,20 @@
                 <table class="widget-table">
                     <thead>
                         <tr>
-                            <th>Koridor</th>
-                            <th>Status</th>
-                            <th>Cuaca</th>
-                            <th>TDE</th>
-                            <th style="text-align: right;">Sirine</th>
+                            <th style="width: 28%;">Koridor</th>
+                            <th style="width: 20%; text-align: center;">Status</th>
+                            <th style="width: 14%; text-align: center;">Cuaca</th>
+                            <th style="width: 18%; text-align: center;">TDE</th>
+                            <th style="width: 20%; text-align: right;">Sirine</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($corridorData as $corridor)
                         <tr>
                             <td><strong>{{ $corridor['name'] }}</strong></td>
-                            <td><span class="badge-status {{ $corridor['class'] }}">{{ $corridor['status'] }}</span></td>
-                            <td><i class="bx {{ $corridor['icon'] }}"></i></td>
-                            <td><span class="badge-tde">{{ $corridor['tde'] }}</span></td>
+                            <td style="text-align: center;"><span class="badge-status {{ $corridor['class'] }}">{{ $corridor['status'] }}</span></td>
+                            <td style="text-align: center;"><i class="bx {{ $corridor['icon'] }}" style="font-size: 15px;"></i></td>
+                            <td style="text-align: center;"><span class="badge-tde">{{ $corridor['tde'] }}</span></td>
                             <td style="text-align: right;">
                                 <button type="button" class="siren-pill-btn" onclick="document.querySelector('[data-monitor=\'siren-toggle\']')?.click()">
                                     <span class="{{ $corridor['siren'] === 'on' ? 'active-on' : '' }}">ON</span><span class="{{ $corridor['siren'] === 'off' ? 'active-off' : '' }}">OFF</span>
@@ -765,12 +813,12 @@
                 <table class="widget-table">
                     <thead>
                         <tr>
-                            <th>Kode SE</th>
-                            <th>Last Ping</th>
-                            <th>Cuaca</th>
-                            <th>Signal</th>
-                            <th>Battery</th>
-                            <th style="text-align: right;">TDE Status</th>
+                            <th style="width: 25%;">Kode SE</th>
+                            <th style="width: 17%; text-align: center;">Last Ping</th>
+                            <th style="width: 12%; text-align: center;">Cuaca</th>
+                            <th style="width: 13%; text-align: center;">Signal</th>
+                            <th style="width: 13%; text-align: center;">Battery</th>
+                            <th style="width: 20%; text-align: left; padding-left: 2px;">TDE Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -782,11 +830,11 @@
                                     <small class="text-muted d-block" style="font-size: 9.5px;">{{ $ms['sensor_count'] }} sensor</small>
                                 @endif
                             </td>
-                            <td>{{ $ms['ping'] }}</td>
-                            <td><i class="bx {{ $ms['icon'] }}"></i></td>
-                            <td>{{ $ms['signal'] }}</td>
-                            <td>{{ $ms['battery'] }}</td>
-                            <td style="text-align: right;"><span class="badge-tde">{{ $ms['tde'] }}</span></td>
+                            <td style="text-align: center;">{{ $ms['ping'] }}</td>
+                            <td style="text-align: center;"><i class="bx {{ $ms['icon'] }}" style="font-size: 15px;"></i></td>
+                            <td style="text-align: center;">{{ $ms['signal'] }}</td>
+                            <td style="text-align: center;">{{ $ms['battery'] }}</td>
+                            <td style="text-align: left; padding-left: 2px;"><span class="badge-tde">{{ $ms['tde'] }}</span></td>
                         </tr>
                         @empty
                         <tr>
