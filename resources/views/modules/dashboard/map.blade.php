@@ -227,40 +227,578 @@
 </style>
 
     <style>
-        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         #sensor-cluster-map { height: 100vh; height: 100dvh; min-height: 0; border-radius: 0; }
         .project-map-header {
-            position: absolute; z-index: 1000; top: 16px; left: 60px;
-            display: flex; align-items: center; gap: 12px;
-            max-width: calc(100% - clamp(360px, 32vw, 460px) - 100px); padding: 10px 14px;
-            background: #fff; border-radius: 5px; box-shadow: 0 4px 18px rgba(18, 38, 63, .16);
+            position: absolute;
+            z-index: 1000;
+            top: 14px;
+            left: 16px;
+            right: calc(clamp(380px, 29vw, 440px) + 24px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 14px;
+            background: rgba(22, 33, 28, 0.82);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+            color: #ffffff;
         }
-        .project-map-title { min-width: 0; }
-        .project-map-title h1 { font-size: 15px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .project-map-title p { font-size: 12px; color: #74788d; margin: 3px 0 0; }
-        .project-map-back { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; color: #343a40; border-radius: 6px; }
-        .project-map-back:hover, .project-map-back:focus-visible { background: #f1f4f8; }
+        .dash-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .dash-back-btn, .dash-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        .dash-back-btn:hover, .dash-action-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            color: #ffffff;
+        }
+        .dash-select-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        .dash-select {
+            appearance: none;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 26px 6px 10px;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dash-select:hover, .dash-select:focus {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .dash-select option {
+            background: #1e293b;
+            color: #ffffff;
+        }
+        .dash-select-container i {
+            position: absolute;
+            right: 8px;
+            pointer-events: none;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+        .dash-weather-timeline {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 3px 6px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .dash-timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #9ca3af;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dash-timeline-item:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .dash-timeline-item.active {
+            background: rgba(16, 185, 129, 0.25);
+            color: #34d399;
+            font-weight: 600;
+        }
+        .dash-timeline-item i {
+            font-size: 13px;
+        }
+        .dash-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .dash-hydrology-container {
+            position: absolute;
+            z-index: 900;
+            bottom: 16px;
+            left: 16px;
+            width: 530px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .hydro-card {
+            background: rgba(22, 33, 28, 0.82);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #ffffff;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+        }
+        .hydro-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .hydro-station-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .hydro-time {
+            font-size: 10.5px;
+            color: #9ca3af;
+        }
+        .hydro-card-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .hydro-metric-col {
+            display: flex;
+            flex-direction: column;
+        }
+        .hydro-metric-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
+        }
+        .hydro-metric-val {
+            display: flex;
+            align-items: baseline;
+            gap: 3px;
+        }
+        .hydro-metric-val .val-num {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.1;
+        }
+        .hydro-metric-val .val-unit {
+            font-size: 11px;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+        .hydro-trend {
+            font-size: 10.5px;
+            font-weight: 600;
+            margin-top: 3px;
+        }
+        .trend-up {
+            color: #34d399;
+        }
+        .trend-down {
+            color: #f87171;
+        }
+        .hydro-meta-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10.5px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+        .dash-legend-card {
+            position: absolute;
+            z-index: 900;
+            bottom: 16px;
+            left: 560px;
+            width: 220px;
+            background: rgba(22, 33, 28, 0.82);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #ffffff;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+        }
+        .legend-card-header {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .legend-card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .legend-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: #e2e8f0;
+            cursor: pointer;
+            margin: 0;
+            user-select: none;
+        }
+        .legend-checkbox-item input[type="checkbox"] {
+            width: 13px;
+            height: 13px;
+            accent-color: #10b981;
+            cursor: pointer;
+            margin: 0;
+        }
+        .legend-symbol {
+            display: inline-block;
+            width: 18px;
+            height: 3px;
+            border-radius: 2px;
+        }
+        .sym-corridor { background: #0D47A1; height: 3px; }
+        .sym-river { background: #38bdf8; height: 2px; }
+        .sym-boundary { background: #94a3b8; height: 2px; border-top: 2px dashed #cbd5e1; }
+        .sym-cfpe { background: #ef4444; height: 2px; border-top: 2px dashed #f87171; }
+        .legend-symbol-icon { font-size: 12px; width: 18px; text-align: center; }
+        .legend-symbol-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            width: 16px;
+            height: 14px;
+            color: #ffffff;
+        }
+        .map-badge-tag {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            padding: 3px 8px;
+            background: #ffffff;
+            color: #1e293b;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(0, 0, 0, 0.15);
+        }
+        .hulu-tag {
+            color: #0f766e;
+            border-color: #0f766e;
+        }
+        .hilir-tag {
+            color: #b45309;
+            border-color: #b45309;
+        }
+        .cfpe-route-marker-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px;
+            background: rgba(22, 33, 28, 0.85);
+            color: #ffffff;
+            font-size: 10.5px;
+            font-weight: 700;
+            border-radius: 4px;
+            border: 1px solid rgba(239, 68, 68, 0.6);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        .cfpe-route-marker-tag .route-dash {
+            color: #ef4444;
+            font-weight: 900;
+        }
+        .map-station-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px;
+            background: rgba(20, 30, 25, 0.9);
+            border-radius: 4px;
+            color: #ffffff;
+            font-size: 10.5px;
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .pill-ms {
+            border-color: rgba(59, 130, 246, 0.6);
+        }
+        .pill-ws {
+            border-color: rgba(245, 158, 11, 0.6);
+        }
         .warning-station-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #b7791f; border-radius: 50%; color: #854d0e; box-shadow: 0 3px 12px rgba(18,38,63,.25); font-size: 22px; }
         .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
-        @media (max-width: 767px) {
-            .project-map-header { max-width: calc(100% - 132px); }
+        @media (max-width: 1200px) {
+            .dash-legend-card { display: none; }
+        }
+        @media (max-width: 991px) {
+            .project-map-header {
+                right: 16px;
+                top: 10px;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .dash-weather-timeline { display: none; }
+            .dash-hydrology-container {
+                width: calc(100vw - 32px);
+                max-width: 530px;
+            }
         }
         @media (max-width: 575px) {
-            .project-map-header { top: 10px; gap: 6px; padding: 8px; }
-            .project-map-title h1 { font-size: 13px; }
-            #map-fit-filtered { padding: 4px; }
+            .dash-hydrology-container { display: none; }
         }
     </style>
 </head>
 <body>
     <div id="sensor-cluster-map" role="region" aria-label="Peta {{ $project->displayLabel() }}"></div>
+
     <header class="project-map-header">
-        <a href="{{ route('dashboard') }}" class="project-map-back" aria-label="Kembali ke daftar project" title="Kembali ke daftar project"><i class="bx bx-arrow-back fs-4" aria-hidden="true"></i></a>
-        <div class="project-map-title">
-            <h1>{{ $project->displayLabel() }}</h1>
+        <div class="dash-header-left">
+            <a href="{{ route('dashboard') }}" class="dash-back-btn" aria-label="Kembali ke daftar project" title="Kembali ke daftar project">
+                <i class="bx bx-arrow-back" aria-hidden="true"></i>
+            </a>
+            <div class="dash-select-container">
+                <select class="dash-select" id="dash-corridor-select" aria-label="Pilih Koridor">
+                    <option value="kali-mujur" selected>Kali Mujur</option>
+                    <option value="kali-leprak">Kali Leprak</option>
+                    <option value="kali-lengkong">Kali Lengkong</option>
+                    <option value="kali-glidik">Kali Glidik</option>
+                </select>
+                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+            </div>
+            <div class="dash-select-container">
+                <select class="dash-select" id="dash-cluster-select" aria-label="Pilih Cluster">
+                    <option value="cluster-01" selected>Cluster 01</option>
+                    <option value="cluster-02">Cluster 02</option>
+                    <option value="cluster-03">Cluster 03</option>
+                </select>
+                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+            </div>
         </div>
-        <button type="button" id="map-fit-filtered" class="btn btn-sm btn-light" aria-label="Kembali ke area Semeru" title="Kembali ke area Semeru"><i class="bx bx-target-lock fs-5" aria-hidden="true"></i></button>
+
+        <div class="dash-weather-timeline">
+            <div class="dash-timeline-item active">
+                <span class="t-date">09 Nov</span>
+                <i class="bx bx-sun text-warning" aria-hidden="true"></i>
+            </div>
+            <div class="dash-timeline-item">
+                <span class="t-date">10 Nov</span>
+                <i class="bx bx-sun text-warning" aria-hidden="true"></i>
+            </div>
+            <div class="dash-timeline-item">
+                <span class="t-date">11 Nov</span>
+                <i class="bx bx-cloud text-light" aria-hidden="true"></i>
+            </div>
+            <div class="dash-timeline-item">
+                <span class="t-date">12 Nov</span>
+                <i class="bx bx-cloud-rain text-info" aria-hidden="true"></i>
+            </div>
+            <div class="dash-timeline-item">
+                <span class="t-date">13 Nov</span>
+                <i class="bx bx-cloud text-light" aria-hidden="true"></i>
+            </div>
+        </div>
+
+        <div class="dash-header-actions">
+            <button type="button" id="map-fit-filtered" class="dash-action-btn" aria-label="Kembali ke area Semeru" title="Kembali ke area Semeru">
+                <i class="bx bx-target-lock" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="dash-action-btn" id="btn-ews-config" aria-label="Pengaturan EWS" title="Hydromet EWS Configuration">
+                <i class="bx bx-cog" aria-hidden="true"></i>
+            </button>
+        </div>
     </header>
+
+    <div class="dash-hydrology-container" id="dash-hydrology-panel" aria-label="Pemantauan Hidrologi">
+        <div class="hydro-card">
+            <div class="hydro-card-header">
+                <span class="hydro-station-name">Hidrologi - MS-005</span>
+                <span class="hydro-time">14:20</span>
+            </div>
+            <div class="hydro-card-body">
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">TMA</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">2.45</span>
+                        <span class="val-unit">m</span>
+                    </div>
+                    <span class="hydro-trend trend-up">+3 cm / 430m</span>
+                </div>
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">Kecepatan Arus</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">3.20</span>
+                        <span class="val-unit">m/s</span>
+                    </div>
+                    <div class="hydro-meta-info">
+                        <span><i class="bx bxs-battery me-1" aria-hidden="true"></i>87%</span>
+                        <span><i class="bx bx-signal-5 me-1" aria-hidden="true"></i>4/4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hydro-card">
+            <div class="hydro-card-header">
+                <span class="hydro-station-name">Hidrologi - MS-006</span>
+                <span class="hydro-time">14:22</span>
+            </div>
+            <div class="hydro-card-body">
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">TMA</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">1.92</span>
+                        <span class="val-unit">m</span>
+                    </div>
+                    <span class="hydro-trend trend-up">+5 cm / 430m</span>
+                </div>
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">Kecepatan Arus</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">2.60</span>
+                        <span class="val-unit">m/s</span>
+                    </div>
+                    <div class="hydro-meta-info">
+                        <span><i class="bx bxs-battery me-1" aria-hidden="true"></i>78%</span>
+                        <span><i class="bx bx-signal-4 me-1" aria-hidden="true"></i>3/4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hydro-card">
+            <div class="hydro-card-header">
+                <span class="hydro-station-name">Hidrologi - MS-007</span>
+                <span class="hydro-time">14:21</span>
+            </div>
+            <div class="hydro-card-body">
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">TMA</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">2.18</span>
+                        <span class="val-unit">m</span>
+                    </div>
+                    <span class="hydro-trend trend-up">+2 cm / 430m</span>
+                </div>
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">Kecepatan Arus</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">2.85</span>
+                        <span class="val-unit">m/s</span>
+                    </div>
+                    <div class="hydro-meta-info">
+                        <span><i class="bx bxs-battery me-1" aria-hidden="true"></i>91%</span>
+                        <span><i class="bx bx-signal-5 me-1" aria-hidden="true"></i>4/4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hydro-card">
+            <div class="hydro-card-header">
+                <span class="hydro-station-name">Hidrologi - MS-008</span>
+                <span class="hydro-time">14:19</span>
+            </div>
+            <div class="hydro-card-body">
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">TMA</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">1.76</span>
+                        <span class="val-unit">m</span>
+                    </div>
+                    <span class="hydro-trend trend-down">-1 cm / 430m</span>
+                </div>
+                <div class="hydro-metric-col">
+                    <span class="hydro-metric-label">Kecepatan Arus</span>
+                    <div class="hydro-metric-val">
+                        <span class="val-num">1.94</span>
+                        <span class="val-unit">m/s</span>
+                    </div>
+                    <div class="hydro-meta-info">
+                        <span><i class="bx bxs-battery-low me-1" aria-hidden="true"></i>68%</span>
+                        <span><i class="bx bx-signal-3 me-1" aria-hidden="true"></i>2/4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dash-legend-card" id="dash-legend-card" aria-label="Legenda Peta">
+        <div class="legend-card-header">
+            <span>Legenda Peta</span>
+        </div>
+        <div class="legend-card-body">
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-corridor" checked>
+                <span class="legend-symbol sym-corridor"></span>
+                <span class="legend-text">Monitoring Corridor</span>
+            </label>
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-ms" checked>
+                <span class="legend-symbol-icon sym-ms">🗼</span>
+                <span class="legend-text">Monitoring Station</span>
+            </label>
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-ws" checked>
+                <span class="legend-symbol-icon sym-ws">🔔</span>
+                <span class="legend-text">Warning Station</span>
+            </label>
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-river" checked>
+                <span class="legend-symbol sym-river"></span>
+                <span class="legend-text">Jaringan Sungai</span>
+            </label>
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-boundary" checked>
+                <span class="legend-symbol sym-boundary"></span>
+                <span class="legend-text">Batas Administrasi</span>
+            </label>
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-labels" checked>
+                <span class="legend-symbol-badge">Aa</span>
+                <span class="legend-text">Label Stasiun</span>
+            </label>
+            <label class="legend-checkbox-item">
+                <input type="checkbox" id="chk-cfpe" checked>
+                <span class="legend-symbol sym-cfpe"></span>
+                <span class="legend-text">CFPE Reference Route</span>
+            </label>
+        </div>
+    </div>
 @include('modules.dashboard.partials.monitoring-panel')
 <script src="{{ URL::asset('build/libs/leaflet/leaflet.js') }}"></script>
 <script src="{{ asset('build/js/pages/dashboard-weather-widget.js') }}?v={{ filemtime(public_path('build/js/pages/dashboard-weather-widget.js')) }}"></script>
@@ -859,7 +1397,92 @@
             .catch(function () {});
         }
 
-        // Load spatial data after a short delay
+        var huluIcon = L.divIcon({
+            className: 'map-hulu-marker-wrap',
+            html: '<div class="map-badge-tag hulu-tag"><span>HULU</span> <i class="bx bx-down-arrow-alt"></i></div>',
+            iconSize: [64, 26],
+            iconAnchor: [32, 13]
+        });
+        L.marker([-8.125, 112.930], { icon: huluIcon, interactive: false }).addTo(map);
+
+        var hilirIcon = L.divIcon({
+            className: 'map-hilir-marker-wrap',
+            html: '<div class="map-badge-tag hilir-tag"><span>HILIR</span></div>',
+            iconSize: [54, 26],
+            iconAnchor: [27, 13]
+        });
+        L.marker([-8.235, 113.020], { icon: hilirIcon, interactive: false }).addTo(map);
+
+        var cfpeRouteIcon = L.divIcon({
+            className: 'map-cfpe-tag-wrap',
+            html: '<span class="cfpe-route-marker-tag"><span class="route-dash">---</span> CFPE Route</span>',
+            iconSize: [110, 22],
+            iconAnchor: [55, 11]
+        });
+        L.marker([-8.170, 112.985], { icon: cfpeRouteIcon, interactive: false }).addTo(map);
+
+        var stationTagLayer = L.layerGroup().addTo(map);
+        var stationTags = [
+            { name: 'MS-001', lat: -8.138, lng: 112.942, type: 'ms' },
+            { name: 'WS-001', lat: -8.156, lng: 112.956, type: 'ws' },
+            { name: 'MS-002', lat: -8.178, lng: 112.972, type: 'ms' },
+            { name: 'WS-002', lat: -8.192, lng: 112.988, type: 'ws' },
+            { name: 'MS-003', lat: -8.208, lng: 113.002, type: 'ms' },
+            { name: 'MS-004', lat: -8.220, lng: 113.015, type: 'ms' }
+        ];
+
+        stationTags.forEach(function (st) {
+            var tagIcon = L.divIcon({
+                className: 'map-station-tag-wrap',
+                html: '<div class="map-station-pill ' + (st.type === 'ms' ? 'pill-ms' : 'pill-ws') + '">' +
+                      '<span class="st-icon">' + (st.type === 'ms' ? '🗼' : '🔔') + '</span>' +
+                      '<span class="st-name">' + st.name + '</span>' +
+                      '</div>',
+                iconSize: [76, 24],
+                iconAnchor: [38, 12]
+            });
+            L.marker([st.lat, st.lng], { icon: tagIcon, interactive: true }).bindPopup('<strong>' + st.name + '</strong>').addTo(stationTagLayer);
+        });
+
+        var chkLabels = document.getElementById('chk-labels');
+        if (chkLabels) {
+            chkLabels.addEventListener('change', function () {
+                if (this.checked) map.addLayer(stationTagLayer);
+                else map.removeLayer(stationTagLayer);
+            });
+        }
+
+        var chkWs = document.getElementById('chk-ws');
+        if (chkWs) {
+            chkWs.addEventListener('change', function () {
+                if (this.checked) map.addLayer(warningLayer);
+                else map.removeLayer(warningLayer);
+            });
+        }
+
+        var chkCorridor = document.getElementById('chk-corridor');
+        var chkMs = document.getElementById('chk-ms');
+        var chkRiver = document.getElementById('chk-river');
+        var chkBoundary = document.getElementById('chk-boundary');
+        var chkCfpe = document.getElementById('chk-cfpe');
+
+        [chkCorridor, chkMs, chkRiver, chkBoundary, chkCfpe].forEach(function (chk) {
+            if (chk) {
+                chk.addEventListener('change', function () {
+                    var anyChecked = (chkCorridor && chkCorridor.checked) ||
+                                     (chkMs && chkMs.checked) ||
+                                     (chkRiver && chkRiver.checked) ||
+                                     (chkBoundary && chkBoundary.checked) ||
+                                     (chkCfpe && chkCfpe.checked);
+                    if (anyChecked && !map.hasLayer(spatialLayer)) {
+                        map.addLayer(spatialLayer);
+                    } else if (!anyChecked && map.hasLayer(spatialLayer)) {
+                        map.removeLayer(spatialLayer);
+                    }
+                });
+            }
+        });
+
         setTimeout(loadSpatialOverlay, 2000);
 
     });
