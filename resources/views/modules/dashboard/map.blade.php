@@ -247,6 +247,10 @@
             border-radius: 8px;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
             color: #ffffff;
+            transition: right 0.3s ease;
+        }
+        .project-map-header.sidebar-collapsed {
+            right: 76px;
         }
         .dash-header-left {
             display: flex;
@@ -307,6 +311,9 @@
             color: #95a5a0;
         }
         .dash-weather-timeline {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             align-items: center;
             gap: 4px;
@@ -314,6 +321,13 @@
             padding: 3px 6px;
             border-radius: 6px;
             border: 1px solid #374b47;
+            z-index: 2;
+        }
+        @media (max-width: 1199px) {
+            .dash-weather-timeline {
+                position: static;
+                transform: none;
+            }
         }
         .dash-timeline-item {
             display: flex;
@@ -1525,22 +1539,35 @@
         var panelToggleBtn = document.querySelector('[data-monitor="panel-toggle"]');
         var openBtn = document.getElementById('map-monitor-open');
         var legendCard = document.getElementById('dash-legend-card');
-        if (panelToggleBtn && legendCard) {
+        var mapHeader = document.querySelector('.project-map-header');
+
+        if (panelToggleBtn) {
             panelToggleBtn.addEventListener('click', function () {
                 setTimeout(function () {
                     var panel = document.getElementById('map-monitor-panel');
-                    if (panel && panel.hidden) {
-                        legendCard.classList.add('sidebar-collapsed');
-                    } else {
-                        legendCard.classList.remove('sidebar-collapsed');
+                    var isHidden = panel && panel.hidden;
+                    if (legendCard) {
+                        if (isHidden) legendCard.classList.add('sidebar-collapsed');
+                        else legendCard.classList.remove('sidebar-collapsed');
+                    }
+                    if (mapHeader) {
+                        if (isHidden) mapHeader.classList.add('sidebar-collapsed');
+                        else mapHeader.classList.remove('sidebar-collapsed');
+                    }
+                    if (isHidden && typeof map !== 'undefined' && map.panBy) {
+                        map.panBy([-180, 0], { duration: 0.4 });
                     }
                 }, 50);
             });
         }
-        if (openBtn && legendCard) {
+        if (openBtn) {
             openBtn.addEventListener('click', function () {
                 setTimeout(function () {
-                    legendCard.classList.remove('sidebar-collapsed');
+                    if (legendCard) legendCard.classList.remove('sidebar-collapsed');
+                    if (mapHeader) mapHeader.classList.remove('sidebar-collapsed');
+                    if (typeof map !== 'undefined' && map.panBy) {
+                        map.panBy([180, 0], { duration: 0.4 });
+                    }
                 }, 50);
             });
         }
