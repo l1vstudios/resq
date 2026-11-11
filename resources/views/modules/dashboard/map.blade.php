@@ -239,13 +239,13 @@
             align-items: center;
             justify-content: space-between;
             gap: 10px;
-            padding: 8px 14px;
-            background: #243330;
-            -webkit-backdrop-filter: none;
-            backdrop-filter: none;
-            border: 1px solid #374b47;
+            padding: 7px 14px;
+            background: rgba(28, 40, 36, 0.82);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 8px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
             color: #ffffff;
             transition: right 0.3s ease;
         }
@@ -255,8 +255,9 @@
         .dash-header-left {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             flex-shrink: 0;
+            min-width: 0;
         }
         .dash-back-btn, .dash-action-btn {
             display: inline-flex;
@@ -265,8 +266,8 @@
             width: 32px;
             height: 32px;
             border-radius: 6px;
-            background: #1c2926;
-            border: 1px solid #374b47;
+            background: rgba(18, 28, 24, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             color: #ffffff;
             cursor: pointer;
             font-size: 16px;
@@ -274,33 +275,37 @@
             text-decoration: none;
         }
         .dash-back-btn:hover, .dash-action-btn:hover {
-            background: #2b3d39;
+            background: rgba(36, 52, 46, 0.95);
             color: #ffffff;
         }
         .dash-select-container {
             position: relative;
             display: inline-flex;
             align-items: center;
+            flex-shrink: 0;
         }
         .dash-select {
             appearance: none;
-            background: #1c2926;
-            border: 1px solid #374b47;
+            background: rgba(18, 28, 24, 0.85);
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 6px;
             color: #ffffff;
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 600;
-            padding: 6px 26px 6px 10px;
+            padding: 5px 24px 5px 9px;
             outline: none;
             cursor: pointer;
             transition: all 0.2s ease;
+            white-space: nowrap;
         }
         .dash-select:hover, .dash-select:focus {
-            background: #243531;
+            background: rgba(28, 42, 36, 0.95);
             border-color: #34d399;
         }
         .dash-select option {
-            background: #1c2926;
+            background: #141f19;
             color: #ffffff;
         }
         .dash-select-container i {
@@ -311,23 +316,17 @@
             color: #95a5a0;
         }
         .dash-weather-timeline {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
             display: flex;
             align-items: center;
             gap: 4px;
-            background: #1c2926;
+            background: rgba(18, 28, 24, 0.85);
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
             padding: 3px 6px;
             border-radius: 6px;
-            border: 1px solid #374b47;
-            z-index: 2;
-        }
-        @media (max-width: 1199px) {
-            .dash-weather-timeline {
-                position: static;
-                transform: none;
-            }
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            flex-shrink: 0;
+            margin: 0 auto;
         }
         .dash-timeline-item {
             display: flex;
@@ -373,14 +372,14 @@
             scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
-            background: #243330;
-            -webkit-backdrop-filter: none;
-            backdrop-filter: none;
-            border: 1px solid #374b47;
+            background: rgba(28, 40, 36, 0.82);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 6px;
             padding: 10px 12px;
             color: #ffffff;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
         .hydro-card-header {
             display: flex;
@@ -464,14 +463,14 @@
             bottom: 24px;
             right: calc(clamp(380px, 29vw, 440px) + 24px);
             width: 220px;
-            background: #243330;
-            -webkit-backdrop-filter: none;
-            backdrop-filter: none;
-            border: 1px solid #374b47;
+            background: rgba(28, 40, 36, 0.82);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 6px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
             transition: right 0.3s ease;
         }
         .dash-legend-card.sidebar-collapsed {

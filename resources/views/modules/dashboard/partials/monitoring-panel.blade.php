@@ -44,18 +44,18 @@
         align-items: center;
         justify-content: center;
         padding: 0;
-        border: 1px solid #374b47;
+        border: 1px solid rgba(255, 255, 255, 0.18);
         border-radius: 8px;
-        background: #243330;
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
+        background: rgba(28, 40, 36, 0.82);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
         color: #ffffff;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
         font-size: 22px;
         cursor: pointer;
     }
     .monitor-open-button:hover {
-        background: #2b3d39;
+        background: rgba(36, 52, 46, 0.95);
     }
     .monitor-open-button:focus-visible {
         outline: 2px solid #34d399;
@@ -68,12 +68,12 @@
         align-items: center;
         justify-content: space-between;
         padding: 8px 12px;
-        background: #243330;
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-        border: 1px solid #374b47;
+        background: rgba(28, 40, 36, 0.82);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 6px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         margin-bottom: 8px;
     }
     .monitor-header-main {
@@ -168,13 +168,13 @@
         display: none;
     }
     .widget-card {
-        background: #243330;
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-        border: 1px solid #374b47;
+        background: rgba(28, 40, 36, 0.82);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 6px;
         padding: 10px 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         display: flex;
         flex-direction: column;
     }
