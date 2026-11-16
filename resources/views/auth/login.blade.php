@@ -351,9 +351,9 @@
     <div class="spec-canvas">
 
         <nav class="top-nav-wrapper">
-            <a href="#about-us" class="top-nav-link">About Us</a>
+            <a href="{{ route('about-us') }}" class="top-nav-link">About Us</a>
             <span class="top-nav-divider">|</span>
-            <a href="#contact-us" class="top-nav-link">Contact Us</a>
+            <a href="{{ route('contact-us') }}" class="top-nav-link">Contact Us</a>
         </nav>
 
         <div class="main-area">
@@ -404,7 +404,7 @@
                                 autocomplete="current-password"
                                 required
                             >
-                            <button type="button" class="btn-input-action" id="password-addon" title="Show/Hide" tabindex="-1">
+                            <button type="button" class="btn-input-action" id="password-addon" title="Tampilkan password" aria-label="Tampilkan password" aria-pressed="false" aria-controls="userpassword">
                                 <i class="mdi mdi-eye-off-outline" id="password-toggle-icon"></i>
                             </button>
                         </div>
@@ -453,12 +453,18 @@
                 e.preventDefault();
                 if (passwordInput.type === 'password') {
                     passwordInput.type = 'text';
+                    toggleBtn.setAttribute('aria-pressed', 'true');
+                    toggleBtn.setAttribute('aria-label', 'Sembunyikan password');
+                    toggleBtn.title = 'Sembunyikan password';
                     if (toggleIcon) {
                         toggleIcon.classList.remove('mdi-eye-off-outline');
                         toggleIcon.classList.add('mdi-eye-outline');
                     }
                 } else {
                     passwordInput.type = 'password';
+                    toggleBtn.setAttribute('aria-pressed', 'false');
+                    toggleBtn.setAttribute('aria-label', 'Tampilkan password');
+                    toggleBtn.title = 'Tampilkan password';
                     if (toggleIcon) {
                         toggleIcon.classList.remove('mdi-eye-outline');
                         toggleIcon.classList.add('mdi-eye-off-outline');

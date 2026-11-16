@@ -39,6 +39,9 @@ use Illuminate\Support\Facades\Route;
 
 Auth::routes(['verify' => true]);
 
+Route::view('/about-us', 'public.about')->name('about-us');
+Route::view('/contact-us', 'public.contact')->name('contact-us');
+
 Route::get('/', [DashboardController::class, 'index'])->name('root')->middleware('auth');
 
 Route::middleware('auth')->group(function () {

@@ -95,6 +95,82 @@
         return padding;
     }
 
+    function LocalWarningSirenController(options) {
+        this.monitoring = options.monitoring;
+        this.buttons = Array.from(options.buttons || []);
+        this.awasStations = new Set();
+        this.silencedStations = new Set();
+        this.manualStations = new Set();
+        this.playbackBlocked = false;
+
+        this.buttons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.toggleStation(button.getAttribute('data-station-code'));
+            }.bind(this));
+        }, this);
+    }
+
+    LocalWarningSirenController.prototype.stationKey = function (code) {
+        return String(code || '').trim().toUpperCase();
+    };
+
+    LocalWarningSirenController.prototype.syncSensors = function (sensors) {
+        var nextAwas = new Set();
+        (Array.isArray(sensors) ? sensors : []).forEach(function (sensor) {
+            if (sensorState(sensor).tone !== 'awas') return;
+            var code = this.stationKey(sensor.warning_station || sensor.warning_station_code);
+            if (code) nextAwas.add(code);
+        }, this);
+        this.silencedStations.forEach(function (code) {
+            if (!nextAwas.has(code)) this.silencedStations.delete(code);
+        }, this);
+        this.awasStations = nextAwas;
+        if (nextAwas.size === 0 && this.manualStations.size === 0) this.playbackBlocked = false;
+        this.render();
+    };
+
+    LocalWarningSirenController.prototype.isStationActive = function (code) {
+        return !this.playbackBlocked && (this.manualStations.has(code) ||
+            (this.awasStations.has(code) && !this.silencedStations.has(code)));
+    };
+
+    LocalWarningSirenController.prototype.toggleStation = function (stationCode) {
+        var code = this.stationKey(stationCode);
+        if (!code) return;
+        if (this.isStationActive(code)) {
+            this.manualStations.delete(code);
+            if (this.awasStations.has(code)) this.silencedStations.add(code);
+        } else {
+            this.playbackBlocked = false;
+            this.silencedStations.delete(code);
+            if (!this.awasStations.has(code)) this.manualStations.add(code);
+        }
+        this.render();
+    };
+
+    LocalWarningSirenController.prototype.handlePlaybackError = function () {
+        this.playbackBlocked = true;
+        this.render();
+    };
+
+    LocalWarningSirenController.prototype.render = function () {
+        var shouldPlay = false;
+        this.buttons.forEach(function (button) {
+            var stationCode = button.getAttribute('data-station-code') || 'Warning Station';
+            var code = this.stationKey(stationCode);
+            var active = this.isStationActive(code);
+            var automatic = active && this.awasStations.has(code) && !this.silencedStations.has(code);
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', String(active));
+            button.setAttribute('aria-label', (active ? 'Matikan' : 'Aktifkan') + ' suara sirene ' + stationCode + ' di perangkat ini' + (automatic ? ', aktif otomatis karena sensor Awas' : ''));
+            button.title = automatic ? 'Aktif otomatis karena sensor Awas' : 'Suara sirene di perangkat ini';
+            if (active) shouldPlay = true;
+        }, this);
+        if (this.monitoring.sirenRequested !== shouldPlay) this.monitoring.setSiren(shouldPlay);
+    };
+
     function ProjectMapMonitoring(options) {
         this.options = options;
         this.panel = options.panel;
@@ -283,7 +359,8 @@
         }.bind(this)).catch(function () {
             if (this.sirenGeneration !== generation) return;
             this.setSiren(false);
-            this.elements['siren-status'].textContent = 'Suara gagal diputar. Klik untuk mencoba lagi.';
+            if (typeof this.options.onSirenPlaybackError === 'function') this.options.onSirenPlaybackError();
+            this.elements['siren-status'].textContent = 'Suara otomatis belum bisa diputar. Klik sakelar sirine WS untuk mencoba lagi.';
         }.bind(this));
     };
 
@@ -362,9 +439,10 @@
     };
 
     if (typeof module !== 'undefined' && module.exports) {
-        module.exports = { ProjectMapMonitoring: ProjectMapMonitoring, sensorState: sensorState, tdeCardHtml: tdeCardHtml, tdeSummaryHtml: tdeSummaryHtml, sortSensorsByPriority: sortSensorsByPriority, tdePresentation: tdePresentation, mapViewportPadding: mapViewportPadding };
+        module.exports = { ProjectMapMonitoring: ProjectMapMonitoring, LocalWarningSirenController: LocalWarningSirenController, sensorState: sensorState, tdeCardHtml: tdeCardHtml, tdeSummaryHtml: tdeSummaryHtml, sortSensorsByPriority: sortSensorsByPriority, tdePresentation: tdePresentation, mapViewportPadding: mapViewportPadding };
     } else {
         root.ProjectMapMonitoring = ProjectMapMonitoring;
+        root.LocalWarningSirenController = LocalWarningSirenController;
         root.projectMapViewportPadding = mapViewportPadding;
         root.projectMapTdeCard = tdeCardHtml;
     }

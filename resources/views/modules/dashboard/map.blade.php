@@ -1222,23 +1222,14 @@
         var monitoringStationLayer = L.layerGroup().addTo(map);
         var spatialLayer = L.featureGroup().addTo(map);
         var tdeLayer = L.layerGroup().addTo(map);
-        function updateWarningSirenButton(button, active) {
-            var stationCode = button.getAttribute('data-station-code') || 'Warning Station';
-            button.classList.toggle('is-active', active);
-            button.setAttribute('aria-pressed', String(active));
-            button.setAttribute('aria-label', (active ? 'Matikan' : 'Aktifkan') + ' suara sirene ' + stationCode + ' di perangkat ini');
-        }
+        var localSiren;
         var monitoring = new ProjectMapMonitoring({
             panel: document.getElementById('map-monitor-panel'),
             openButton: document.getElementById('map-monitor-open'),
             sensorDialog: document.getElementById('map-sensor-detail'),
             sirenUrl: @json(asset('sound/sirene.mp3')),
-            onSirenStateChange: function (enabled) {
-                if (!enabled) {
-                    document.querySelectorAll('[data-warning-siren]').forEach(function (button) {
-                        updateWarningSirenButton(button, false);
-                    });
-                }
+            onSirenPlaybackError: function () {
+                if (localSiren) localSiren.handlePlaybackError();
             },
             tdeUrl: @json(route('dashboard.projects.tde-data', $project, false)),
             onTdeData: function (stations, presentation) {
@@ -1256,11 +1247,17 @@
                 });
             }
         });
+        localSiren = new LocalWarningSirenController({
+            monitoring: monitoring,
+            buttons: document.querySelectorAll('[data-warning-siren]')
+        });
+        localSiren.syncSensors(sensorPoints);
         window.addEventListener('pagehide', function () { monitoring.destroy(); });
         window.addEventListener('pageshow', function (event) {
             if (event.persisted) {
                 monitoring.destroyed = false;
                 monitoring.start();
+                localSiren.syncSensors(sensorPoints);
             }
         });
 
@@ -1451,6 +1448,7 @@
                         clusters = data.clusters || [];
                         initialAlertActive = data.alert_active;
                         latestMapData = data;
+                        localSiren.syncSensors(sensorPoints);
                         applyDashboardFilters(false);
                     }
                 })
@@ -1957,18 +1955,6 @@
             row.addEventListener('click', function (event) {
                 if (event.target.closest('[data-warning-siren]')) return;
                 monitoring.selectWarningStation(row.getAttribute('data-warning-station-id'));
-            });
-        });
-
-        document.querySelectorAll('[data-warning-siren]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                updateWarningSirenButton(this, !this.classList.contains('is-active'));
-                var hasActiveSiren = Boolean(document.querySelector('[data-warning-siren].is-active'));
-                if (monitoring.sirenRequested !== hasActiveSiren) {
-                    monitoring.setSiren(hasActiveSiren);
-                }
             });
         });
 

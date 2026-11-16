@@ -1,6 +1,26 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ProjectMapMonitoring, sensorState, sortSensorsByPriority, tdePresentation, tdeSummaryHtml, mapViewportPadding } = require('../../public/build/js/pages/project-map-monitoring.js');
+const { ProjectMapMonitoring, LocalWarningSirenController, sensorState, sortSensorsByPriority, tdePresentation, tdeSummaryHtml, mapViewportPadding } = require('../../public/build/js/pages/project-map-monitoring.js');
+
+function sirenButton(code) {
+    const attributes = { 'data-station-code': code };
+    const classes = new Set();
+    return {
+        attributes,
+        classes,
+        addEventListener() {},
+        getAttribute(name) { return attributes[name]; },
+        setAttribute(name, value) { attributes[name] = value; },
+        classList: { toggle(name, active) { if (active) classes.add(name); else classes.delete(name); } }
+    };
+}
+
+function localSirenSetup() {
+    const calls = [];
+    const monitoring = { sirenRequested: false, setSiren(enabled) { this.sirenRequested = enabled; calls.push(enabled); } };
+    const buttons = [sirenButton('WS-A'), sirenButton('WS-B')];
+    return { controller: new LocalWarningSirenController({ monitoring, buttons }), monitoring, buttons, calls };
+}
 
 function setup(options = {}) {
     const elements = {};
@@ -251,13 +271,60 @@ test('stopping a siren while playback is pending keeps it stopped', async () => 
 
 test('blocked audio resets its button and provides a retry message', async () => {
     const sirenStates = [];
-    const { panel, audio, elements } = setup({ onSirenStateChange: enabled => sirenStates.push(enabled) });
+    let playbackErrors = 0;
+    const { panel, audio, elements } = setup({
+        onSirenStateChange: enabled => sirenStates.push(enabled),
+        onSirenPlaybackError: () => { playbackErrors++; }
+    });
     audio.play = () => Promise.reject(new Error('NotAllowedError'));
     await panel.setSiren(true);
     assert.equal(panel.sirenRequested, false);
     assert.deepEqual(sirenStates, [true, false]);
+    assert.equal(playbackErrors, 1);
     assert.equal(elements['siren-toggle'].textContent, 'Aktifkan sirene');
     assert.match(elements['siren-status'].textContent, /mencoba lagi/);
+});
+
+test('an Awas sensor activates only its linked Warning Station and stops when clear', () => {
+    const { controller, buttons, calls } = localSirenSetup();
+    controller.syncSensors([{ warning_station: 'WS-A', status: 'Normal', alert_level: 'Awas' }]);
+    assert.equal(buttons[0].attributes['aria-pressed'], 'true');
+    assert.match(buttons[0].title, /otomatis.*Awas/);
+    assert.equal(buttons[1].attributes['aria-pressed'], 'false');
+    assert.deepEqual(calls, [true]);
+    controller.syncSensors([{ warning_station: 'WS-A', alert_level: 'Awas' }]);
+    assert.deepEqual(calls, [true]);
+    controller.syncSensors([{ warning_station: 'WS-A', alert_level: 'Normal' }]);
+    assert.equal(buttons[0].attributes['aria-pressed'], 'false');
+    assert.deepEqual(calls, [true, false]);
+});
+
+test('silencing an Awas station lasts until its alert clears, then rearms', () => {
+    const { controller, buttons, calls } = localSirenSetup();
+    const awas = [{ warning_station: 'WS-A', status: 'Awas' }];
+    controller.syncSensors(awas);
+    controller.toggleStation('WS-A');
+    controller.syncSensors(awas);
+    assert.equal(buttons[0].attributes['aria-pressed'], 'false');
+    assert.deepEqual(calls, [true, false]);
+    controller.syncSensors([]);
+    controller.syncSensors(awas);
+    assert.equal(buttons[0].attributes['aria-pressed'], 'true');
+    assert.deepEqual(calls, [true, false, true]);
+});
+
+test('blocked autoplay waits for a user retry instead of retrying every poll', () => {
+    const { controller, buttons, monitoring, calls } = localSirenSetup();
+    const awas = [{ warning_station: 'WS-A', status: 'Awas' }];
+    controller.syncSensors(awas);
+    monitoring.sirenRequested = false;
+    controller.handlePlaybackError();
+    controller.syncSensors(awas);
+    assert.equal(buttons[0].attributes['aria-pressed'], 'false');
+    assert.deepEqual(calls, [true]);
+    controller.toggleStation('WS-A');
+    assert.equal(buttons[0].attributes['aria-pressed'], 'true');
+    assert.deepEqual(calls, [true, true]);
 });
 
 test('TDE polling does not overlap, retains results on failure, and stops after disposal', async () => {
