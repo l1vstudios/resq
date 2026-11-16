@@ -4,13 +4,13 @@
 
 @section('page-css')
 <style>
-    .contact-page { padding: 32px 0 72px; }
-    .contact-heading { text-align: center; margin-bottom: 30px; }
+    .contact-page { padding: 8px 0 28px; }
+    .contact-heading { text-align: center; margin-bottom: 18px; }
     .contact-heading h1 { margin: 0; color: #34483e; font-size: clamp(30px, 4vw, 38px); font-weight: 600; line-height: 1.2; }
-    .contact-heading p { margin: 10px auto 0; max-width: 600px; color: #60776b; font-size: 14px; line-height: 1.6; }
-    .contact-card { width: min(600px, 100%); margin: 0 auto; padding: 32px; }
-    .contact-field { margin-bottom: 22px; }
-    .contact-field label { display: block; margin-bottom: 12px; color: #34483e; font-size: 15px; font-weight: 600; line-height: 1; }
+    .contact-heading p { margin: 6px auto 0; max-width: 600px; color: #60776b; font-size: 14px; line-height: 1.6; }
+    .contact-card { width: min(600px, 100%); margin: 0 auto; padding: 24px; }
+    .contact-field { margin-bottom: 14px; }
+    .contact-field label { display: block; margin-bottom: 8px; color: #34483e; font-size: 15px; font-weight: 600; line-height: 1; }
     .contact-field input, .contact-field textarea {
         display: block;
         width: 100%;
@@ -24,18 +24,18 @@
         transition: border-color .2s ease;
     }
     .contact-field input { height: 54px; }
-    .contact-field textarea { min-height: 120px; resize: vertical; }
+    .contact-field textarea { min-height: 90px; resize: vertical; }
     .contact-field input::placeholder, .contact-field textarea::placeholder { color: #9ca9a0; font-size: 13.5px; }
     .contact-field input:focus, .contact-field textarea:focus { border-color: #176d54; }
-    .contact-submit { display: block; width: 100%; height: 54px; margin-top: 28px; border: 0; border-radius: 5px; background: #176d54; color: #fff; font-size: 17px; font-weight: 600; cursor: pointer; transition: background-color .2s ease; }
+    .contact-submit { display: block; width: 100%; height: 54px; margin-top: 16px; border: 0; border-radius: 5px; background: #176d54; color: #fff; font-size: 17px; font-weight: 600; cursor: pointer; transition: background-color .2s ease; }
     .contact-submit:hover { background: #125843; }
     .contact-submit:focus-visible { outline: 2px solid #176d54; outline-offset: 3px; }
     .contact-status { margin: 18px 0 0; color: #60776b; text-align: center; font-size: 13px; line-height: 1.5; }
     .contact-status[hidden] { display: none; }
     @media (max-width: 640px) {
-        .contact-page { padding: 20px 0 56px; }
-        .contact-heading { margin-bottom: 24px; }
-        .contact-card { padding: 24px 20px; }
+        .contact-page { padding: 8px 0 28px; }
+        .contact-heading { margin-bottom: 18px; }
+        .contact-card { padding: 20px; }
     }
 </style>
 @endsection

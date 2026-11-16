@@ -22,14 +22,14 @@
         .public-header {
             width: min(1440px, 100%);
             margin: 0 auto;
-            padding: 28px 60px;
+            padding: 12px 60px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 24px;
         }
         .public-brand { display: inline-flex; align-items: center; text-decoration: none; flex: 0 0 auto; }
-        .public-brand img { display: block; width: 190px; height: 64px; object-fit: cover; object-position: center 45%; }
+        .public-brand img { display: block; width: 170px; height: 56px; object-fit: cover; object-position: center 45%; }
         .public-nav { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px 18px; }
         .public-nav a { text-decoration: none; color: #40594c; font-size: 17px; font-weight: 400; line-height: 1; white-space: nowrap; }
         .public-nav a:hover, .public-nav a[aria-current="page"] { color: #176d54; }
@@ -37,13 +37,13 @@
         .public-main { flex: 1; }
         .public-container { width: min(1060px, calc(100% - 48px)); margin: 0 auto; }
         .public-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 5px; box-shadow: 0 4px 20px rgba(0, 0, 0, .06); }
-        .public-footer { width: min(1320px, calc(100% - 120px)); margin: 0 auto; padding: 24px 0 28px; display: flex; justify-content: space-between; gap: 18px; color: #60776b; font-size: 13px; }
+        .public-footer { width: min(1320px, calc(100% - 120px)); margin: 0 auto; padding: 16px 0 20px; display: flex; justify-content: space-between; gap: 18px; color: #60776b; font-size: 13px; }
         .public-footer a { color: #176d54; text-decoration: none; }
         .public-footer a:hover { text-decoration: underline; }
         @media (max-width: 640px) {
-            .public-header { padding: 24px 20px; flex-direction: column; align-items: flex-start; gap: 20px; }
+            .public-header { padding: 14px 20px; flex-direction: column; align-items: flex-start; gap: 12px; }
             .public-container, .public-footer { width: calc(100% - 40px); }
-            .public-brand img { width: 160px; height: 54px; }
+            .public-brand img { width: 150px; height: 50px; }
             .public-nav { justify-content: flex-start; gap: 10px 12px; }
             .public-nav a, .public-nav-divider { font-size: 14px; }
             .public-footer { flex-direction: column; }
