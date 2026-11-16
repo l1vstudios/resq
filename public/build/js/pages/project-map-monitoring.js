@@ -84,6 +84,10 @@
     function mapViewportPadding(mapRect, panelRect, headerRect) {
         var padding = { paddingTopLeft: [40, Math.max(40, headerRect.bottom - mapRect.top + 16)], paddingBottomRight: [40, 40] };
         if (panelRect.width === 0 && panelRect.height === 0) return padding;
+        if (panelRect.top > mapRect.top + mapRect.height / 2) {
+            padding.paddingBottomRight[1] = Math.max(40, Math.ceil(mapRect.bottom - panelRect.top + 16));
+            return padding;
+        }
         // Keep a usable map area even when the sidebar fills most of a small screen.
         padding.paddingBottomRight[0] = Math.max(40, Math.min(
             Math.ceil(mapRect.right - panelRect.left + 24), mapRect.width - padding.paddingTopLeft[0] - 120

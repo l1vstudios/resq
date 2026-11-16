@@ -23,7 +23,7 @@
                         <td class="text-center">{{ $project->warning_stations_count }}</td>
                         <td><span class="badge bg-{{ $project->monitoring_tone }}-subtle text-{{ $project->monitoring_tone }}">{{ $project->monitoring_status }}</span></td>
                         <td><span class="badge {{ $active ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ $project->status ?: 'Belum aktif' }}</span></td>
-                        <td><a href="{{ route('dashboard.projects.map', $project) }}" class="btn btn-sm btn-outline-primary text-nowrap" aria-label="Buka peta {{ $project->displayLabel() }}"><i class="bx bx-map-alt me-1" aria-hidden="true"></i>Buka Peta</a></td>
+                        <td><a href="{{ route('dashboard.projects.map', $project) }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary text-nowrap" aria-label="Buka peta {{ $project->displayLabel() }} di tab baru"><i class="bx bx-map-alt me-1" aria-hidden="true"></i>Buka Peta</a></td>
                     </tr>
                 @empty
                     <tr><td colspan="10" class="text-center py-5">

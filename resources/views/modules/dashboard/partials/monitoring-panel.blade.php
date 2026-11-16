@@ -623,10 +623,11 @@
     }
     @media (max-width: 767px) {
         .map-monitor-panel {
-            top: 72px;
+            top: auto;
             right: 8px;
-            bottom: 16px;
-            width: min(360px, calc(100vw - 32px));
+            bottom: 8px;
+            width: min(380px, calc(100vw - 16px));
+            height: min(38dvh, 300px);
         }
         .monitor-open-button {
             top: 10px;

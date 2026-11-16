@@ -462,7 +462,9 @@
             z-index: 900;
             bottom: 24px;
             right: calc(clamp(380px, 29vw, 440px) + 24px);
-            width: 220px;
+            width: min(220px, calc(100vw - 32px));
+            max-height: calc(100dvh - 48px);
+            overflow-y: auto;
             background: rgba(28, 40, 36, 0.82);
             -webkit-backdrop-filter: blur(8px);
             backdrop-filter: blur(8px);
@@ -477,6 +479,10 @@
             right: 20px;
         }
         .legend-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
             font-size: 12.5px;
             font-weight: 700;
             color: #ffffff;
@@ -484,11 +490,38 @@
             padding-bottom: 5px;
             border-bottom: 1px solid #374b47;
         }
+        .legend-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 26px;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            cursor: pointer;
+        }
+        .legend-toggle:hover, .legend-toggle:focus-visible {
+            background: rgba(255, 255, 255, 0.18);
+            outline-color: #34d399;
+        }
+        .dash-legend-card.is-collapsed .legend-card-header {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: 0;
+        }
+        .dash-legend-card.is-collapsed .legend-card-body {
+            display: none;
+        }
         .legend-card-body {
             display: flex;
             flex-direction: column;
             gap: 5px;
         }
+        .legend-card-body[hidden] { display: none; }
         .legend-checkbox-item {
             display: flex;
             align-items: center;
@@ -606,21 +639,47 @@
             color: #ffffff !important;
         }
         .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
+        @media (max-width: 1199px) {
+            .dash-legend-card {
+                top: 180px;
+                bottom: auto;
+                left: 64px;
+                right: auto;
+                max-height: calc(100dvh - 196px);
+            }
+            .dash-legend-card.sidebar-collapsed { right: auto; }
+        }
         @media (max-width: 991px) {
-            .dash-legend-card { display: none; }
             .project-map-header {
-                right: 16px;
+                right: 404px;
                 top: 10px;
                 flex-wrap: wrap;
                 gap: 8px;
             }
+            .leaflet-top.leaflet-left { top: 110px !important; }
             .dash-weather-timeline { display: none; }
             .dash-hydrology-container {
-                width: calc(100vw - 32px);
-                max-width: 530px;
+                width: min(530px, calc(100vw - 420px));
+                grid-template-columns: 1fr;
             }
         }
-        @media (max-width: 575px) {
+        @media (max-width: 767px) {
+            .project-map-header {
+                left: 8px;
+                right: 60px;
+                padding: 7px;
+            }
+            .project-map-header.sidebar-collapsed { right: 60px; }
+            .dash-header-left { flex: 1 1 100%; flex-wrap: wrap; width: 100%; }
+            .dash-select { max-width: min(170px, calc(100vw - 115px)); }
+            .leaflet-top.leaflet-left { top: 112px !important; left: 8px !important; }
+            .dash-legend-card, .dash-legend-card.sidebar-collapsed {
+                top: 130px;
+                right: 8px;
+                left: auto;
+                width: min(220px, calc(100vw - 80px));
+                max-height: min(24dvh, 220px);
+            }
             .dash-hydrology-container { display: none; }
         }
     </style>
@@ -789,8 +848,11 @@
     <div class="dash-legend-card" id="dash-legend-card" aria-label="Legenda Peta">
         <div class="legend-card-header">
             <span>Legenda Peta</span>
+            <button type="button" class="legend-toggle" id="dash-legend-toggle" aria-label="Minimalkan legenda peta" aria-expanded="true" aria-controls="dash-legend-body" title="Minimalkan legenda peta">
+                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+            </button>
         </div>
-        <div class="legend-card-body">
+        <div class="legend-card-body" id="dash-legend-body">
             <label class="legend-checkbox-item">
                 <input type="checkbox" id="chk-sensor" checked>
                 <span class="legend-symbol-icon" style="color: #34d399; font-size: 14px;">●</span>
@@ -864,17 +926,13 @@
             alert_active: initialAlertActive
         };
         var fitFilteredButton = document.getElementById('map-fit-filtered');
-        // Keep the same Semeru region and zoom limits as the original monitoring map.
-        var mapMinZoom = 12;
+        // Open at Semeru while allowing the user to pan and zoom freely.
+        var mapMinZoom = 3;
         var initialMapZoom = 12;
         var userAdjustedView = false;
         var isApplyingMapFocus = false;
-        var mapMaxZoom = 16;
+        var mapMaxZoom = 17;
         var defaultMapCenter = [-8.1724, 112.9716];
-        var semeruMapBounds = L.latLngBounds(
-            [-8.371469032, 112.783198121],
-            [-8.055529857, 113.249208404]
-        );
         var semeruFocusBounds = L.latLngBounds(
             [-8.2390, 112.9220],
             [-8.1080, 113.0185]
@@ -963,7 +1021,7 @@
         }
 
         function applyMapFocus() {
-            if (hasAppliedInitialFocus) {
+            if (hasAppliedInitialFocus || userAdjustedView) {
                 return;
             }
 
@@ -1004,19 +1062,11 @@
         var map = L.map('sensor-cluster-map', {
             scrollWheelZoom: true,
             minZoom: mapMinZoom,
-            maxZoom: mapMaxZoom,
-            maxBounds: semeruMapBounds,
-            maxBoundsViscosity: 1
+            maxZoom: mapMaxZoom
         }).setView(defaultMapCenter, defaultMapZoom);
         map.createPane('warning-stations').style.zIndex = 625;
         map.on('movestart', function () {
             if (!isApplyingMapFocus) userAdjustedView = true;
-        });
-        map.on('resize', function () {
-            if (!userAdjustedView) {
-                hasAppliedInitialFocus = false;
-                applyMapFocus();
-            }
         });
 
         L.control.scale({
@@ -1281,7 +1331,7 @@
                         clusters = data.clusters || [];
                         initialAlertActive = data.alert_active;
                         latestMapData = data;
-                        applyDashboardFilters();
+                        applyDashboardFilters(false);
                     }
                 })
                 .catch(function () {
@@ -1441,7 +1491,7 @@
                 });
 
                 // Warning stations use the live warningLayer so every icon opens the same details.
-                // Overlay geometry must never expand the locked Semeru viewport.
+                // Set the initial view after the overlays load, unless the user has moved the map.
                 applyMapFocus();
             })
             .catch(function () {});
@@ -1538,7 +1588,29 @@
         var panelToggleBtn = document.querySelector('[data-monitor="panel-toggle"]');
         var openBtn = document.getElementById('map-monitor-open');
         var legendCard = document.getElementById('dash-legend-card');
+        var legendToggle = document.getElementById('dash-legend-toggle');
+        var legendBody = document.getElementById('dash-legend-body');
         var mapHeader = document.querySelector('.project-map-header');
+
+        if (legendCard && legendToggle && legendBody) {
+            function setLegendCollapsed(collapsed) {
+                legendCard.classList.toggle('is-collapsed', collapsed);
+                legendBody.hidden = collapsed;
+                legendToggle.setAttribute('aria-expanded', String(!collapsed));
+                legendToggle.setAttribute('aria-label', collapsed ? 'Tampilkan legenda peta' : 'Minimalkan legenda peta');
+                legendToggle.title = collapsed ? 'Tampilkan legenda peta' : 'Minimalkan legenda peta';
+                legendToggle.querySelector('i').className = collapsed ? 'bx bx-chevron-up' : 'bx bx-chevron-down';
+            }
+
+            var compactLegendMedia = window.matchMedia('(max-width: 991px)');
+            setLegendCollapsed(compactLegendMedia.matches);
+            compactLegendMedia.addEventListener('change', function (event) {
+                setLegendCollapsed(event.matches);
+            });
+            legendToggle.addEventListener('click', function () {
+                setLegendCollapsed(!legendCard.classList.contains('is-collapsed'));
+            });
+        }
 
         if (panelToggleBtn) {
             panelToggleBtn.addEventListener('click', function () {
@@ -1553,9 +1625,6 @@
                         if (isHidden) mapHeader.classList.add('sidebar-collapsed');
                         else mapHeader.classList.remove('sidebar-collapsed');
                     }
-                    if (isHidden && typeof map !== 'undefined' && map.panBy) {
-                        map.panBy([-180, 0], { duration: 0.4 });
-                    }
                 }, 50);
             });
         }
@@ -1564,9 +1633,6 @@
                 setTimeout(function () {
                     if (legendCard) legendCard.classList.remove('sidebar-collapsed');
                     if (mapHeader) mapHeader.classList.remove('sidebar-collapsed');
-                    if (typeof map !== 'undefined' && map.panBy) {
-                        map.panBy([180, 0], { duration: 0.4 });
-                    }
                 }, 50);
             });
         }
@@ -1577,7 +1643,7 @@
         function applyDashboardFilters(shouldFly) {
             var selectedCorridor = corridorSelect ? corridorSelect.value.trim() : 'all';
             var selectedCluster = clusterSelect ? clusterSelect.value.trim() : 'all';
-            var doFly = (shouldFly !== false);
+            var doFly = (shouldFly === true);
 
             // 1. Zoom/Pan & Highlight Corridor
             if (selectedCorridor !== 'all') {
