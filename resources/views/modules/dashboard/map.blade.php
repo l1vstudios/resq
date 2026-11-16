@@ -318,14 +318,9 @@
         .dash-weather-timeline {
             display: flex;
             align-items: center;
-            gap: 4px;
             flex: 1 1 220px;
             min-width: 0;
-            overflow-x: auto;
-            overflow-y: hidden;
-            overscroll-behavior-x: contain;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+            overflow: hidden;
             background: rgba(18, 28, 24, 0.85);
             -webkit-backdrop-filter: blur(6px);
             backdrop-filter: blur(6px);
@@ -334,8 +329,21 @@
             border: 1px solid rgba(255, 255, 255, 0.12);
             margin: 0;
         }
-        .dash-weather-timeline::-webkit-scrollbar { height: 5px; }
-        .dash-weather-timeline::-webkit-scrollbar-thumb {
+        .dash-weather-days {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior-x: contain;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+        }
+        .dash-weather-days:focus-visible { outline: 2px solid #34d399; outline-offset: -2px; }
+        .dash-weather-days::-webkit-scrollbar { height: 5px; }
+        .dash-weather-days::-webkit-scrollbar-thumb {
             border-radius: 5px;
             background: rgba(255, 255, 255, 0.35);
         }
@@ -365,16 +373,12 @@
             font-size: 13px;
         }
         .dash-current-clock {
-            position: sticky;
-            right: 0;
-            z-index: 1;
             display: flex;
             align-items: center;
             gap: 4px;
             flex: 0 0 auto;
             padding: 2px 8px;
             border-left: 1px solid rgba(255, 255, 255, 0.15);
-            background: #17251e;
             color: #34d399;
             font-size: 11px;
             font-weight: 700;
@@ -393,8 +397,8 @@
             left: 16px;
             width: 530px;
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            align-items: start;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: stretch;
             gap: 10px;
             max-height: 240px;
             overflow-y: auto;
@@ -402,6 +406,9 @@
             scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
         }
         .hydro-card {
+            box-sizing: border-box;
+            min-width: 0;
+            width: 100%;
             background: rgba(28, 40, 36, 0.82);
             -webkit-backdrop-filter: blur(8px);
             backdrop-filter: blur(8px);
@@ -411,6 +418,7 @@
             color: #ffffff;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
+        .hydro-card.is-collapsed { align-self: start; }
         .hydro-card-header {
             display: flex;
             align-items: center;
@@ -463,13 +471,14 @@
         }
         .hydro-card-body {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
             gap: 8px;
         }
         .hydro-card-body[hidden] { display: none; }
         .hydro-metric-col {
             display: flex;
             flex-direction: column;
+            min-width: 0;
         }
         .hydro-metric-label {
             font-size: 9.5px;
@@ -483,6 +492,9 @@
             font-size: 9.5px;
             color: #7b8e88;
             margin-top: 1px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .hydro-status-dot {
             font-size: 10.5px;
@@ -839,13 +851,15 @@
             </div>
         </div>
 
-        <div class="dash-weather-timeline" id="dash-weather-timeline" role="region" aria-label="Cuaca hari ini dan tujuh hari berikutnya, geser untuk melihat hari lain" tabindex="0">
-            @foreach($timelineDates as $td)
-            <div class="dash-timeline-item {{ $td['is_today'] ? 'active' : '' }}" data-date="{{ $td['date_label'] }}">
-                <span class="t-date">{{ $td['date_label'] }}</span>
-                <i class="bx {{ $td['icon'] }}" aria-hidden="true"></i>
+        <div class="dash-weather-timeline" id="dash-weather-timeline">
+            <div class="dash-weather-days" id="dash-weather-days" role="region" aria-label="Cuaca hari ini dan tujuh hari berikutnya, geser untuk melihat hari lain" tabindex="0">
+                @foreach($timelineDates as $td)
+                <div class="dash-timeline-item {{ $td['is_today'] ? 'active' : '' }}" data-date="{{ $td['date_label'] }}">
+                    <span class="t-date">{{ $td['date_label'] }}</span>
+                    <i class="bx {{ $td['icon'] }}" aria-hidden="true"></i>
+                </div>
+                @endforeach
             </div>
-            @endforeach
             <div class="dash-current-clock" id="dash-live-clock">
                 <i class="bx bx-time-five" aria-hidden="true"></i>
                 <span id="live-time-str">{{ now('Asia/Jakarta')->format('H:i') }}</span>
@@ -883,7 +897,7 @@
                 <div class="hydro-card-body" id="hydro-card-body-{{ $loop->index }}">
                     <div class="hydro-metric-col">
                         <span class="hydro-metric-label">{{ $paramName }}</span>
-                        <div class="hydro-sub-label">{{ $loggerCode ?: 'REDNODE-BLIIOT' }}</div>
+                        <div class="hydro-sub-label" title="{{ $loggerCode ?: 'REDNODE-BLIIOT' }}">{{ $loggerCode ?: 'REDNODE-BLIIOT' }}</div>
                         <div class="hydro-status-dot" style="margin-top: 6px;">
                             <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ $isAwas ? '#ef4444' : '#10b981' }};"></span>
                             <span>{{ $sensorStatus }}</span>
@@ -1958,11 +1972,11 @@
             });
         });
 
-        var weatherTimeline = document.getElementById('dash-weather-timeline');
-        if (weatherTimeline) {
-            weatherTimeline.addEventListener('wheel', function (event) {
-                if (weatherTimeline.scrollWidth > weatherTimeline.clientWidth && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-                    weatherTimeline.scrollLeft += event.deltaY;
+        var weatherDays = document.getElementById('dash-weather-days');
+        if (weatherDays) {
+            weatherDays.addEventListener('wheel', function (event) {
+                if (weatherDays.scrollWidth > weatherDays.clientWidth && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                    weatherDays.scrollLeft += event.deltaY;
                     event.preventDefault();
                 }
             }, { passive: false });
