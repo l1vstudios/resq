@@ -250,10 +250,12 @@ test('stopping a siren while playback is pending keeps it stopped', async () => 
 });
 
 test('blocked audio resets its button and provides a retry message', async () => {
-    const { panel, audio, elements } = setup();
+    const sirenStates = [];
+    const { panel, audio, elements } = setup({ onSirenStateChange: enabled => sirenStates.push(enabled) });
     audio.play = () => Promise.reject(new Error('NotAllowedError'));
     await panel.setSiren(true);
     assert.equal(panel.sirenRequested, false);
+    assert.deepEqual(sirenStates, [true, false]);
     assert.equal(elements['siren-toggle'].textContent, 'Aktifkan sirene');
     assert.match(elements['siren-status'].textContent, /mencoba lagi/);
 });

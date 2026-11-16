@@ -264,6 +264,7 @@
         button.classList.toggle('siren-active', enabled);
         button.textContent = enabled ? 'Matikan sirene' : 'Aktifkan sirene';
         this.elements['siren-status'].textContent = enabled ? 'Menyalakan suara…' : 'Suara di perangkat ini nonaktif';
+        if (typeof this.options.onSirenStateChange === 'function') this.options.onSirenStateChange(enabled);
         if (!enabled) {
             this.audio.pause();
             this.audio.currentTime = 0;

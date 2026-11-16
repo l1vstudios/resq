@@ -319,19 +319,32 @@
             display: flex;
             align-items: center;
             gap: 4px;
+            flex: 1 1 220px;
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior-x: contain;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
             background: rgba(18, 28, 24, 0.85);
             -webkit-backdrop-filter: blur(6px);
             backdrop-filter: blur(6px);
             padding: 3px 6px;
             border-radius: 6px;
             border: 1px solid rgba(255, 255, 255, 0.12);
-            flex-shrink: 0;
-            margin: 0 auto;
+            margin: 0;
+        }
+        .dash-weather-timeline::-webkit-scrollbar { height: 5px; }
+        .dash-weather-timeline::-webkit-scrollbar-thumb {
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.35);
         }
         .dash-timeline-item {
             display: flex;
             align-items: center;
             gap: 5px;
+            flex: 0 0 auto;
+            white-space: nowrap;
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
@@ -351,6 +364,22 @@
         .dash-timeline-item i {
             font-size: 13px;
         }
+        .dash-current-clock {
+            position: sticky;
+            right: 0;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 0 0 auto;
+            padding: 2px 8px;
+            border-left: 1px solid rgba(255, 255, 255, 0.15);
+            background: #17251e;
+            color: #34d399;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
         .dash-header-actions {
             display: flex;
             align-items: center;
@@ -365,6 +394,7 @@
             width: 530px;
             display: grid;
             grid-template-columns: repeat(2, 1fr);
+            align-items: start;
             gap: 10px;
             max-height: 240px;
             overflow-y: auto;
@@ -385,14 +415,42 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 8px;
             margin-bottom: 6px;
             padding-bottom: 5px;
             border-bottom: 1px solid #374b47;
+        }
+        .hydro-card.is-collapsed .hydro-card-header {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: 0;
         }
         .hydro-station-name {
             font-size: 11.5px;
             font-weight: 700;
             color: #ffffff;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .hydro-card-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .hydro-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            cursor: pointer;
+        }
+        .hydro-toggle:hover, .hydro-toggle:focus-visible {
+            background: rgba(255, 255, 255, 0.18);
+            outline-color: #34d399;
         }
         .hydro-badge-live {
             background: rgba(16, 185, 129, 0.2);
@@ -408,6 +466,7 @@
             grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
+        .hydro-card-body[hidden] { display: none; }
         .hydro-metric-col {
             display: flex;
             flex-direction: column;
@@ -640,6 +699,13 @@
         }
         .warning-station-marker:focus-visible { outline: 3px solid #1849a9; outline-offset: 5px; border-radius: 50%; }
         @media (max-width: 1199px) {
+            .project-map-header { flex-wrap: wrap; }
+            .dash-weather-timeline {
+                order: 3;
+                flex: 1 1 100%;
+                width: 100%;
+            }
+            .dash-header-actions { margin-left: auto; }
             .dash-legend-card {
                 top: 180px;
                 bottom: auto;
@@ -656,8 +722,14 @@
                 flex-wrap: wrap;
                 gap: 8px;
             }
-            .leaflet-top.leaflet-left { top: 110px !important; }
-            .dash-weather-timeline { display: none; }
+            .dash-header-left { flex: 1 1 auto; flex-wrap: wrap; }
+            .dash-select-container { max-width: min(100%, 180px); }
+            .dash-select { max-width: 100%; }
+            .leaflet-top.leaflet-left { top: calc(var(--map-header-bottom, 150px) + 12px) !important; }
+            .dash-legend-card {
+                top: calc(var(--map-header-bottom, 150px) + 12px);
+                max-height: calc(100dvh - var(--map-header-bottom, 150px) - 24px);
+            }
             .dash-hydrology-container {
                 width: min(530px, calc(100vw - 420px));
                 grid-template-columns: 1fr;
@@ -672,9 +744,9 @@
             .project-map-header.sidebar-collapsed { right: 60px; }
             .dash-header-left { flex: 1 1 100%; flex-wrap: wrap; width: 100%; }
             .dash-select { max-width: min(170px, calc(100vw - 115px)); }
-            .leaflet-top.leaflet-left { top: 112px !important; left: 8px !important; }
+            .leaflet-top.leaflet-left { left: 8px !important; }
             .dash-legend-card, .dash-legend-card.sidebar-collapsed {
-                top: 130px;
+                top: calc(var(--map-header-bottom, 150px) + 12px);
                 right: 8px;
                 left: auto;
                 width: min(220px, calc(100vw - 80px));
@@ -730,8 +802,9 @@
         });
     }
 
-    $timelineDates = collect([0, 1, 2, 3, 4])->map(function ($dayOffset) {
-        $dt = now()->addDays($dayOffset);
+    $timelineStart = now('Asia/Jakarta')->startOfDay();
+    $timelineDates = collect(range(0, 7))->map(function ($dayOffset) use ($timelineStart) {
+        $dt = $timelineStart->copy()->addDays($dayOffset);
         $icons = ['bx-sun text-warning', 'bx-sun text-warning', 'bx-cloud text-light', 'bx-cloud-rain text-info', 'bx-cloud text-light'];
         return [
             'date_label' => $dt->format('d M'),
@@ -766,25 +839,22 @@
             </div>
         </div>
 
-        <div class="dash-weather-timeline" id="dash-weather-timeline">
+        <div class="dash-weather-timeline" id="dash-weather-timeline" role="region" aria-label="Cuaca hari ini dan tujuh hari berikutnya, geser untuk melihat hari lain" tabindex="0">
             @foreach($timelineDates as $td)
             <div class="dash-timeline-item {{ $td['is_today'] ? 'active' : '' }}" data-date="{{ $td['date_label'] }}">
                 <span class="t-date">{{ $td['date_label'] }}</span>
                 <i class="bx {{ $td['icon'] }}" aria-hidden="true"></i>
             </div>
             @endforeach
-            <div class="dash-current-clock" id="dash-live-clock" style="padding: 2px 8px; border-left: 1px solid rgba(255,255,255,0.15); font-size: 11px; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 4px;">
+            <div class="dash-current-clock" id="dash-live-clock">
                 <i class="bx bx-time-five" aria-hidden="true"></i>
-                <span id="live-time-str">{{ now()->format('H:i') }}</span>
+                <span id="live-time-str">{{ now('Asia/Jakarta')->format('H:i') }}</span>
             </div>
         </div>
 
         <div class="dash-header-actions">
             <button type="button" id="map-fit-filtered" class="dash-action-btn" aria-label="Kembali ke area Semeru" title="Kembali ke area Semeru">
                 <i class="bx bx-target-lock" aria-hidden="true"></i>
-            </button>
-            <button type="button" class="dash-action-btn" id="btn-ews-config" aria-label="Pengaturan EWS" title="Hydromet EWS Configuration">
-                <i class="bx bx-cog" aria-hidden="true"></i>
             </button>
         </div>
     </header>
@@ -805,9 +875,12 @@
             <div class="hydro-card" data-station="{{ $stCode }}" data-sensor="{{ $sensor->sensor_code }}">
                 <div class="hydro-card-header">
                     <span class="hydro-station-name">{{ $stCode }}_{{ strtoupper(str_replace('-', '_', $sensor->sensor_code)) }}</span>
-                    <span class="hydro-badge-live">Live</span>
+                    <div class="hydro-card-actions">
+                        <span class="hydro-badge-live">Live</span>
+                        <button type="button" class="hydro-toggle" aria-label="Minimalkan sensor {{ $sensor->sensor_code }}" aria-expanded="true" aria-controls="hydro-card-body-{{ $loop->index }}" data-hydro-label="sensor {{ $sensor->sensor_code }}"><i class="bx bx-chevron-down" aria-hidden="true"></i></button>
+                    </div>
                 </div>
-                <div class="hydro-card-body">
+                <div class="hydro-card-body" id="hydro-card-body-{{ $loop->index }}">
                     <div class="hydro-metric-col">
                         <span class="hydro-metric-label">{{ $paramName }}</span>
                         <div class="hydro-sub-label">{{ $loggerCode ?: 'REDNODE-BLIIOT' }}</div>
@@ -833,9 +906,12 @@
             <div class="hydro-card">
                 <div class="hydro-card-header">
                     <span class="hydro-station-name">{{ $project->displayName() }}</span>
-                    <span class="hydro-time">{{ now()->format('H:i') }}</span>
+                    <div class="hydro-card-actions">
+                        <span class="hydro-time">{{ now()->format('H:i') }}</span>
+                        <button type="button" class="hydro-toggle" aria-label="Minimalkan status sensor" aria-expanded="true" aria-controls="hydro-card-body-empty" data-hydro-label="status sensor"><i class="bx bx-chevron-down" aria-hidden="true"></i></button>
+                    </div>
                 </div>
-                <div class="hydro-card-body">
+                <div class="hydro-card-body" id="hydro-card-body-empty">
                     <div class="hydro-metric-col">
                         <span class="hydro-metric-label">Status</span>
                         <div class="hydro-metric-val"><span class="val-num" style="font-size: 15px;">Belum ada sensor</span></div>
@@ -905,6 +981,23 @@
             projectLocations: @json($projectWeatherLocations)
         });
         var mapElement = document.getElementById('sensor-cluster-map');
+        var hydroPanel = document.getElementById('dash-hydrology-panel');
+
+        if (hydroPanel) {
+            hydroPanel.addEventListener('click', function (event) {
+                var toggle = event.target.closest('.hydro-toggle');
+                if (!toggle) return;
+                var card = toggle.closest('.hydro-card');
+                var body = document.getElementById(toggle.getAttribute('aria-controls'));
+                if (!card || !body) return;
+                var collapsed = !card.classList.contains('is-collapsed');
+                card.classList.toggle('is-collapsed', collapsed);
+                body.hidden = collapsed;
+                toggle.setAttribute('aria-expanded', String(!collapsed));
+                toggle.setAttribute('aria-label', (collapsed ? 'Tampilkan ' : 'Minimalkan ') + toggle.dataset.hydroLabel);
+                toggle.querySelector('i').className = collapsed ? 'bx bx-chevron-up' : 'bx bx-chevron-down';
+            });
+        }
 
         if (!mapElement || typeof L === 'undefined') {
             return;
@@ -927,11 +1020,11 @@
         };
         var fitFilteredButton = document.getElementById('map-fit-filtered');
         // Open at Semeru while allowing the user to pan and zoom freely.
-        var mapMinZoom = 3;
+        var mapMinZoom = 12;
         var initialMapZoom = 12;
         var userAdjustedView = false;
         var isApplyingMapFocus = false;
-        var mapMaxZoom = 17;
+        var mapMaxZoom = 14;
         var defaultMapCenter = [-8.1724, 112.9716];
         var semeruFocusBounds = L.latLngBounds(
             [-8.2390, 112.9220],
@@ -1115,11 +1208,24 @@
         var monitoringStationLayer = L.layerGroup().addTo(map);
         var spatialLayer = L.featureGroup().addTo(map);
         var tdeLayer = L.layerGroup().addTo(map);
+        function updateWarningSirenButton(button, active) {
+            var stationCode = button.getAttribute('data-station-code') || 'Warning Station';
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', String(active));
+            button.setAttribute('aria-label', (active ? 'Matikan' : 'Aktifkan') + ' suara sirene ' + stationCode + ' di perangkat ini');
+        }
         var monitoring = new ProjectMapMonitoring({
             panel: document.getElementById('map-monitor-panel'),
             openButton: document.getElementById('map-monitor-open'),
             sensorDialog: document.getElementById('map-sensor-detail'),
             sirenUrl: @json(asset('sound/sirene.mp3')),
+            onSirenStateChange: function (enabled) {
+                if (!enabled) {
+                    document.querySelectorAll('[data-warning-siren]').forEach(function (button) {
+                        updateWarningSirenButton(button, false);
+                    });
+                }
+            },
             tdeUrl: @json(route('dashboard.projects.tde-data', $project, false)),
             onTdeData: function (stations, presentation) {
                 tdeLayer.clearLayers();
@@ -1592,6 +1698,18 @@
         var legendBody = document.getElementById('dash-legend-body');
         var mapHeader = document.querySelector('.project-map-header');
 
+        if (mapHeader) {
+            function syncMapHeaderBottom() {
+                document.documentElement.style.setProperty('--map-header-bottom', Math.ceil(mapHeader.getBoundingClientRect().bottom) + 'px');
+            }
+
+            syncMapHeaderBottom();
+            window.addEventListener('resize', syncMapHeaderBottom);
+            if (window.ResizeObserver) {
+                new ResizeObserver(syncMapHeaderBottom).observe(mapHeader);
+            }
+        }
+
         if (legendCard && legendToggle && legendBody) {
             function setLegendCollapsed(collapsed) {
                 legendCard.classList.toggle('is-collapsed', collapsed);
@@ -1658,7 +1776,7 @@
                 if (matchingPolys.length > 0) {
                     var polyGroup = L.featureGroup(matchingPolys.map(function (p) { return p.polyline; }));
                     if (doFly) {
-                        map.fitBounds(polyGroup.getBounds(), { padding: [60, 60], maxZoom: 15 });
+                        map.fitBounds(polyGroup.getBounds(), { padding: [60, 60], maxZoom: mapMaxZoom });
                     }
                     foundMatch = true;
 
@@ -1695,10 +1813,10 @@
                         }
                         collectPoints(cObj.coordinates);
                         if (pts.length === 1 && doFly) {
-                            map.flyTo(pts[0], 15, { duration: 0.8 });
+                            map.flyTo(pts[0], mapMaxZoom, { duration: 0.8 });
                             foundMatch = true;
                         } else if (pts.length > 1 && doFly) {
-                            map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
+                            map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: mapMaxZoom });
                             foundMatch = true;
                         }
                     }
@@ -1709,7 +1827,7 @@
                         return (w.corridor || w.workspace || w.name || '').toLowerCase().indexOf(selectedCorridor.toLowerCase()) >= 0;
                     });
                     if (matchingWs.length > 0 && hasCoordinate(matchingWs[0])) {
-                        map.flyTo([matchingWs[0].lat, matchingWs[0].lng], 14, { duration: 0.8 });
+                        map.flyTo([matchingWs[0].lat, matchingWs[0].lng], mapMaxZoom, { duration: 0.8 });
                     }
                 }
             } else {
@@ -1784,7 +1902,7 @@
             });
 
             // 5. Highlight active row in Status Eskalasi table
-            document.querySelectorAll('#map-monitor-panel-body .widget-table tbody tr').forEach(function (tr) {
+            document.querySelectorAll('section[aria-label="Status Eskalasi"] .widget-table tbody tr').forEach(function (tr) {
                 var firstTd = tr.querySelector('td strong');
                 if (firstTd) {
                     var rowName = firstTd.textContent.trim().toLowerCase();
@@ -1804,12 +1922,11 @@
             clusterSelect.addEventListener('change', function () { applyDashboardFilters(true); });
         }
 
-        document.querySelectorAll('#map-monitor-panel-body .widget-table tbody tr').forEach(function (tr) {
+        document.querySelectorAll('section[aria-label="Status Eskalasi"] .widget-table tbody tr').forEach(function (tr) {
             var firstTd = tr.querySelector('td strong');
             if (firstTd && corridorSelect) {
                 tr.style.cursor = 'pointer';
                 tr.addEventListener('click', function (e) {
-                    if (e.target.closest('.siren-pill-btn')) return;
                     var name = firstTd.textContent.trim();
                     var matchingOption = Array.from(corridorSelect.options).find(function (opt) {
                         return opt.text.trim().toLowerCase() === name.toLowerCase();
@@ -1822,31 +1939,33 @@
             }
         });
 
-        document.querySelectorAll('.siren-pill-btn').forEach(function (btn) {
+        document.querySelectorAll('[data-warning-station-id]').forEach(function (row) {
+            row.addEventListener('click', function (event) {
+                if (event.target.closest('[data-warning-siren]')) return;
+                monitoring.selectWarningStation(row.getAttribute('data-warning-station-id'));
+            });
+        });
+
+        document.querySelectorAll('[data-warning-siren]').forEach(function (btn) {
             btn.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                this.classList.toggle('is-active');
-                var masterBtn = document.querySelector('[data-monitor="siren-toggle"]');
-                if (masterBtn) {
-                    masterBtn.click();
+                updateWarningSirenButton(this, !this.classList.contains('is-active'));
+                var hasActiveSiren = Boolean(document.querySelector('[data-warning-siren].is-active'));
+                if (monitoring.sirenRequested !== hasActiveSiren) {
+                    monitoring.setSiren(hasActiveSiren);
                 }
             });
         });
 
-        var masterSiren = document.querySelector('[data-monitor="siren-toggle"]');
-        if (masterSiren && typeof MutationObserver !== 'undefined') {
-            var sirenObserver = new MutationObserver(function () {
-                var isMasterActive = masterSiren.getAttribute('aria-pressed') === 'true' || masterSiren.classList.contains('siren-active');
-                document.querySelectorAll('.siren-pill-btn').forEach(function (btn) {
-                    if (isMasterActive) {
-                        btn.classList.add('is-active');
-                    } else {
-                        btn.classList.remove('is-active');
-                    }
-                });
-            });
-            sirenObserver.observe(masterSiren, { attributes: true, attributeFilter: ['aria-pressed', 'class'] });
+        var weatherTimeline = document.getElementById('dash-weather-timeline');
+        if (weatherTimeline) {
+            weatherTimeline.addEventListener('wheel', function (event) {
+                if (weatherTimeline.scrollWidth > weatherTimeline.clientWidth && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                    weatherTimeline.scrollLeft += event.deltaY;
+                    event.preventDefault();
+                }
+            }, { passive: false });
         }
 
         document.querySelectorAll('.dash-timeline-item').forEach(function (item) {
@@ -1859,10 +1978,9 @@
         function updateLiveClock() {
             var clockEl = document.getElementById('live-time-str');
             if (clockEl) {
-                var d = new Date();
-                var h = String(d.getHours()).padStart(2, '0');
-                var m = String(d.getMinutes()).padStart(2, '0');
-                clockEl.textContent = h + ':' + m;
+                clockEl.textContent = new Intl.DateTimeFormat('en-GB', {
+                    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jakarta'
+                }).format(new Date());
             }
         }
         setInterval(updateLiveClock, 1000);

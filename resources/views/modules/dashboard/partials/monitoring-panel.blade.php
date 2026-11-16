@@ -199,6 +199,8 @@
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     }
+    .warning-station-table-scroll { overflow-x: auto; }
+    .warning-station-table { min-width: 390px; }
     .widget-table {
         width: 100%;
         border-collapse: collapse;
@@ -313,6 +315,7 @@
         background: #201315;
         border-color: #ef4444;
         box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 10px rgba(239, 68, 68, 0.35);
+        animation: sirenActiveGlow 1.5s ease-in-out infinite;
     }
     .siren-pill-btn.is-active .siren-pill-slider {
         transform: translateX(0px);
@@ -353,6 +356,16 @@
     }
     .siren-pill-btn:active .siren-pill-slider {
         width: 31px;
+    }
+    .siren-pill-btn:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+    }
+    @keyframes sirenActiveGlow {
+        50% { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 16px rgba(239, 68, 68, 0.85); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .siren-pill-btn, .siren-pill-slider, .siren-pill-btn .pill-label { animation: none; transition: none; }
     }
     .notif-list {
         display: flex;
@@ -686,25 +699,21 @@
             $class = 'status-awas';
             $icon = 'bx-cloud-lightning text-danger';
             $tde = 'Menguat';
-            $siren = 'on';
         } elseif ($hasSiaga) {
             $status = 'Siaga';
             $class = 'status-siaga';
             $icon = 'bx-cloud-rain text-danger';
             $tde = '→ Basah';
-            $siren = 'on';
         } elseif ($hasWaspada) {
             $status = 'Waspada';
             $class = 'status-waspada';
             $icon = 'bx-cloud text-warning';
             $tde = '→ Kering';
-            $siren = 'off';
         } else {
             $status = 'Normal';
             $class = 'status-normal';
             $icon = 'bx-sun text-warning';
             $tde = 'Stabil';
-            $siren = 'off';
         }
 
         return [
@@ -713,7 +722,6 @@
             'class' => $class,
             'icon' => $icon,
             'tde' => $tde,
-            'siren' => $siren,
         ];
     });
 
@@ -849,7 +857,6 @@
         </div>
         <div class="monitor-header-actions">
             <div class="monitor-actions">
-                <small class="monitor-muted" data-monitor="siren-status" role="status" style="display: none;">Suara di perangkat ini nonaktif</small>
                 <button type="button" class="siren-button" data-monitor="siren-toggle" aria-pressed="false" style="display: none;">Aktifkan sirene</button>
             </div>
             <button type="button" class="monitor-minimize" data-monitor="panel-toggle" aria-expanded="true" aria-controls="map-monitor-panel">Minimize</button>
@@ -873,11 +880,10 @@
                 <table class="widget-table">
                     <thead>
                         <tr>
-                            <th style="width: 28%;">Koridor</th>
-                            <th style="width: 20%; text-align: center;">Status</th>
-                            <th style="width: 14%; text-align: center;">Cuaca</th>
-                            <th style="width: 18%; text-align: center;">TDE</th>
-                            <th style="width: 20%; text-align: right;">Sirine</th>
+                            <th style="width: 35%;">Koridor</th>
+                            <th style="width: 25%; text-align: center;">Status</th>
+                            <th style="width: 18%; text-align: center;">Cuaca</th>
+                            <th style="width: 22%; text-align: center;">TDE</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -887,17 +893,10 @@
                             <td style="text-align: center;"><span class="badge-status {{ $corridor['class'] }}">{{ $corridor['status'] }}</span></td>
                             <td style="text-align: center;"><i class="bx {{ $corridor['icon'] }}" style="font-size: 15px;"></i></td>
                             <td style="text-align: center;"><span class="badge-tde">{{ $corridor['tde'] }}</span></td>
-                            <td style="text-align: right;">
-                                <button type="button" class="siren-pill-btn {{ $corridor['siren'] === 'on' ? 'is-active' : '' }}" onclick="toggleSirenPill(this, event)" aria-label="Toggle Sirine {{ $corridor['name'] }}">
-                                    <div class="siren-pill-slider"></div>
-                                    <span class="pill-label pill-on">ON</span>
-                                    <span class="pill-label pill-off">OFF</span>
-                                </button>
-                            </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted" style="padding: 12px;">Belum ada koridor pemantauan.</td>
+                            <td colspan="4" class="text-center text-muted" style="padding: 12px;">Belum ada koridor pemantauan.</td>
                         </tr>
                         @endforelse
                     </tbody>
@@ -909,19 +908,20 @@
             <div class="widget-card-header">
                 <span class="widget-card-title">Status Stasiun Diseminasi</span>
             </div>
-            <div class="widget-card-body">
-                <table class="widget-table">
+            <div class="widget-card-body warning-station-table-scroll" tabindex="0" aria-label="Daftar Warning Station, geser untuk melihat sirine">
+                <table class="widget-table warning-station-table">
                     <thead>
                         <tr>
                             <th>Stasiun</th>
                             <th>Last Ping</th>
                             <th>Signal</th>
                             <th style="text-align: right;">Battery</th>
+                            <th style="text-align: right;">Sirine</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($warningStationData as $ws)
-                        <tr style="cursor: pointer;" onclick="window.monitoring && window.monitoring.selectWarningStation({{ json_encode($ws['id']) }})">
+                        <tr data-warning-station-id="{{ $ws['id'] }}" style="cursor: pointer;">
                             <td><strong>{{ $ws['code'] }}</strong></td>
                             <td>{{ $ws['ping'] }}</td>
                             <td>
@@ -931,15 +931,23 @@
                                 </span>
                             </td>
                             <td style="text-align: right; font-weight: 600;">{{ $ws['battery'] }}</td>
+                            <td style="text-align: right;">
+                                <button type="button" class="siren-pill-btn" data-warning-siren data-station-code="{{ $ws['code'] }}" aria-pressed="false" aria-label="Aktifkan suara sirene {{ $ws['code'] }} di perangkat ini" title="Suara sirene di perangkat ini">
+                                    <span class="siren-pill-slider" aria-hidden="true"></span>
+                                    <span class="pill-label pill-on" aria-hidden="true">ON</span>
+                                    <span class="pill-label pill-off" aria-hidden="true">OFF</span>
+                                </button>
+                            </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="4" class="text-center text-muted" style="padding: 12px;">Belum ada stasiun diseminasi.</td>
+                            <td colspan="5" class="text-center text-muted" style="padding: 12px;">Belum ada stasiun diseminasi.</td>
                         </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
+            <small class="monitor-muted" data-monitor="siren-status" role="status">Suara di perangkat ini nonaktif</small>
         </section>
 
         <section class="widget-card" aria-label="Status Stasiun Meteorologi">
@@ -1029,16 +1037,3 @@
     </div>
     <div class="sensor-detail-content" data-monitor="sensor-detail-content"></div>
 </dialog>
-<script>
-    function toggleSirenPill(btn, e) {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-        btn.classList.toggle('is-active');
-        var masterBtn = document.querySelector('[data-monitor="siren-toggle"]');
-        if (masterBtn) {
-            masterBtn.click();
-        }
-    }
-</script>

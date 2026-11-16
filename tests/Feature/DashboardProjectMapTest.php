@@ -248,13 +248,13 @@ class DashboardProjectMapTest extends TestCase
             ->assertDontSee('id="page-topbar"', false)
             ->assertSee(json_encode(route('dashboard.projects.map-data', $project, false)), false)
             ->assertSee('project_id='.$project->id, false)
-            ->assertSee('var mapMinZoom = 3;', false)
+            ->assertSee('var mapMinZoom = 12;', false)
             ->assertSee('var initialMapZoom = 12;', false)
             ->assertSee('var defaultMapCenter = [-8.1724, 112.9716];', false)
             ->assertDontSee('maxBounds: semeruMapBounds', false)
             ->assertSee('id="dash-legend-toggle"', false)
             ->assertSee('Kembali ke area Semeru')
-            ->assertSee('var mapMaxZoom = 17;', false);
+            ->assertSee('var mapMaxZoom = 14;', false);
 
         $this->getJson(route('dashboard.projects.map-data', $project))
             ->assertOk()
